@@ -8,10 +8,9 @@ import { Button } from './ui'
 /**
  * İnteraktif ürün turu (Modül 5).
  *
- * NEDEN HAZIR KÜTÜPHANE (Joyride/Driver.js) DEĞİL: proje Google Drive üzerinde duruyor ve
- * node_modules kurulumu zaten kırılgan (bkz. frontend/setup-dev.ps1). Dört adımlık bir
- * spot ışığı için yeni bağımlılık eklemek, kurulum riskini kazanılan koddan daha çok
- * artırıyordu. Karşılığında Türkçe metin, mobil davranış ve 44px dokunma kuralı bizde.
+ * NEDEN HAZIR KÜTÜPHANE (Joyride/Driver.js) DEĞİL: dört adımlık bir spot ışığı için yeni
+ * bir bağımlılık, bakım yükünü kazanılan koddan daha çok artırıyordu. Karşılığında Türkçe
+ * metin, mobil davranış ve 44px dokunma kuralı bizde.
  *
  * DURUM SUNUCUDA tutulur, localStorage'da değil: tur yalnızca giriş yapmış kullanıcıya
  * gösteriliyor, dolayısıyla hesaba yazmak hem cihazlar arası taşınır hem de çerez

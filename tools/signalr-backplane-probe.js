@@ -14,8 +14,7 @@ const path = require('path')
 
 // SignalR istemcisi frontend bağımlılıklarından ödünç alınır (ayrı kurulum gerekmesin).
 const signalRPath = path.join(
-  process.env.LOCALAPPDATA,
-  'PeerLearnBuild', 'frontend-dev', 'node_modules', '@microsoft', 'signalr',
+  __dirname, '..', 'frontend', 'node_modules', '@microsoft', 'signalr',
 )
 const signalR = require(signalRPath)
 

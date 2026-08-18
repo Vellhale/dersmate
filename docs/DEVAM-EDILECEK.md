@@ -118,7 +118,8 @@ Değişenler:
 
 **DEĞİŞMEYENLER ve gerekçeleri** (1.990 kullanım, 194 dosya — hepsi kullanıcıya görünmez):
 namespace'ler, proje/çözüm adları, `peerlearn` veritabanı ve kullanıcısı, `PeerLearnBuild`
-derleme yolu, Swagger başlığı. Üçü ayrıca kırılgan:
+çalışma dizini (artık yalnızca PostgreSQL veri dizini ve dev logları; derleme çıktısı
+depo içine döndü), Swagger başlığı. Üçü ayrıca kırılgan:
 `Jwt:Issuer`/`Audience` (değişirse yaşayan tüm oturumlar düşer), veritabanı adı (göç
 gerekir) ve aşağıdaki HWID satırı.
 

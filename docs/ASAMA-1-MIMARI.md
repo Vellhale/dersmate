@@ -24,7 +24,6 @@ ileride bölmek mekanik bir iştir.
 
 ```
 PeerLearn.slnx
-Directory.Build.props            → bin/obj çıktıları yerel diske (Google Drive kilit sorunu)
 src/
   PeerLearn.Domain/              → Saf entity'ler + enum'lar (hiçbir pakete bağımlı değil)
     Common/                      → BaseEntity
@@ -171,9 +170,6 @@ transfer olmamıştır ("itirazda transfer donar"). Bu yüzden:
   tablolarda (`CreditLots.WalletId` gibi) ayrıca düz FK index'i tanımlıdır; yenisini
   eklerken aynı kurala dikkat edin (EF, FK ile başlayan declared index görünce otomatik
   FK index'i üretmez — filter'lı olsa bile).
-- **Google Drive uyarısı**: `Directory.Build.props` build çıktısını
-  `%LOCALAPPDATA%\PeerLearnBuild` altına yönlendirir; Drive senkronu .exe dosyalarını
-  kilitlediği için bu gereklidir. Ekip arkadaşının makinesinde de otomatik çalışır.
 
 ## 7. Migration Komutları (ilk kurulum)
 

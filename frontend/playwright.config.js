@@ -20,7 +20,8 @@ import { defineConfig, devices } from '@playwright/test'
 export default defineConfig({
   testDir: './e2e',
 
-  // Google Drive üzerinde dosya erişimi yavaş; varsayılan 5 sn dar kalıyor.
+  // Varsayılan 5 sn dar: ilk gezinmede Vite modülleri o an derliyor ve dev sunucusu
+  // soğuk başlıyorsa ilk test tek başına birkaç saniye yiyor.
   timeout: 30_000,
   expect: { timeout: 7_000 },
 

@@ -30,31 +30,23 @@ Kalıcı servis istersen (yönetici PowerShell'de, tek sefer) — betiğin baş�
 Şema ve ders kataloğu, API Development modunda ilk açılışta otomatik kuruldu
 (migration + seed). Sıfırdan kurmak için veritabanını silip API'yi yeniden başlatmak yeter.
 
-### 1.2 Frontend çalışma alanı
-
-Proje Google Drive sanal diskinde (`G:`) durduğu için **npm, node_modules'ü proje klasörüne
-kuramıyor** (`EBADF` / `ENOTEMPTY` — Drive'ın sanal dosya sistemi binlerce küçük dosyanın hızlı
-oluşturulup silinmesini kaldırmıyor; bu denendi ve doğrulandı).
-
-Çözüm, backend'de `Directory.Build.props` ile yapılanın aynısı: **kaynak Drive'da kalır,
-üretilen dosyalar yerel diske gider.**
+### 1.2 Frontend kurulumu
 
 ```bash
-powershell -ExecutionPolicy Bypass -File frontend/setup-dev.ps1
+cd frontend
+npm install
 ```
 
-Betik şunu kurar:
+Başka bir şey gerekmez.
 
-```
-C:\Users\<kullanıcı>\AppData\Local\PeerLearnBuild\frontend-dev\
-  node_modules\        ← gerçek, yerel disk
-  src\                 ← JUNCTION → G:\...\frontend\src   (Drive'daki gerçek kaynak)
-  package.json, vite.config.js, ...  ← Drive'dan kopya
-```
-
-Kodu **her zaman Drive'daki `frontend/src` içinde düzenle**; junction sayesinde değişiklik
-anında yansır. (`vite.config.js` içindeki `resolve.preserveSymlinks: true` bunun için şarttır —
-onsuz Rollup yolu G:'ye çözer ve `node_modules`'ü bulamaz.)
+> **Tarihçe — kaldırılan düzenek.** Proje bir dönem Google Drive sanal diskinde (`G:`)
+> durdu ve npm `node_modules`'ü oraya kuramıyordu (`EBADF` / `ENOTEMPTY`). Çözüm olarak
+> `%LOCALAPPDATA%` altında ayrı bir çalışma alanı açılıp `src`/`public`/`e2e` klasörleri
+> oraya junction'lanıyordu. Depo yerel diske taşındığında bu düzenek tamamen kaldırıldı:
+> `frontend/setup-dev.ps1`, `Directory.Build.props`, `tools/e2e-frontend.ps1` silindi;
+> `vite.config.js`'teki `resolve.preserveSymlinks` ve 3 saniyelik `usePolling` de gitti.
+> HMR artık gecikmesiz çalışıyor. Depoyu tekrar bir senkron klasörüne taşırsanız bunların
+> hepsi geri gerekir — git geçmişinde duruyorlar.
 
 ### 1.3 Çalıştırma
 
@@ -63,7 +55,7 @@ dotnet run --project src/PeerLearn.Api
 ```
 
 ```bash
-npm --prefix "%LOCALAPPDATA%\PeerLearnBuild\frontend-dev" run dev
+npm --prefix frontend run dev
 ```
 
 Arayüz: <http://localhost:5173> · API + Swagger: <http://localhost:5000/swagger>
@@ -457,7 +449,7 @@ kullanmamak daha temiz ve tek kaynak korunuyor), ama bu bir **performans düzelt
 | Redis (Memurai 4.1.2) | Windows servisi, otomatik başlangıç — makine açılışında hazır |
 | API | `dotnet run --project src/PeerLearn.Api` → :5000 |
 | API (2. instance) | `dotnet run --project src/PeerLearn.Api --no-launch-profile --urls http://localhost:5001` |
-| Frontend | `npm --prefix "%LOCALAPPDATA%\PeerLearnBuild\frontend-dev" run dev` → :5173 |
+| Frontend | `npm --prefix frontend run dev` → :5173 |
 
 | Test | Komut | Kontrol |
 |---|---|---|

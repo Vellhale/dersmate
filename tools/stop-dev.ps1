@@ -22,6 +22,13 @@
 
 $ErrorActionPreference = 'Stop'
 
+# Vite süreci BU DEPONUN frontend klasörüne göre seçilir. Makinede başka Vite projeleri
+# olabilir; sadece "node + vite" eşleştirmek onları da kapatırdı.
+# WildcardPattern::Escape şart: -like operatörü * ? [ ] karakterlerini joker sayar, klonun
+# durduğu yolda bunlardan biri geçerse (C:\repos\proje[1]\...) eşleşme sessizce tutmaz.
+$root = Split-Path $PSScriptRoot -Parent
+$feDesen = [Management.Automation.WildcardPattern]::Escape((Join-Path $root 'frontend'))
+
 function Dinliyor($port) {
     (Test-NetConnection -ComputerName localhost -Port $port -WarningAction SilentlyContinue).TcpTestSucceeded
 }
@@ -51,7 +58,7 @@ if (-not $bulundu) { Write-Host "  zaten kapali" -ForegroundColor DarkGray }
 Write-Host "`nVite durduruluyor..." -ForegroundColor Yellow
 $viteBulundu = $false
 Get-CimInstance Win32_Process -Filter "Name='node.exe'" |
-    Where-Object { $_.CommandLine -and $_.CommandLine -like '*PeerLearnBuild\frontend-dev*' -and $_.CommandLine -like '*vite*' } |
+    Where-Object { $_.CommandLine -and $_.CommandLine -like "*$feDesen*" -and $_.CommandLine -like '*vite*' } |
     ForEach-Object {
         $viteBulundu = $true
         # Önce sarmalayıcı PowerShell (start-dev.ps1 onu Start-Process ile açıyor), sonra node:

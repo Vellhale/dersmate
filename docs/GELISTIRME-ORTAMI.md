@@ -178,5 +178,3 @@ Ayrıntı: `frontend/e2e/README.md` ve `docs/DEVAM-EDILECEK.md`.
 | `connection refused` (5432) | Konteyner kalkmamış — `docker compose ps` |
 | `Npgsql...database "peerlearn" does not exist` | Hacim eski bir kurulumdan kalmış — `docker compose down -v` sonra 1–2. adım |
 | Sağlık ucu `Degraded` | Redis kopuk; tek instance'ta çalışmaya devam eder |
-| Vite sayfayı saniyede bir yeniliyor | Google Drive senkronu; `vite.config.js`'teki polling ayarları bunun içindir |
-| Build `.exe` kilitli diyor | Google Drive; `Directory.Build.props` çıktıyı `%LOCALAPPDATA%` altına yönlendirir |

@@ -41,6 +41,12 @@ powershell -ExecutionPolicy Bypass -File .\tools\run-all-tests.ps1
 (`:5000` ve `:5001`); ikincisi yoksa `-SkipConcurrency` ekle — özet bunu `EKSİK` olarak
 raporlar, sessizce yeşile dönmez.
 
+Tarayıcı testleri ayrı ve **backend istemez** (API taklit ediliyor):
+
+```bash
+npm --prefix frontend run test:e2e
+```
+
 ## Belgeler
 
 | Dosya | İçerik |
@@ -59,8 +65,12 @@ parolası ve JWT anahtarı yalnızca localhost içindir ve açıkta durmaları b
 (`DEV-ONLY-...-CHANGE-IN-PRODUCTION`). Üretim değerleri depoya **girmez** —
 `docs/URETIME-CIKIS.md`'e bak.
 
-**`.claude/launch.json` makineye özeldir.** `frontend` yapılandırmasındaki yol bir
-kullanıcının makinesine sabitlenmiş durumda; kendi makinende çalışmazsa oradan düzelt.
+**Depoyu senkronize bir klasöre (Google Drive, OneDrive, Dropbox) koymayın.** Proje bir
+dönem Google Drive'da durdu ve bu, kendi başına bir düzenek yığını doğurmuştu: npm
+`node_modules`'ü oraya kuramadığı için ayrı bir çalışma alanı + junction'lar, build
+çıktısını kaçırmak için `Directory.Build.props`, Drive dosya olayı üretmediği için Vite'ta
+3 saniyelik polling. Hepsi kaldırıldı. Ayrıca senkron aracı `.git` klasörünü bozabilir —
+zaten GitHub yedeğin, Drive'a gerek yok.
 
 ⚠️ **`frontend/src/lib/hwid.js` içindeki `canvasSignal()` fonksiyonuna dokunma.**
 Çizilen metin ve renk, cihaz parmak izinin **girdisidir**. Herhangi birini değiştirmek

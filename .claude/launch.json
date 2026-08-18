@@ -20,7 +20,7 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": [
         "--prefix",
-        "C:/Users/abdul/AppData/Local/PeerLearnBuild/frontend-dev",
+        "frontend",
         "run",
         "dev"
       ],

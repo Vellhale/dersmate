@@ -1,9 +1,8 @@
 # Test/bench hesap temizligini calistirir.
 #
-# NEDEN SARMALAYICI: komutu elle yazmak iki kez basarisiz oldu. Sebep proje yolundaki
-# kesme isareti ("Drive'ım") ve PowerShell'in inline env-var onekini (PGPASSWORD=... psql)
-# desteklememesi. Burada yol da parola da betigin icinde, disaridan tirnaklanacak hicbir
-# sey yok.
+# NEDEN SARMALAYICI: komutu elle yazmak iki kez basarisiz oldu. Sebep PowerShell'in inline
+# env-var onekini (PGPASSWORD=... psql) desteklememesi ve proje yolunda kesme isareti
+# olabilmesi. Burada yol da parola da betigin icinde, disaridan tirnaklanacak hicbir sey yok.
 #
 # Kullanim (proje kokunden):  powershell -ExecutionPolicy Bypass -File .\tools\temizlik-calistir.ps1
 #

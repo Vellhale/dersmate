@@ -14,12 +14,15 @@ $ErrorActionPreference = 'Stop'
 
 $root = Split-Path $PSScriptRoot -Parent
 
-# Proje yolu KESME İŞARETİ içeriyor: "G:\Drive'ım\...". Alt sürece geçirilen komut
-# metninde yol tek tırnak içine alınırsa tırnak tam orada kapanır ve komut sessizce
-# bozulur (süreç hiç başlamaz, hata da görünmez). PowerShell'de tek tırnaklı dizgede
-# kesme işareti ikiye katlanarak kaçırılır.
+# Yol KESME İŞARETİ içerebilir. Alt sürece geçirilen komut metninde yol tek tırnak içine
+# alınırsa tırnak tam orada kapanır ve komut sessizce bozulur — süreç hiç başlamaz, hata
+# da görünmez. PowerShell'de tek tırnaklı dizgede kesme işareti ikiye katlanarak kaçırılır.
+# Depo şu an kesme işaretsiz bir yolda duruyor ama bu kaçırma savunma olarak kalıyor:
+# klonlayan kişinin kullanıcı adında kesme işareti olabilir (C:\Users\Ada'nın\...).
 $rootEsc = $root -replace "'", "''"
 
+# Loglar ve PostgreSQL veri dizini depo DIŞINDA (%LOCALAPPDATA%) tutulur. Bunlar üretilen
+# ve makineye özgü şeyler; depo klasöründe dursalardı her koşuda git'i kirletirlerdi.
 $logDir = Join-Path $env:LOCALAPPDATA 'PeerLearnBuild\devlog'
 if (-not (Test-Path $logDir)) { New-Item -ItemType Directory -Path $logDir -Force | Out-Null }
 
@@ -61,36 +64,16 @@ if (Dinliyor 5173) {
     Write-Host "Frontend zaten calisiyor (5173)." -ForegroundColor Green
 } else {
     Write-Host "Frontend baslatiliyor (http://localhost:5173)..."
-    # Vite, Drive'daki klasörden DEĞİL yerel çalışma alanından koşar: node_modules Google
-    # Drive'a kurulamıyor, bu yüzden frontend\setup-dev.ps1 yerel bir çalışma alanı açıp
-    # "src"/"public" klasörlerini Drive'daki kaynağa junction'lıyor. Drive yolundan
-    # çalıştırılırsa "'vite' is not recognized" hatası alınır.
-    $feDev = Join-Path $env:LOCALAPPDATA 'PeerLearnBuild\frontend-dev'
-    if (-not (Test-Path (Join-Path $feDev 'node_modules'))) {
-        throw "Frontend calisma alani kurulmamis: $feDev  (once frontend\setup-dev.ps1 calistir)"
-    }
-
-    <#
-      YAPILANDIRMA DOSYALARI HER BASLANGICTA YENIDEN KOPYALANIR.
-
-      "src" ve "public" Drive'a junction, ama index.html / vite.config.js / tailwind.config.js
-      / .env.development KOPYADIR (bkz. frontend\setup-dev.ps1). Yani Drive'da index.html'i
-      duzenlemek Vite'a HIC ULASMAZ ve degisiklik sessizce yok sayilir — sayfa baslgini
-      degistirip "neden olmadi" diye aramak tam olarak bu yuzden oluyor.
-
-      Kopyalama tek yonlu: Drive kaynak, calisma alani turev.
-    #>
-    foreach ($cfg in 'index.html', 'package.json', 'vite.config.js', 'tailwind.config.js',
-                     'postcss.config.js', '.env.development', 'playwright.config.js') {
-        $kaynak = Join-Path $root "frontend\$cfg"
-        if (Test-Path -LiteralPath $kaynak) { Copy-Item -LiteralPath $kaynak -Destination $feDev -Force }
+    $fe = Join-Path $root 'frontend'
+    if (-not (Test-Path (Join-Path $fe 'node_modules'))) {
+        throw "frontend\node_modules yok. Once calistir:  cd frontend; npm install"
     }
     Start-Process -FilePath 'powershell.exe' -WindowStyle Hidden `
         -RedirectStandardOutput (Join-Path $logDir 'vite.out.log') `
         -RedirectStandardError  (Join-Path $logDir 'vite.err.log') `
         -ArgumentList @(
             '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command',
-            "Set-Location '$($feDev -replace "'", "''")'; npm run dev"
+            "Set-Location '$($fe -replace "'", "''")'; npm run dev"
         )
 }
 

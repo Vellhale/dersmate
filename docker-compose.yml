@@ -86,7 +86,8 @@ services:
 
 volumes:
   db-data:
-    # İsimli hacim, bind mount DEĞİL: proje klasörü Google Drive üzerinde ve Drive'ın
-    # dosya kilitleri PostgreSQL'in veri dizinini bozar (bkz. Directory.Build.props'taki
-    # aynı gerekçe). Hacim Docker'ın kendi alanında durur, Drive'a hiç dokunmaz.
+    # İsimli hacim, bind mount DEĞİL. Veritabanı dosyaları depo klasöründe durmamalı:
+    # git'i kirletirler, yedeklenmeleri anlamsızdır ve klasör bir senkron aracına
+    # (Drive/OneDrive) taşınırsa dosya kilitleri veri dizinini bozar. Hacim Docker'ın
+    # kendi alanında durur.
     name: peerlearn-db-data

@@ -53,8 +53,8 @@ Section 'B. Hız sınırı: kimlik ucunda tetikleniyor'
 $env:ASPNETCORE_ENVIRONMENT = 'Development'
 $env:RateLimit__AuthPerMinute = '3'
 
-# Yol TIRNAKLANMALI: proje dizini boşluk ve kesme işareti içeriyor (G:\Drive'ım\...),
-# Start-Process argümanı tırnaksız verilince yolu ilk boşluktan bölüyor.
+# Yol TIRNAKLANMALI: proje dizininde boşluk olabilir ve Start-Process argümanı tırnaksız
+# verilince yolu ilk boşluktan böler — süreç anlamsız bir hatayla düşer.
 $sunucu = Start-Process -FilePath 'dotnet' -ArgumentList @('run', '--project', "`"$api`"", '--no-build', '--no-launch-profile', '--urls', 'http://localhost:5098') `
     -PassThru -NoNewWindow -RedirectStandardOutput (Join-Path $env:TEMP 'pl-rl-out.txt') `
     -RedirectStandardError (Join-Path $env:TEMP 'pl-rl-err.txt')

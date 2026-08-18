@@ -11,9 +11,9 @@ namespace PeerLearn.Infrastructure.Services;
 /// SMTP üzerinden gerçek e-posta gönderimi.
 ///
 /// NEDEN HARİCİ PAKET YOK: System.Net.Mail çerçeveyle geliyor ve tek ihtiyacımız olan şey
-/// düz metin bir doğrulama e-postası göndermek. Bir SDK (SendGrid/SES) eklemek, bu projenin
-/// kurulum kırılganlığını (Google Drive üzerinde node_modules/NuGet) artırırdı. Sağlayıcı
-/// değiştirilecekse yapılacak tek şey IEmailSender'ın başka bir uygulamasını yazmaktır.
+/// düz metin bir doğrulama e-postası göndermek. Bir SDK (SendGrid/SES) eklemek, tek bir
+/// çağrı için bağımlılık ve kimlik yönetimi yükü getirirdi. Sağlayıcı değiştirilecekse
+/// yapılacak tek şey IEmailSender'ın başka bir uygulamasını yazmaktır.
 ///
 /// GÖNDERİM HATASI YUTULMAZ ama akışı da düşürmez: kayıt işlemi tamamlanmışken e-posta
 /// gönderilemediyse kullanıcı zaten "yeniden gönder" ile kurtulabilir (bkz.

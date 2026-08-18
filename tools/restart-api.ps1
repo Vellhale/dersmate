@@ -15,7 +15,9 @@
 $ErrorActionPreference = 'Stop'
 
 $root    = Split-Path $PSScriptRoot -Parent
-$rootEsc = $root -replace "'", "''"      # yol kesme işareti içeriyor: "G:\Drive'ım\..."
+$rootEsc = $root -replace "'", "''"      # yolda kesme işareti olabilir (C:\Users\Ada'nın\...):
+                                         # tek tırnaklı dizgede ikiye katlanmazsa tırnak
+                                         # orada kapanır ve komut sessizce bozulur.
 $proje   = Join-Path $root 'src\PeerLearn.Api'
 $logDir  = Join-Path $env:LOCALAPPDATA 'PeerLearnBuild\devlog'
 if (-not (Test-Path $logDir)) { New-Item -ItemType Directory -Path $logDir -Force | Out-Null }
