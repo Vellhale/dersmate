@@ -1,0 +1,92 @@
+# Geliştirme bağımlılıkları: PostgreSQL + Redis.
+#
+# Uygulamanın KENDİSİ burada çalışmaz — API'yi `dotnet run`, arayüzü `npm run dev` ile
+# kendi makinende koşuyorsun. Bu dosya yalnızca ikisinin ihtiyaç duyduğu iki servisi
+# ayağa kaldırır. Sebep: her kod değişikliğinde imaj yeniden kurmak, iki kişilik bir
+# ekipte kazandırdığından fazlasını götürür.
+#
+#   docker compose up -d          → başlat
+#   docker compose ps             → durum (healthy olmasını bekle)
+#   docker compose logs -f db     → veritabanı günlüğü
+#   docker compose down           → durdur (VERİ KALIR)
+#   docker compose down -v        → durdur ve VERİYİ SİL (temiz kurulum)
+#
+# Ayrıntı ve ilk kurulum sırası: docs/GELISTIRME-ORTAMI.md
+
+name: peerlearn
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: peerlearn-db
+    restart: unless-stopped
+
+    # DEĞERLER appsettings.json İLE BİREBİR AYNI OLMALI.
+    # Depodaki bağlantı dizesi: Host=localhost;Port=5432;Database=peerlearn;
+    #                           Username=peerlearn;Password=PeerLearnDev2026
+    # Birini değiştirirsen diğerini de değiştir; aksi halde API açılışta
+    # "password authentication failed" ile düşer ve sebebi bariz olmaz.
+    #
+    # Bu parola GELİŞTİRME parolasıdır ve depoda açıkta durması bilinçlidir
+    # (bkz. docs/URETIME-CIKIS.md — üretimde ConnectionStrings__Postgres ortam
+    # değişkeniyle verilir ve ProductionGuard eksikse uygulamayı açtırmaz).
+    environment:
+      POSTGRES_DB: peerlearn
+      POSTGRES_USER: peerlearn
+      POSTGRES_PASSWORD: PeerLearnDev2026
+      # Sıralama (collation) BİLEREK 'C': bayt sırası, yani her makinede birebir aynı.
+      # tr_TR gibi bir yerel ayar 'İ/ı/ş' harflerini "doğru" sıralar ama sonucu işletim
+      # sisteminin ICU/glibc sürümüne bağlar; iki geliştiricinin ORDER BY'ı farklı sonuç
+      # verir ve indeksler sürüm yükseltmesinde bozulur. Bir sorgu gerçekten Türkçe
+      # sıralama istiyorsa bunu `ORDER BY x COLLATE "tr-TR-x-icu"` ile açıkça istemeli.
+      #
+      # NOT: bu argümanlar YALNIZCA hacim boşken, ilk kurulumda uygulanır. Mevcut bir
+      # kurulumda değiştirmek için `docker compose down -v` gerekir (veri silinir).
+      POSTGRES_INITDB_ARGS: '--encoding=UTF8 --locale=C'
+      TZ: UTC
+
+    ports:
+      # 127.0.0.1'e bağlı: konteyner yalnızca bu makineden erişilebilir. Salt "5432:5432"
+      # yazmak portu ağdaki herkese açar ve Windows'ta güvenlik duvarı bunu sormaz.
+      - '127.0.0.1:5432:5432'
+
+    volumes:
+      - db-data:/var/lib/postgresql/data
+
+    # API, DB hazır olmadan açılırsa migration'da patlar. healthcheck + depends_on
+    # ikilisi bunu engelliyor. `-U peerlearn -d peerlearn` şart: argümansız pg_isready
+    # sunucu ayakta ama veritabanı henüz oluşmamışken de "hazır" der.
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U peerlearn -d peerlearn']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  cache:
+    image: redis:7-alpine
+    container_name: peerlearn-cache
+    restart: unless-stopped
+
+    ports:
+      - '127.0.0.1:6379:6379'
+
+    # KALICILIK BİLEREK KAPALI (--save '' --appendonly no).
+    # Redis burada yalnızca dağıtık kilit ve önbellek taşıyor; ikisi de yeniden
+    # üretilebilir veri. Kalıcılık açık olsaydı, geliştirme sırasında yeniden başlatılan
+    # bir konteyner ESKİ kilitleri geri yükler ve "cüzdan kilidi alınamadı" hataları
+    # sebepsiz görünürdü. Üretimde bu karar yeniden değerlendirilmeli.
+    command: ['redis-server', '--save', '', '--appendonly', 'no']
+
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  db-data:
+    # İsimli hacim, bind mount DEĞİL: proje klasörü Google Drive üzerinde ve Drive'ın
+    # dosya kilitleri PostgreSQL'in veri dizinini bozar (bkz. Directory.Build.props'taki
+    # aynı gerekçe). Hacim Docker'ın kendi alanında durur, Drive'a hiç dokunmaz.
+    name: peerlearn-db-data

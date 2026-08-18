@@ -1,0 +1,34 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-slate-50 text-slate-900 antialiased;
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  }
+}
+
+@layer components {
+  /* Dokunmatikte text-base (16px) ŞART: iOS Safari — iPad dahil — 16px'ten küçük yazı
+     tipli bir alana odaklanınca sayfayı otomatik yakınlaştırır ve kullanıcı elle geri
+     uzaklaştırmak zorunda kalır. py-2.5 + 16px ≈ 44px yükseklik veriyor (dokunma hedefi
+     alt sınırı). Eşik lg: 768px'lik tablet de parmakla kullanılıyor. */
+  /* Kenarlık slate-300 → slate-200: alan sınırı zaten beyaz zemin/gri sayfa karşıtlığıyla
+     okunuyor; koyu çerçeve minimal dilde gereksiz ağırlık. Odak halkası (brand-100)
+     dokunulmadı — erişilebilirlik için görünür odak şart. */
+  .input {
+    @apply w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-base
+           outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100
+           disabled:cursor-not-allowed disabled:bg-slate-100
+           lg:py-2 lg:text-sm;
+  }
+
+  .label {
+    @apply mb-1 block text-sm font-medium text-slate-700;
+  }
+}

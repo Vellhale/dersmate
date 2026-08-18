@@ -1,0 +1,80 @@
+using PeerLearn.Domain.Common;
+
+namespace PeerLearn.Domain.Moderation;
+
+/// <summary>
+/// TEK YÖNLÜ şikayet. Şikayet edilen kişi bunu hiçbir yerde görmez ve yanıt veremez.
+/// </summary>
+/// <remarks>
+/// NEDEN İTİRAZIN (Dispute) YERİNE GEÇTİ.
+///
+/// İtiraz iki taraflıydı: öğrenci itiraz açar, eğitmen savunma yazar, hakem karar verir ve
+/// karar boyunca dersin puanı donardı. Bu yapı, aralarında ders ilişkisi olan iki kişiyi
+/// karşı karşıya getiriyordu — "beni şikayet etmişsin" konuşması platformun kendisinde
+/// başlıyordu. Amaç kötü davranışı yönetime bildirmekti; sonuç iki kullanıcı arasında
+/// gerginlik üretmekti.
+///
+/// Şikayet bunu üç noktada değiştiriyor:
+///   1. GİZLİ — şikayet edilene hiçbir bildirim gitmez, profilinde/derslerinde görünmez.
+///   2. SAVUNMA YOK — yanıt ucu yoktur; kararı yalnızca yönetim verir.
+///   3. DERSİ ETKİLEMEZ — puan basımı normal akışında sürer. Bilinçli bir takas: şikayet
+///      tek başına puanı dondursaydı, sebebini bilmeyen ve itiraz edemeyen eğitmen
+///      cezalandırılmış olurdu. Yaptırım kişiye uygulanır (uyarı/askı/ban), derse değil.
+///
+/// ESKİ İTİRAZLAR SİLİNMEDİ: <see cref="Dispute"/> tablosu ve geçmiş kararlar denetim izi
+/// olarak duruyor, yalnızca yeni itiraz AÇILAMIYOR.
+/// </remarks>
+public class Report : BaseEntity
+{
+    /// <summary>Şikayeti açan. Yalnızca yönetim görür.</summary>
+    public Guid ReporterUserId { get; set; }
+
+    /// <summary>Şikayet edilen kişi. Bu alanın kullanıcıya dönen HİÇBİR DTO'da karşılığı yoktur.</summary>
+    public Guid ReportedUserId { get; set; }
+
+    /// <summary>
+    /// İlgili ders. Zorunlu DEĞİL: bir kullanıcı ders dışı bir davranış için de
+    /// (sohbette taciz gibi) şikayet edilebilmeli.
+    /// </summary>
+    public Guid? SessionId { get; set; }
+
+    public ReportReason Reason { get; set; }
+
+    public string Description { get; set; } = null!;
+
+    public ReportStatus Status { get; set; } = ReportStatus.Open;
+
+    public Guid? ReviewedByAdminId { get; set; }
+    public DateTime? ReviewedAtUtc { get; set; }
+
+    /// <summary>Yönetimin kapatma notu. Şikayet edene de gösterilmez — iç kayıttır.</summary>
+    public string? AdminNote { get; set; }
+}
+
+public enum ReportReason
+{
+    /// <summary>Ders yapılmadı ama yapılmış gibi onaya gönderildi.</summary>
+    SessionNotHeld = 0,
+
+    /// <summary>Kanıt olarak sahte/alakasız görsel yüklendi.</summary>
+    FakeProof = 1,
+
+    /// <summary>Ders süresi anlaşılandan belirgin kısa sürdü.</summary>
+    DurationMismatch = 2,
+
+    /// <summary>Hakaret, taciz, uygunsuz davranış.</summary>
+    Abuse = 3,
+
+    Other = 4
+}
+
+public enum ReportStatus
+{
+    Open = 0,
+
+    /// <summary>Yönetim inceledi ve bir yaptırım uyguladı.</summary>
+    ActionTaken = 1,
+
+    /// <summary>Yönetim inceledi, işlem gerektirmedi.</summary>
+    Dismissed = 2
+}

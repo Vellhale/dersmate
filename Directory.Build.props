@@ -1,0 +1,14 @@
+<Project>
+
+  <!--
+    Proje Google Drive senkronize klasöründe durduğu için build çıktılarını (bin/obj)
+    yerel diske yönlendiriyoruz:
+      1) Drive, yeni üretilen .exe dosyalarını tararken kilitliyor (CreateAppHost IOException).
+      2) Binlerce geçici build dosyasının buluta senkronlanması gereksiz ve yavaş.
+  -->
+  <PropertyGroup>
+    <BaseIntermediateOutputPath>$(LOCALAPPDATA)\PeerLearnBuild\obj\$(MSBuildProjectName)\</BaseIntermediateOutputPath>
+    <BaseOutputPath>$(LOCALAPPDATA)\PeerLearnBuild\bin\$(MSBuildProjectName)\</BaseOutputPath>
+  </PropertyGroup>
+
+</Project>

@@ -1,0 +1,47 @@
+bin/
+obj/
+artifacts/
+proof-storage/
+node_modules/
+dist/
+.vite/
+*.user
+.vs/
+.vscode/
+appsettings.Development.json
+appsettings.Local.json
+
+# Playwright çıktıları (frontend/e2e). Rapor ve izler her koşuda yeniden üretilir;
+# test-results/ içinde başarısız koşuların ekran görüntüleri de olur.
+playwright-report/
+test-results/
+blob-report/
+.playwright/
+
+# --- Google Drive ---
+# Drive her klasöre bir desktop.ini bırakıyor. Depoya girerse arkadaşının makinesinde
+# anlamsız dosyalar olarak durur ve her senkronda gürültü diff'i üretir.
+desktop.ini
+
+# --- Playwright MCP oturum çıktıları ---
+# Tarayıcı oturumlarının ekran görüntüleri ve konsol dökümleri (~2 MB, her koşuda yeniden
+# üretilir). playwright-report/ zaten yukarıda; bu ayrı bir klasör.
+.playwright-mcp/
+
+# --- dotnet test ---
+TestResults/
+
+# --- ortam dosyaları ---
+# .env.development ve .env.example DEPODA KALIR: içlerindeki her şey VITE_ önekli, yani
+# tanım gereği istemciye gönderiliyor — gizli olamaz. Klonlayan kişi hiçbir şey
+# kopyalamadan çalıştırabilsin diye bilinçli olarak izleniyorlar.
+# Gerçek değer taşıyabilecek olanlar (üretim, kişisel geçersiz kılmalar) hariç:
+.env.local
+.env.*.local
+.env.production
+
+# --- editör / işletim sistemi ---
+.idea/
+Thumbs.db
+.DS_Store
+*.swp

@@ -1,0 +1,986 @@
+import { useEffect, useMemo, useState } from 'react'
+import { api } from '../lib/api'
+import { useAsync } from '../state/useAsync'
+import { useWallet } from '../state/WalletContext'
+import { AnalyticsEvents, trackEvent } from '../lib/analytics'
+import { ReviewModal } from '../components/ReviewModal'
+import { PersonLink } from '../components/PersonLink'
+import {
+  REPORT_REASON_LABELS,
+  SESSION_STATUS_LABELS,
+  TRANSACTION_LABELS,
+  formatDateTime,
+  remainingText,
+  signedCredit,
+} from '../lib/format'
+import { Badge, Button, Card, EmptyState, ErrorBox, Field, Loading, Modal, Notice, Pagination, SectionTitle } from '../components/ui'
+
+const STATUS_TONES = {
+  Booked: 'brand',
+  AwaitingApproval: 'warning',
+  Completed: 'success',
+  Disputed: 'danger',
+  Cancelled: 'neutral',
+  Expired: 'neutral',
+}
+
+/*
+  Sayfa başına 5 ders. Eskiden 20'ydi ve "daha fazla yükle" ile ekleniyordu; 60 dersi olan
+  bir kullanıcıda sayfa üç ekran boyu uzuyordu. Sayfalar artık DEĞİŞİYOR, birikmiyor —
+  liste hep aynı yükseklikte kalıyor ve sayfanın altındaki puan geçmişi hep aynı yerde.
+*/
+const PAST_PAGE_SIZE = 5
+
+export default function Sessions() {
+  const sessions = useAsync(() => api.mySessions(1, PAST_PAGE_SIZE), [])
+  const matches = useAsync(() => api.myMatches(), [])
+  const { refreshWallet } = useWallet()
+  const [notice, setNotice] = useState(null)
+  const [bookOpen, setBookOpen] = useState(false)
+  const [dialog, setDialog] = useState(null) // { type: 'complete'|'approve'|'report'|'cancel', session }
+
+  /*
+    Geçmişin GÖRÜNEN sayfası. null iken sessions.data'daki ilk sayfa gösterilir; kullanıcı
+    bir sayfaya tıkladığında burası dolar ve onu GEÇERSİZ KILAR (eklemez).
+
+    Ayrı state olmasının sebebi: sessions.reload() tüm ekranı tazeliyor ve geçmiş sayfası
+    da 1'e dönmeli — ders onaylandığında o ders aktiften geçmişin ilk sayfasına düşer.
+    Tek kaynak kullanılsaydı ya reload sayfayı sıfırlamaz ya da sayfa değiştirmek tüm
+    ekranı spinner'a düşürürdü.
+  */
+  const [pastView, setPastView] = useState(null)
+  const [pastLoading, setPastLoading] = useState(false)
+  const [pastError, setPastError] = useState(null)
+
+  // Time-Lock ve otomatik onay geri sayımları canlı aksın diye periyodik yeniden çizim.
+  const [, setTick] = useState(0)
+  useEffect(() => {
+    const id = setInterval(() => setTick((t) => t + 1), 20000)
+    return () => clearInterval(id)
+  }, [])
+
+  const groups = useMemo(() => {
+    // Aktif dersler sunucuda ayrılıyor (Booked/AwaitingApproval/Disputed); burada
+    // yalnızca "senden aksiyon bekleyen" ile "yaklaşan" ayrımı yapılır.
+    const active = sessions.data?.active ?? []
+    return {
+      action: active.filter((s) => s.canComplete || s.canApprove || s.status === 'Disputed'),
+      upcoming: active.filter((s) => !s.canComplete && !s.canApprove && s.status !== 'Disputed'),
+      past: (pastView ?? sessions.data?.past)?.items ?? [],
+    }
+  }, [sessions.data, pastView])
+
+  const pastSayfa = pastView ?? sessions.data?.past
+  const pastTotal = pastSayfa?.totalCount ?? 0
+  const pastPage = pastSayfa?.page ?? 1
+  const pastTotalPages = Math.ceil(pastTotal / PAST_PAGE_SIZE)
+  const activeTruncated = (sessions.data?.activeTotal ?? 0) > (sessions.data?.active?.length ?? 0)
+
+  function refresh(message) {
+    setDialog(null)
+    setBookOpen(false)
+    if (message) setNotice(message)
+
+    // Geçmiş 1. sayfaya döner: onaylanan ders aktiften çıkıp geçmişin BAŞINA girer,
+    // kullanıcı 4. sayfada kalsaydı az önce onayladığı dersi göremezdi.
+    setPastView(null)
+    setPastError(null)
+    sessions.reload()
+    // Onay puan basar; basım unvanı değiştirebilir. Başlıktaki unvan rozeti de tazelenmeli.
+    refreshWallet()
+  }
+
+  async function sayfayaGit(hedef) {
+    if (hedef < 1 || hedef > pastTotalPages || hedef === pastPage) return
+    setPastLoading(true)
+    setPastError(null)
+    try {
+      const data = await api.mySessions(hedef, PAST_PAGE_SIZE)
+      setPastView(data.past)
+    } catch (err) {
+      // Hata AYRI tutulur: sayfa yükleme hatası, zaten görünen listeyi silmemeli.
+      setPastError(err)
+    } finally {
+      setPastLoading(false)
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">Derslerim</h1>
+          <p className="mt-1 text-sm text-slate-600">
+            Ders almak ücretsizdir. Ders onaylandığında anlatan tarafa puan yazılır.
+          </p>
+        </div>
+        <Button onClick={() => setBookOpen(true)}>+ Ders rezerve et</Button>
+      </div>
+
+      {notice && (
+        <Notice tone="success" onDismiss={() => setNotice(null)}>
+          {notice}
+        </Notice>
+      )}
+
+      <ErrorBox error={sessions.error} onRetry={sessions.reload} />
+
+      {sessions.loading ? (
+        <Loading />
+      ) : groups.action.length + groups.upcoming.length + groups.past.length === 0 ? (
+        <EmptyState
+          title="Henüz dersin yok"
+          description="Kabul edilmiş bir eşleşmen varsa hemen ders saati belirleyebilirsin."
+          action={<Button onClick={() => setBookOpen(true)}>Ders rezerve et</Button>}
+        />
+      ) : (
+        <div className="space-y-8">
+          {/* Kesme SESSİZ olmaz: kullanıcı listenin tamamını görmediğini bilmeli. */}
+          {activeTruncated && (
+            <Notice tone="warning">
+              {sessions.data.activeTotal} aktif dersinden ilk {sessions.data.active.length} tanesi
+              gösteriliyor. Listeyi kısaltmak için tamamlanan dersleri onayla.
+            </Notice>
+          )}
+
+          {groups.action.length > 0 && (
+            <section>
+              <SectionTitle>Senden aksiyon bekleyenler</SectionTitle>
+              <div className="space-y-3">
+                {groups.action.map((s) => (
+                  <SessionCard key={s.sessionId} session={s} onAction={setDialog} />
+                ))}
+              </div>
+            </section>
+          )}
+
+          {groups.upcoming.length > 0 && (
+            <section>
+              <SectionTitle>Yaklaşan dersler</SectionTitle>
+              <div className="space-y-3">
+                {groups.upcoming.map((s) => (
+                  <SessionCard key={s.sessionId} session={s} onAction={setDialog} />
+                ))}
+              </div>
+            </section>
+          )}
+
+          {groups.past.length > 0 && (
+            <section>
+              <SectionTitle>
+                Geçmiş ({pastTotal}){pastTotalPages > 1 ? ` · sayfa ${pastPage}/${pastTotalPages}` : ''}
+              </SectionTitle>
+              <div className="space-y-3">
+                {groups.past.map((s) => (
+                  <SessionCard key={s.sessionId} session={s} onAction={setDialog} past />
+                ))}
+              </div>
+
+              <ErrorBox error={pastError} onRetry={() => sayfayaGit(pastPage)} />
+
+              <Pagination
+                page={pastPage}
+                totalPages={pastTotalPages}
+                onChange={sayfayaGit}
+                disabled={pastLoading}
+              />
+            </section>
+          )}
+        </div>
+      )}
+
+      {/*
+        Puan geçmişi, ders listesinin ALTINDA ve ders akışıyla AYNI sayfada.
+
+        Eskiden ayrı bir Cüzdan ekranıydı; o ekran kalkınca defter erişilemez hâle geldi
+        (uç duruyordu, çağıran kalmamıştı). Buraya taşındı çünkü her puan hareketinin
+        kaynağı bir derstir — "bu puan nereden geldi" sorusunun yanıtı hemen üstündeki
+        listede duruyor. Ayrı bir sekme, aynı olayı iki yere bölerdi.
+      */}
+      <PointHistory />
+
+      {/*
+        Modallar KOŞULLU render edilir ve session id ile key'lenir.
+        Koşulsuz render edilselerdi bileşen state'i (seçilen dosya, yazılan kod) kapatınca
+        sıfırlanmaz ve BİR SONRAKİ derse taşınırdı — yanlış derse yanlış kanıt yüklenebilirdi.
+      */}
+      {bookOpen && (
+        <BookModal
+          matches={matches.data?.active ?? []}
+          onClose={() => setBookOpen(false)}
+          onBooked={(code, mintAmount) =>
+            refresh(
+              // Öğrenci hiçbir şey ödemiyor; gösterilen tek sayı EĞİTMENİN kazanacağı
+              // puan ve o da sunucudan geliyor (istemcide formül kopyası tutulmuyor).
+              `Ders rezerve edildi (${mintAmount === 0 ? 'gönüllü ders' : `eğitmen ${mintAmount} puan kazanacak`}). ` +
+                `Doğrulama kodun: ${code} — ders ekran görüntüsünde görünmeli.`,
+            )
+          }
+        />
+      )}
+
+      {dialog?.type === 'complete' && (
+        <CompleteModal
+          key={dialog.session.sessionId}
+          session={dialog.session}
+          onClose={() => setDialog(null)}
+          onDone={() => refresh('Kanıt yüklendi. Ders karşı tarafın onayına gönderildi.')}
+        />
+      )}
+
+      {dialog?.type === 'approve' && (
+        <ApproveModal
+          key={dialog.session.sessionId}
+          session={dialog.session}
+          onClose={() => setDialog(null)}
+          onApproved={(credits, session) => {
+            refresh(
+              credits > 0
+                ? `Ders onaylandı. Eğitmene ${credits} puan yazıldı.`
+                : 'Gönüllü ders onaylandı — puan yazılmadı.',
+            )
+            // Değerlendirme, onayın hemen ardından açılır: kural gereği yorum ancak
+            // tamamlanmış bir dersin çıktısı olabilir ve bu an tam olarak o an.
+            setDialog({ type: 'review', session })
+          }}
+          onReport={() => setDialog({ type: 'report', session: dialog.session })}
+        />
+      )}
+
+      {dialog?.type === 'review' && (
+        <ReviewModal
+          open
+          session={dialog.session}
+          onClose={() => setDialog(null)}
+          onSubmitted={() => {
+            setDialog(null)
+            refresh('Değerlendirmen kaydedildi. Teşekkürler!')
+          }}
+        />
+      )}
+
+      {dialog?.type === 'report' && (
+        <ReportModal
+          key={dialog.session.sessionId}
+          session={dialog.session}
+          onClose={() => setDialog(null)}
+          onDone={() => refresh('Şikayetin yönetime iletildi. Karşı tarafa bildirilmez.')}
+        />
+      )}
+
+      
+
+      {dialog?.type === 'cancel' && (
+        <CancelModal
+          key={dialog.session.sessionId}
+          session={dialog.session}
+          onClose={() => setDialog(null)}
+          onDone={() => refresh('Ders iptal edildi.')}
+        />
+      )}
+    </div>
+  )
+}
+
+const HISTORY_PAGE_SIZE = 20
+
+/**
+ * Puan geçmişi (eski Cüzdan ekranının defteri).
+ *
+ * AÇILINCA YÜKLENİR. Derslerim zaten iki istek atıyor; defter kullanıcıların çoğunun her
+ * ziyarette bakmadığı bir kayıt. Kapalı dururken sıfır maliyeti var, açıldığında tek
+ * sayfa geliyor.
+ */
+function PointHistory() {
+  const [open, setOpen] = useState(false)
+  const [rows, setRows] = useState([])
+  const [total, setTotal] = useState(0)
+  const [page, setPage] = useState(0)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
+
+  async function loadPage(next) {
+    setLoading(true)
+    setError(null)
+    try {
+      const result = await api.statement(next, HISTORY_PAGE_SIZE)
+      // Sayfa EKLENİR, değiştirilmez: "daha fazla" akışında önceki satırlar kaybolmamalı.
+      setRows((prev) => (next === 1 ? result.items : [...prev, ...result.items]))
+      setTotal(result.totalCount)
+      setPage(next)
+    } catch (err) {
+      setError(err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  function toggle() {
+    const next = !open
+    setOpen(next)
+    if (next && page === 0) loadPage(1)
+  }
+
+  return (
+    <section>
+      <button
+        type="button"
+        onClick={toggle}
+        aria-expanded={open}
+        className="flex min-h-11 w-full items-center justify-between gap-3 rounded-xl border border-slate-200/80
+                   bg-white px-4 py-3 text-left transition hover:border-slate-300 hover:bg-slate-50"
+      >
+        <span>
+          <span className="font-semibold text-slate-900">Puan geçmişi</span>
+          <span className="ml-2 text-sm text-slate-500">
+            Her hareketin hangi dersten geldiği
+          </span>
+        </span>
+        <span aria-hidden="true" className="text-slate-400">{open ? '▲' : '▼'}</span>
+      </button>
+
+      {open && (
+        <div className="mt-3">
+          <ErrorBox error={error} onRetry={() => loadPage(page || 1)} />
+
+          {loading && rows.length === 0 ? (
+            <Loading />
+          ) : rows.length === 0 && !error ? (
+            <Card>
+              <p className="text-sm text-slate-600">
+                Henüz puan hareketin yok. Bir ders anlatıp onaylandığında ilk kaydın burada belirir.
+              </p>
+            </Card>
+          ) : (
+            <>
+              <div className="space-y-2">
+                {rows.map((row, i) => (
+                  <HistoryRow key={`${row.createdAtUtc}-${i}`} row={row} />
+                ))}
+              </div>
+
+              {rows.length < total && (
+                <div className="mt-4 flex justify-center">
+                  <Button variant="secondary" loading={loading} onClick={() => loadPage(page + 1)}>
+                    Daha eski hareketler ({rows.length}/{total})
+                  </Button>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+    </section>
+  )
+}
+
+function HistoryRow({ row }) {
+  const kazanc = row.amount > 0
+
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-lg border border-slate-200/80 bg-white px-4 py-3">
+      <div className="min-w-0">
+        <p className="truncate text-sm font-medium text-slate-900">
+          {TRANSACTION_LABELS[row.type] ?? row.type}
+        </p>
+        {/* Konu ve karşı taraf sunucudan geliyor: çıplak bir ders kimliği kullanıcıya
+            hiçbir şey anlatmıyor. Ders bilgisi yoksa (hoş geldin puanı gibi) satır
+            yalnızca türüyle kalır. */}
+        <p className="truncate text-xs text-slate-500">
+          {row.topicName
+            ? `${row.topicName}${row.counterpartDisplayName ? ` · ${row.counterpartDisplayName}` : ''}`
+            : formatDateTime(row.createdAtUtc)}
+        </p>
+      </div>
+
+      <div className="shrink-0 text-right">
+        <div className={`text-sm font-semibold ${kazanc ? 'text-emerald-600' : 'text-slate-500'}`}>
+          {signedCredit(row.amount)}
+        </div>
+        <div className="text-xs text-slate-400">{formatDateTime(row.createdAtUtc)}</div>
+      </div>
+    </div>
+  )
+}
+
+function SessionCard({ session, onAction, past = false }) {
+  const startsIn = remainingText(session.scheduledStartUtc)
+  const endsIn = remainingText(session.scheduledEndUtc)
+  const autoApproveIn = remainingText(session.autoApproveDeadlineUtc)
+
+  // Sunucu bayrağı kaynak-of-truth; ders bitişi geçtiyse iyimser davranıp butonu açarız
+  // (sunucu yine doğrular — kullanıcı "neden hâlâ kapalı?" diye takılmasın).
+  const completeReady =
+    session.canComplete || (session.iAmTutor && session.status === 'Booked' && !endsIn)
+
+  const showCode = !past && (session.status === 'Booked' || session.status === 'AwaitingApproval')
+
+  return (
+    <Card>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge tone={session.iAmTutor ? 'success' : 'brand'}>
+              {session.iAmTutor ? 'Anlatıyorum' : 'Alıyorum'}
+            </Badge>
+            <span className="font-semibold text-slate-800">{session.topicName}</span>
+            <Badge tone={STATUS_TONES[session.status]}>
+              {SESSION_STATUS_LABELS[session.status] ?? session.status}
+            </Badge>
+          </div>
+
+          <p className="mt-1 text-sm text-slate-600">
+            {session.subjectName} ·{' '}
+            <PersonLink userId={session.otherUserId} className="text-brand-700">
+              {session.otherDisplayName}
+            </PersonLink>{' '}
+            ile
+          </p>
+
+          <p className="mt-1 text-sm text-slate-500">
+            {formatDateTime(session.scheduledStartUtc)} · {session.durationMinutes} dk ·{' '}
+            <strong className="text-slate-700">{session.isVolunteer ? 'gönüllü' : `${session.mintAmount} puan`}</strong>
+            {startsIn && !past && <span className="text-brand-600"> · {startsIn} sonra</span>}
+          </p>
+
+          {showCode && (
+            <div className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
+              Doğrulama kodu:{' '}
+              <span className="font-mono text-sm font-semibold tracking-wider text-slate-800">
+                {session.verificationCode}
+              </span>
+              {session.iAmTutor
+                ? ' — ders ekran görüntüsünde bu kod, sistem saati ve katılımcı listesi görünmeli.'
+                : ' — kanıt görselinde bu kodun göründüğünü doğrula.'}
+            </div>
+          )}
+
+          {session.iAmTutor && session.status === 'Booked' && endsIn && (
+            <p className="mt-2 text-xs text-amber-700">
+              ⏳ Time-Lock: “Dersi Tamamladım” <strong>{endsIn}</strong> sonra (planlanan bitişte) açılır.
+            </p>
+          )}
+
+          {session.canApprove && autoApproveIn && (
+            <p className="mt-2 text-xs text-amber-700">
+              ⏳ Onaylamazsan <strong>{autoApproveIn}</strong> sonra otomatik onaylanacak ve{' '}
+              eğitmene {session.mintAmount} puan yazılacak. İtiraz hakkın da o an kapanır.
+            </p>
+          )}
+        </div>
+
+        <div className="flex shrink-0 flex-wrap gap-2">
+          {session.iAmTutor && session.status === 'Booked' && (
+            <Button
+              disabled={!completeReady}
+              onClick={() => onAction({ type: 'complete', session })}
+              title={completeReady ? undefined : 'Ders bitiş saatinden önce tamamlanamaz.'}
+            >
+              Dersi tamamladım
+            </Button>
+          )}
+
+          {session.canApprove && (
+            <Button variant="success" onClick={() => onAction({ type: 'approve', session })}>
+              Kanıtı incele ve onayla
+            </Button>
+          )}
+
+          {/* Şikayet HER derste açık: eski itiraz yalnızca onay bekleyen derste
+              mümkündü, oysa kötü davranış geçmiş bir derste de yaşanmış olabilir.
+              Savunma düğmesi YOK — şikayet tek yönlüdür (bkz. Domain/Moderation/Report.cs). */}
+          {!session.canApprove && (
+            <Button variant="secondary" onClick={() => onAction({ type: 'report', session })}>
+              Şikayet et
+            </Button>
+          )}
+
+          {session.canCancel && (
+            <Button variant="secondary" onClick={() => onAction({ type: 'cancel', session })}>
+              İptal
+            </Button>
+          )}
+        </div>
+      </div>
+    </Card>
+  )
+}
+
+/**
+ * Çift taraflı onayın anlamlı olduğu yer: puan BASILMADAN önce öğrenci kanıtı görür.
+ * (Eskiden buradaki risk öğrencinin kredisiydi; artık öğrencinin kaybedeceği bir şey yok,
+ * ama onay hâlâ şart — basımın tek meşru tetikleyicisi dersin gerçekten yapılmış olması.)
+ * Kanıt görseli Authorization başlığı gerektirdiği için blob olarak indirilip object URL'e çevrilir.
+ */
+function ApproveModal({ session, onClose, onApproved, onReport }) {
+  const proofs = useAsync(() => api.sessionProofs(session.sessionId), [session.sessionId])
+  const [imageUrl, setImageUrl] = useState(null)
+  const [imageError, setImageError] = useState(null)
+  const [error, setError] = useState(null)
+  const [busy, setBusy] = useState(false)
+
+  const latestProof = proofs.data?.[proofs.data.length - 1] ?? null
+
+  useEffect(() => {
+    if (!latestProof) return
+
+    let revoked = false
+    let url = null
+
+    api
+      .proofContentUrl(session.sessionId, latestProof.proofId)
+      .then((objectUrl) => {
+        if (revoked) {
+          URL.revokeObjectURL(objectUrl)
+          return
+        }
+        url = objectUrl
+        setImageUrl(objectUrl)
+      })
+      .catch(setImageError)
+
+    return () => {
+      revoked = true
+      if (url) URL.revokeObjectURL(url) // Bellek sızıntısını önle.
+    }
+  }, [latestProof, session.sessionId])
+
+  async function approve() {
+    setBusy(true)
+    setError(null)
+    try {
+      const result = await api.approveSession(session.sessionId)
+
+      // credit_transferred — transfer GERÇEKLEŞTİKTEN sonra; onay tıklaması yetmez,
+      // sunucu kilit/escrow adımlarında reddedebilir. Gönüllü derste 0 gönderilir:
+      // olayı hiç atmamak, "kaç ders tamamlandı" ölçümünü eksik bırakırdı.
+      trackEvent(AnalyticsEvents.CreditTransferred, {
+        credits: result.creditsMinted,
+        trigger: 'student_approval',
+        volunteer: result.creditsMinted === 0,
+      })
+
+      onApproved(result.creditsMinted, session)
+    } catch (err) {
+      setError(err)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Modal open onClose={onClose} title="Kanıtı incele ve onayla">
+      <div className="space-y-4">
+        <Notice tone="info">
+          {/* "aktarılır" DEĞİL "yazılır": senden bir şey alınıp ona verilmiyor, puan bu anda
+              üretiliyor. Eski transfer dili öğrenciye bir bedel ödediği izlenimi veriyordu. */}
+          Onayladığında {session.otherDisplayName} kişisine{' '}
+          <strong>{session.mintAmount} puan</strong> yazılır ve işlem geri alınamaz. Senden
+          bir şey düşmez. Görselde{' '}
+          <strong className="font-mono">{session.verificationCode}</strong> kodunun, sistem saatinin
+          ve katılımcı listesinin göründüğünü doğrula.
+        </Notice>
+
+        {proofs.loading ? (
+          <Loading label="Kanıt yükleniyor…" />
+        ) : !latestProof ? (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+            Bu derse hiç kanıt yüklenmemiş. Ders gerçekten yapılmadıysa onaylama —
+            dilersen <strong>şikayet et</strong>, yönetim inceler.
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {latestProof.isDuplicateHash && (
+              <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
+                ⚠️ Bu görsel <strong>başka bir derste de kullanılmış</strong>. Sahte kanıt olabilir —
+                dikkatle incele.
+              </div>
+            )}
+
+            {imageError ? (
+              <ErrorBox error={imageError} />
+            ) : imageUrl ? (
+              <a href={imageUrl} target="_blank" rel="noopener noreferrer">
+                <img
+                  src={imageUrl}
+                  alt="Ders kanıtı ekran görüntüsü"
+                  className="max-h-80 w-full rounded-lg border border-slate-200/80 object-contain"
+                />
+              </a>
+            ) : (
+              <Loading label="Görsel indiriliyor…" />
+            )}
+
+            <p className="text-xs text-slate-500">
+              Yükleme: {formatDateTime(latestProof.uploadedAtUtc)} · Büyütmek için görsele tıkla.
+            </p>
+          </div>
+        )}
+
+        <ErrorBox error={error} />
+
+        <div className="flex flex-wrap justify-end gap-2">
+          <Button variant="secondary" onClick={onClose}>
+            Sonra karar ver
+          </Button>
+          <Button variant="danger" onClick={onReport}>
+            Şikayet et
+          </Button>
+          <Button variant="success" loading={busy} onClick={approve}>
+            Onayla ve puanı yaz
+          </Button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
+function BookModal({ matches, onClose, onBooked }) {
+  // Sunucudaki izinli süre kümesiyle birebir (SessionRules.AllowedDurations).
+  // Buraya fazladan bir değer eklemek, kullanıcıya sunucunun reddedeceği bir seçenek
+  // göstermek olur.
+  const DURATION_OPTIONS = [30, 60]
+
+  const [matchId, setMatchId] = useState('')
+  const [topicId, setTopicId] = useState('')
+  const [startLocal, setStartLocal] = useState('')
+  const [duration, setDuration] = useState(60)
+  const [error, setError] = useState(null)
+  const [busy, setBusy] = useState(false)
+
+  /*
+    Rezervasyonu YAPAN taraf her zaman ÖĞRENCİdir. Dolayısıyla seçilebilecek konu, karşı
+    tarafın BANA anlatacağı konudur:
+      - Ben isteği başlattıysam  → requestedTopic (benim öğrenmek istediğim)
+      - Karşı taraf başlattıysa  → offeredTopic  (onun karşılığında anlatmayı önerdiği)
+    Her ikisini birden listelemek, kullanıcının KENDİ anlatacağı konuya öğrenci olarak
+    kaydolmasına yol açardı (backend bunu reddetmez: ders açılır, puan yanlış tarafa yazılır).
+  */
+  const options = matches.map((match) => ({
+    match,
+    topicId: match.iAmInitiator ? match.requestedTopicId : match.offeredTopicId,
+    topicName: match.iAmInitiator ? match.requestedTopicName : match.offeredTopicName,
+  }))
+
+  const selected = options.find((o) => o.match.matchId === matchId) ?? null
+  const bookable = options.filter((o) => o.topicId)
+
+  async function submit(event) {
+    event.preventDefault()
+    setBusy(true)
+    setError(null)
+    try {
+      // datetime-local yerel saat verir; backend UTC bekler (toISOString hep "...Z" üretir).
+      const result = await api.bookSession({
+        matchId,
+        topicId: selected.topicId,
+        scheduledStartUtc: new Date(startLocal).toISOString(),
+        durationMinutes: Number(duration),
+      })
+      // session_requested — ders talebi (rezervasyon) oluştu. Escrow yok; basım onayda.
+      trackEvent(AnalyticsEvents.SessionRequested, {
+        duration_minutes: Number(duration),
+        mint_amount: result.mintAmount,
+      })
+
+      onBooked(result.verificationCode, result.mintAmount)
+    } catch (err) {
+      setError(err)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Modal open onClose={onClose} title="Ders rezerve et">
+      {matches.length === 0 ? (
+        <EmptyState
+          title="Kabul edilmiş eşleşmen yok"
+          description="Önce Keşfet sayfasından istek gönder ve karşı tarafın kabul etmesini bekle."
+        />
+      ) : bookable.length === 0 ? (
+        <EmptyState
+          title="Bu eşleşmelerde sana anlatılacak konu yok"
+          description="Aktif eşleşmelerinde ders anlatan taraf sensin. Ders almak için Keşfet'ten yeni bir istek gönder."
+        />
+      ) : (
+        <>
+          <form onSubmit={submit} id="book-form" className="space-y-4">
+            <Field
+              label="Eşleşme"
+              hint="Dersi alan taraf sensin; listelenen konu karşı tarafın sana anlatacağı konudur."
+            >
+              <select
+                className="input"
+                value={matchId}
+                onChange={(e) => {
+                  setMatchId(e.target.value)
+                  setTopicId('')
+                }}
+                required
+              >
+                <option value="">Seç…</option>
+                {bookable.map((option) => (
+                  <option key={option.match.matchId} value={option.match.matchId}>
+                    {option.match.otherDisplayName} anlatacak — {option.topicName}
+                  </option>
+                ))}
+              </select>
+            </Field>
+
+            {selected && (
+              <div
+                className={`rounded-lg px-3 py-2 text-sm ${
+                  selected.match.tutorOffersVolunteer
+                    ? 'bg-emerald-50 text-emerald-900'
+                    : 'bg-slate-50 text-slate-600'
+                }`}
+              >
+                Konu: <strong>{selected.topicName}</strong>
+                {selected.match.tutorOffersVolunteer && (
+                  <span className="mt-0.5 block text-xs">
+                    🤝 Gönüllü ders — eğitmen bu dersten <strong>puan kazanmıyor</strong>.
+                  </span>
+                )}
+              </div>
+            )}
+
+            <Field label="Başlangıç" hint="Kendi saat diliminde seç; sistem UTC'ye çevirir.">
+              <input
+                type="datetime-local"
+                className="input"
+                value={startLocal}
+                onChange={(e) => setStartLocal(e.target.value)}
+                required
+              />
+            </Field>
+
+            {/* ÖĞRENCİYE ÜCRET GÖSTERİLMİYOR — çünkü ücret yok. Süre listesi yalnızca
+                süre seçtiriyor; eğitmenin kazanacağı puan bu kararın konusu değil ve
+                öğrenciye bir bedel varmış izlenimi vermemeli. */}
+            <Field label="Süre" hint="Ders almak ücretsizdir.">
+              <select className="input" value={duration} onChange={(e) => setDuration(e.target.value)}>
+                {DURATION_OPTIONS.map((dk) => (
+                  <option key={dk} value={dk}>
+                    {dk} dakika
+                  </option>
+                ))}
+              </select>
+            </Field>
+
+            <ErrorBox error={error} />
+          </form>
+
+          <div className="mt-4 flex justify-end gap-2">
+            <Button variant="secondary" onClick={onClose}>
+              Vazgeç
+            </Button>
+            <Button type="submit" form="book-form" loading={busy} disabled={!selected || !startLocal}>
+              Rezerve et
+            </Button>
+          </div>
+        </>
+      )}
+    </Modal>
+  )
+}
+
+function CompleteModal({ session, onClose, onDone }) {
+  const [code, setCode] = useState('')
+  const [file, setFile] = useState(null)
+  const [error, setError] = useState(null)
+  const [busy, setBusy] = useState(false)
+
+  async function submit(event) {
+    event.preventDefault()
+    setBusy(true)
+    setError(null)
+    try {
+      await api.completeSession(session.sessionId, code.trim(), file)
+
+      // proof_uploaded — kanıt sunucuya kabul edildi (kod eşleşmesi ve dosya doğrulaması geçti).
+      trackEvent(AnalyticsEvents.ProofUploaded, {
+        duration_minutes: session.durationMinutes,
+      })
+
+      onDone()
+    } catch (err) {
+      setError(err)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Modal open onClose={onClose} title="Dersi tamamladım">
+      <form onSubmit={submit} id="complete-form" className="space-y-4">
+        <Notice tone="info">
+          Ekran görüntüsünde <strong>sistem saati</strong>, <strong>katılımcı listesi</strong> ve
+          doğrulama kodu <strong className="font-mono">{session.verificationCode}</strong> görünmelidir.
+          Öğrenci onayladığında {session.mintAmount} puan kazanırsın.
+        </Notice>
+
+        <Field label="Doğrulama kodu (Session ID)">
+          <input
+            className="input font-mono uppercase tracking-wider"
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
+            required
+            maxLength={12}
+            placeholder={session.verificationCode}
+          />
+        </Field>
+
+        <Field label="Kanıt ekran görüntüsü" hint="PNG, JPEG veya WebP · en fazla 10 MB.">
+          <input
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            className="input"
+            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+            required
+          />
+        </Field>
+
+        <ErrorBox error={error} />
+      </form>
+
+      <div className="mt-4 flex justify-end gap-2">
+        <Button variant="secondary" onClick={onClose}>
+          Vazgeç
+        </Button>
+        <Button type="submit" form="complete-form" loading={busy} disabled={!file || !code.trim()}>
+          Gönder
+        </Button>
+      </div>
+    </Modal>
+  )
+}
+
+function ReportModal({ session, onClose, onDone }) {
+  const [reason, setReason] = useState('SessionNotHeld')
+  const [description, setDescription] = useState('')
+  const [error, setError] = useState(null)
+  const [busy, setBusy] = useState(false)
+
+  async function submit(event) {
+    event.preventDefault()
+    setBusy(true)
+    setError(null)
+    try {
+      await api.reportSession(session.sessionId, reason, description.trim())
+
+      // dispute_opened — itiraz sebebi sabit bir sözlükten geldiği için serbest metin
+      // değil; kullanıcının yazdığı açıklama GÖNDERİLMEZ (kişisel veri içerebilir).
+      trackEvent(AnalyticsEvents.DisputeOpened, { reason })
+
+      onDone()
+    } catch (err) {
+      setError(err)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Modal open onClose={onClose} title="Şikayet et">
+      <form onSubmit={submit} id="report-form" className="space-y-4">
+        <Notice tone="info">
+          Şikayetin <strong>yalnızca yönetime</strong> gider. Karşı taraf ne şikayeti görür,
+          ne bildirim alır, ne de yanıt verebilir.
+          <span className="mt-2 block">
+            Dersin akışı değişmez — bu bir itiraz değil, kişi hakkında bildirimdir. Yönetim
+            gerekli görürse uyarı, askı ya da ban uygular.
+          </span>
+        </Notice>
+
+        <Field label="Sebep">
+          <select className="input" value={reason} onChange={(e) => setReason(e.target.value)}>
+            {Object.entries(REPORT_REASON_LABELS).map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </Field>
+
+        <Field label="Ne oldu?" hint="En az 15 karakter. Yönetim yalnızca senin anlattığını görecek.">
+          <textarea
+            className="input h-28 resize-none"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            required
+            minLength={15}
+            maxLength={2000}
+          />
+        </Field>
+
+        <ErrorBox error={error} />
+      </form>
+
+      <div className="mt-4 flex justify-end gap-2">
+        <Button variant="secondary" onClick={onClose}>
+          Vazgeç
+        </Button>
+        <Button
+          type="submit"
+          form="report-form"
+          variant="danger"
+          loading={busy}
+          disabled={description.trim().length < 15}
+        >
+          Şikayeti gönder
+        </Button>
+      </div>
+    </Modal>
+  )
+}
+
+function CancelModal({ session, onClose, onDone }) {
+  const [reason, setReason] = useState('')
+  const [error, setError] = useState(null)
+  const [busy, setBusy] = useState(false)
+
+  async function submit() {
+    setBusy(true)
+    setError(null)
+    try {
+      await api.cancelSession(session.sessionId, reason.trim() || null)
+      onDone()
+    } catch (err) {
+      setError(err)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Modal open onClose={onClose} title="Dersi iptal et">
+      <div className="space-y-4">
+        <p className="text-sm text-slate-600">
+          {formatDateTime(session.scheduledStartUtc)} tarihli ders iptal edilecek. Ders almak
+          ücretsiz olduğu için iade edilecek bir puan yok; eğitmene de puan yazılmaz.
+        </p>
+
+        <Field label="Sebep (opsiyonel)">
+          <input
+            className="input"
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            maxLength={500}
+          />
+        </Field>
+
+        <ErrorBox error={error} />
+
+        <div className="flex justify-end gap-2">
+          <Button variant="secondary" onClick={onClose}>
+            Vazgeç
+          </Button>
+          <Button variant="danger" loading={busy} onClick={submit}>
+            Dersi iptal et
+          </Button>
+        </div>
+      </div>
+    </Modal>
+  )
+}

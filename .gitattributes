@@ -1,0 +1,36 @@
+# Satır sonları. İKİ KİŞİLİK WINDOWS PROJESİNDE BU DOSYA ŞART:
+# bu kural olmadan birinizin editörü CRLF, diğerininki LF yazdığında git dosyanın
+# TAMAMINI değişmiş sayar. O diff'in içinde gerçek bir satır değişikliği görünmez —
+# gözden geçirme imkânsızlaşır ve birleştirme her seferinde çakışır.
+#
+# text=auto: depoda daima LF saklanır, checkout'ta işletim sisteminin doğal hâline döner.
+* text=auto
+
+# Kabuk betikleri LF OLMAK ZORUNDA. CRLF ile kaydedilmiş bir .sh, satır sonundaki \r'yi
+# komutun parçası sayar ve "command not found" verir.
+*.sh text eol=lf
+
+# PowerShell betikleri Windows'ta kalacak; CRLF sabitlendi ki editör değiştirmesin.
+*.ps1 text eol=crlf
+*.psm1 text eol=crlf
+*.cmd text eol=crlf
+*.bat text eol=crlf
+
+# İkili dosyalar: git bunlara satır sonu dönüşümü UYGULAMAMALI. Uygularsa görsel bozulur.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.zip binary
+*.dll binary
+*.pfx binary
+
+# Üretilmiş tek dosya önizleme (400 KB, gömülü CSS+JS). Kaynağı frontend/ içinde;
+# bunu elle düzenlemek anlamsız, o yüzden diff'lerde katlanıyor.
+dersmate-onizleme.html linguist-generated=true -diff

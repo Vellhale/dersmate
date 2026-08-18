@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 80" width="100%" height="100%">
+  <!--
+    KOYU TEMA ASLI. Uygulamada doğrudan KULLANILMAZ — frontend/src/components/Logo.jsx
+    bunun açık zemine uyarlanmış satır içi kopyasıdır (BG ile INK yer değiştirir).
+
+    VURGU RENGİ İKİ TEMADA FARKLI VE BU BİLİNÇLİ (F1b):
+      koyu zemin (#0F172A) → brand-400 #33A7DF  : 6.57:1
+      açık zemin (beyaz)   → brand-500 #0088CC  : 3.89:1  (büyük metin AA eşiği 3.0)
+    Aynı rengi iki temada da kullanmak zorunda değiliz; zorunlu olan ikisinin de AYNI
+    SKALADAN gelmesi. Eski değer #38BDF8 skala dışıydı ve açık zemine kopyalandığında
+    2.14:1'e düşüyordu — büyük metin için bile yetersiz. Koyu zeminde ise sorunu yoktu,
+    yani kusur rengin kendisinde değil, yanlış temaya taşınmasındaydı.
+  -->
+  <!-- Arka Plan (Koyu tema kutusu) -->
+  <rect width="280" height="80" fill="#0F172A" rx="12"/>
+
+  <!-- İki Arkadaş / El Sıkışma & Bağlantı İkonu -->
+  <g transform="translate(18, 16)">
+    <!-- Sol Kullanıcı Düğümü -->
+    <circle cx="16" cy="24" r="10" fill="#33A7DF" opacity="0.95"/>
+    <!-- Sağ Kullanıcı Düğümü -->
+    <circle cx="34" cy="24" r="10" fill="#FFFFFF" opacity="0.95"/>
+    <!-- Bağlantı / Köprü Çizgisi -->
+    <path d="M 16 24 Q 25 14, 34 24" stroke="#0F172A" stroke-width="3" fill="none" stroke-linecap="round"/>
+  </g>
+
+  <!-- Tipografi: dersmate -->
+  <text x="75" y="49" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="26" font-weight="700" letter-spacing="-0.5">
+    <tspan fill="#FFFFFF">ders</tspan><tspan fill="#33A7DF">mate</tspan>
+  </text>
+</svg>
