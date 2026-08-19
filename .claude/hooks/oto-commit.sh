@@ -1,11 +1,18 @@
 #!/usr/bin/env bash
 # ---------------------------------------------------------------------------
-# Claude Code "Stop" hook — oturum değişikliklerini YERELDE commit'ler.
+# Claude Code "Stop" hook — oturum değişikliklerini commit'ler ve GitHub'a gönderir.
 #
 # Kurulum: .claude/settings.local.json → hooks.Stop bu betiği çağırır.
 #
-# NE YAPAR : her turun sonunda çalışma ağacındaki değişiklikleri tek commit'e alır.
-# NE YAPMAZ: push. GitHub'a gönderme kararı sende — 'git push' ile elle yap.
+# AKIŞ: her turun sonunda
+#   1. ana dal ('main') üzerindeysen -> 'claude/oturum-<tarih>' dalına geçer
+#   2. çalışma ağacındaki değişiklikleri tek commit'e alır
+#   3. o dalı 'origin'e gönderir
+#
+# ANA DALA ASLA OTOMATİK COMMIT/GÖNDERİM YAPILMAZ. CLAUDE.md kuralı: "Ana dal
+# main. Doğrudan itmek yerine dal aç ve PR aç." Oturum dalı bu kuralı korurken
+# değişikliklerin makine dışında yedeklenmesini de sağlıyor. İş bitince PR aç ve
+# squash'la; 'oto:' commit'leri main'e hiç sızmaz.
 #
 # Bilerek konulmuş kapılar. Hiçbiri turu bloklamaz; koşul sağlanmazsa sessizce
 # ya da tek satırlık bir uyarıyla atlar:
@@ -13,6 +20,8 @@
 #   - değişiklik yoksa: commit atmaz (sohbet turları tarihçeyi kirletmesin)
 #   - 10 MB üstü bir dosya varsa: HİÇ commit atmaz, uyarır. 'git add -A'
 #     yanlışlıkla veritabanı dökümü / derleme çıktısı içeri almasın diye.
+#   - gönderim takılırsa: commit yerelde durur, tur bloklanmaz. Kimlik doğrulama
+#     penceresi açılıp oturumu kilitlemesin diye istem kapalı + zaman aşımlı.
 #
 # NOT: JSON kaçırma bilerek saf bash genişletmesiyle yapılıyor, sed ile değil.
 # Betik metni kabuk katmanlarından geçerken ters bölüler yarıya iniyor ve
@@ -23,6 +32,7 @@ set -uo pipefail
 AZAMI_BAYT=$((10 * 1024 * 1024))   # tek dosya üst sınırı: 10 MB
 OZET_SINIRI=30                     # commit gövdesinde listelenecek azami dosya
 AZAMI_DAL_DENEMESI=20              # oturum dalı adı çakışırsa kaç kez soneklensin
+PUSH_ZAMAN_ASIMI=45                # uzağa gönderim için azami bekleme (saniye)
 
 # --- JSON çıktı yardımcıları (jq bu makinede yok) ---------------------------
 json_kacir() {
@@ -137,7 +147,35 @@ $ozet
 Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 MSG
 then
-  bildir "Oto-commit: $sayi dosya '$dal' dalına commit'lendi ($(git rev-parse --short HEAD)). Push yapılmadı."
+  kisa=$(git rev-parse --short HEAD)
 else
   bildir "Oto-commit BAŞARISIZ: 'git commit' hata verdi. Değişiklikler sahnelenmiş (staged) hâlde duruyor, kaybolmadı."
+fi
+
+# --- Uzağa gönderim: yalnızca oturum/özellik dalı, ASLA ana dal -------------
+# Ana dala gönderim CLAUDE.md kuralına aykırı; buraya düşülüyorsa dal değiştirme
+# merdiveni çalışmamış demektir, sessizce ana dala itmektense commit'te bırak.
+if [ "$hedef_dal" = "$ana_dal" ]; then
+  bildir "Oto-commit: $sayi dosya '$hedef_dal' dalına commit'lendi ($kisa). Uzağa gönderilmedi — ana dala otomatik gönderim yapılmaz."
+fi
+
+# Kimlik doğrulama istemi kapalı + zaman aşımlı: takılan bir kimlik penceresi
+# oturumu kilitlemesin. Gönderim başarısız olsa bile commit yerelde duruyor.
+if command -v timeout >/dev/null 2>&1; then
+  zaman_asimi="timeout $PUSH_ZAMAN_ASIMI"
+else
+  zaman_asimi=""
+fi
+
+gonderim_cikti=$(GIT_TERMINAL_PROMPT=0 GCM_INTERACTIVE=never $zaman_asimi \
+  git -c credential.interactive=false push -q -u origin "$hedef_dal" 2>&1)
+gonderim_kod=$?
+
+if [ "$gonderim_kod" -eq 0 ]; then
+  bildir "Oto-commit: $sayi dosya '$hedef_dal' dalına commit'lendi ($kisa) ve GitHub'a gönderildi."
+elif [ "$gonderim_kod" -eq 124 ]; then
+  bildir "Oto-commit: $sayi dosya commit'lendi ($kisa) ama gönderim ${PUSH_ZAMAN_ASIMI}sn'de yanıt vermedi (kimlik doğrulama bekliyor olabilir). Elle: git push -u origin $hedef_dal"
+else
+  ilk_satir=$(printf '%s' "$gonderim_cikti" | head -n 1 | cut -c1-160)
+  bildir "Oto-commit: $sayi dosya commit'lendi ($kisa) ama GÖNDERİM BAŞARISIZ: $ilk_satir | Elle: git push -u origin $hedef_dal"
 fi
