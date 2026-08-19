@@ -22,6 +22,7 @@ set -uo pipefail
 
 AZAMI_BAYT=$((10 * 1024 * 1024))   # tek dosya üst sınırı: 10 MB
 OZET_SINIRI=30                     # commit gövdesinde listelenecek azami dosya
+AZAMI_DAL_DENEMESI=20              # oturum dalı adı çakışırsa kaç kez soneklensin
 
 # --- JSON çıktı yardımcıları (jq bu makinede yok) ---------------------------
 json_kacir() {
@@ -45,6 +46,11 @@ kok=$(cd "$kendi_dizin/../.." && pwd) || sessiz_cik
 cd "$kok" || sessiz_cik
 
 git rev-parse --is-inside-work-tree >/dev/null 2>&1 || sessiz_cik
+
+# --- Ana dalı tespit et -----------------------------------------------------
+ana_dal=$(git symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null)
+ana_dal=${ana_dal#origin/}
+[ -n "$ana_dal" ] || ana_dal=main
 
 # --- Yarım kalmış git işlemine karışma -------------------------------------
 gitdizin=$(git rev-parse --git-dir 2>/dev/null) || sessiz_cik
@@ -77,6 +83,35 @@ if [ -n "$buyuk" ]; then
   bildir "Oto-commit atlandı: 10 MB üstü dosya var -> $buyuk . Bilerekse .gitignore'a ekle, sonra elle commit'le."
 fi
 
+# --- Ana daldaysan oturum dalına geç ---------------------------------------
+# Yeni dal HEAD'den açılır: çalışma ağacı olduğu gibi taşınır, birleştirme yok.
+# Ad çakışırsa önce mevcut dala geçmeyi dener (yalnızca HEAD'in soyundansa,
+# yani ileri doğru bir hareketse), olmazsa -2, -3... sonekiyle yenisini açar.
+# Bu merdiven daima bir yerde biter; hiçbir dalın üstüne yazmaz.
+hedef_dal=$dal
+if [ "$dal" = "$ana_dal" ]; then
+  taban="claude/oturum-$(date '+%Y-%m-%d')"
+  aday=$taban
+  ek=2
+  gecildi=0
+  while [ "$ek" -le "$AZAMI_DAL_DENEMESI" ]; do
+    if git show-ref --verify --quiet "refs/heads/$aday"; then
+      if git merge-base --is-ancestor HEAD "$aday" 2>/dev/null \
+         && git checkout -q "$aday" 2>/dev/null; then
+        gecildi=1; break
+      fi
+    elif git checkout -q -b "$aday" 2>/dev/null; then
+      gecildi=1; break
+    fi
+    aday="$taban-$ek"
+    ek=$((ek + 1))
+  done
+  if [ "$gecildi" -ne 1 ]; then
+    bildir "Oto-commit atlandı: oturum dalı açılamadı. '$ana_dal' dalına otomatik commit atılmıyor (CLAUDE.md kuralı). Elle bir dal aç."
+  fi
+  hedef_dal=$aday
+fi
+
 # --- Sahnele ve commit'le ---------------------------------------------------
 git add -A || bildir "Oto-commit başarısız: 'git add -A' hata verdi."
 git diff --cached --quiet && sessiz_cik   # hepsi yoksayıldıysa commit atma
@@ -93,8 +128,8 @@ if git commit -q -F - <<MSG
 oto: $sayi dosya güncellendi — $damga
 
 Claude Code oturumunda yapılan değişiklikler, tur sonunda Stop hook
-tarafından otomatik commit'lendi. Push YAPILMADI; GitHub'a göndermek
-için 'git push' çalıştır.
+tarafından otomatik commit'lendi. Bu bir oturum dalıdır; '$ana_dal'
+dalına PR ile ve squash'lanarak girmesi beklenir.
 
 Değişen dosyalar:
 $ozet
