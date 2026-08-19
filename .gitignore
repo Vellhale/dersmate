@@ -45,3 +45,10 @@ TestResults/
 Thumbs.db
 .DS_Store
 *.swp
+
+# --- Claude Code kişisel ayarları ---
+# Oto-commit hook'unu ETKİNLEŞTİREN dosya. Hangi hook'ların çalışacağı makineye
+# özel bir tercih, ekip kuralı değil. Betiğin kendisi (.claude/hooks/oto-commit.sh)
+# DEPODA KALIR: bu dosya olmadan kendiliğinden çalışmaz, yani klonlayan kimseyi
+# sürprize uğratmaz — isteyen aynı hook'u kendi settings.local.json'ıyla açar.
+.claude/settings.local.json
