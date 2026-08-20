@@ -92,24 +92,53 @@ test.describe('Marka rengi (F1b)', () => {
     expect(oran).toBeGreaterThanOrEqual(4.5)
   })
 
-  test('logo vurgusu sayfada brand-500 olarak çiziliyor', async ({ page }) => {
+  test('logo vurgusu her iki temada da paletten geliyor', async ({ page }) => {
     /*
       500, 400 DEĞİL. Marka tonu #0088CC gövde rengi olarak AA'yı kaçırıyor (beyaz yazıyla
       3.89:1) ve bu yüzden F1b'de kimlik 500 basamağında bırakılıp zemin görevi 600'e
       taşındı — logo ve odak kenarlığı 500'ü, düğmeler 600'ü kullanır.
       Test o kararı sabitliyor: logo bir gün 400'e kayarsa marka tonu ile arayüz tonu
       birbirinden ayrılır ve kimse fark etmez. (bkz. docs/DEVAM-EDILECEK.md, F1b)
+
+      İKİ VARYANT (2026-08-20'de düzeltildi): /giris sayfası logoyu İKİ kez çiziyor —
+      sol koyu paneldeki onDark sürümü (DOM'da önce) ve mobilde görünen açık sürümü.
+      Test eskiden `.first()` ile yalnız ilkine bakıp brand-500 bekliyordu; koyu varyantın
+      vurgusu ise BİLEREK brand-100. Logo.jsx bunu ölçmüş: brand-500 koyu zeminde (#0077B3)
+      1.26:1 veriyor, yani "mate" hecesi seçilemiyor; brand-100 ise 3.86:1 ile geçiyor.
+      Yani eski test, kayıtlı bir tasarım kararını ihlal sanıp kırmızı kalıyordu.
+
+      Yeni kural iki şeyi birden kilitliyor ve eskisinden güçlü:
+        1. açık varyant brand-500 kullanır (marka kimliği tek kaynaktan gelir),
+        2. HİÇBİR varyant paletin dışına çıkmaz — koyu olan yalnız brand-100 olabilir.
     */
     await page.goto('/giris')
 
-    const logo = page.locator('svg[aria-label="dersmate"]').first()
-    await expect(logo).toBeVisible()
+    const logolar = page.locator('svg[aria-label="dersmate"]')
+    await expect(logolar.first()).toBeVisible()
 
-    // Vurgu dairesi: logodaki iki düğümden marka renkli olanı.
-    const doluluklar = await logo.locator('circle').evaluateAll((el) =>
-      el.map((c) => c.getAttribute('fill')?.toLowerCase()),
+    // Her logonun daire dolguları: [vurgu, mürekkep]. Vurgu, mürekkep olmayan tondur.
+    const hepsi = await logolar.evaluateAll((svgler) =>
+      svgler.map((svg) =>
+        [...svg.querySelectorAll('circle')].map((c) => c.getAttribute('fill')?.toLowerCase()),
+      ),
     )
-    expect(doluluklar, 'logoda brand-500 tonunda daire yok').toContain(palet[500].toLowerCase())
+    expect(hepsi.length, 'sayfada aria-label="dersmate" taşıyan svg yok').toBeGreaterThan(0)
+
+    const acik = palet[500].toLowerCase() // #0088CC — açık zemin vurgusu
+    const koyu = palet[100].toLowerCase() // #CCE9F7 — koyu zemin vurgusu (ölçüldü, bkz. Logo.jsx)
+
+    expect(
+      hepsi.some((d) => d.includes(acik)),
+      `açık varyant brand-500 (${acik}) kullanmıyor — bulunanlar: ${JSON.stringify(hepsi)}`,
+    ).toBe(true)
+
+    for (const doluluklar of hepsi) {
+      const vurgu = doluluklar.find((d) => d === acik || d === koyu)
+      expect(
+        vurgu,
+        `bir logonun vurgusu paletin dışında — dolgular: ${JSON.stringify(doluluklar)}`,
+      ).toBeDefined()
+    }
   })
 
   test('arayüzde eski indigo tonlarından hiçbiri kalmadı', async ({ page }) => {
