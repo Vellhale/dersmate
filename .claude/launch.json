@@ -2,28 +2,9 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "api",
-      "runtimeExecutable": "dotnet",
-      "runtimeArgs": ["run", "--project", "src/PeerLearn.Api"],
-      "port": 5000
-    },
-    {
-      "_comment": "İkinci instance: eşzamanlılık testi için. Süreç içi kilit iki instance'ı KAPSAMAZ, dolayısıyla yalnızca DB savunmaları (xmin + kısıtlar) devrede kalır.",
-      "_comment2": "Betik üzerinden başlatılıyor çünkü ASPNETCORE_ENVIRONMENT set edilmeli: --no-launch-profile ile ortam değişkeni hiç yazılmaz ve ASP.NET Production varsayar; üretim ayar kapısı da süreci başlatmaz.",
-      "name": "api2",
-      "runtimeExecutable": "powershell",
-      "runtimeArgs": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "tools/start-api2.ps1"],
-      "port": 5001
-    },
-    {
       "name": "frontend",
       "runtimeExecutable": "npm",
-      "runtimeArgs": [
-        "--prefix",
-        "frontend",
-        "run",
-        "dev"
-      ],
+      "runtimeArgs": ["--prefix", "frontend", "run", "dev"],
       "port": 5173
     }
   ]
