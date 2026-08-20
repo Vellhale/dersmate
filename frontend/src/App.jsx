@@ -11,6 +11,7 @@ import Chat from './pages/Chat'
 import Sessions from './pages/Sessions'
 import Profile from './pages/Profile'
 import Admin from './pages/Admin'
+import Hakkimizda from './pages/Hakkimizda'
 
 function RequireAuth({ children }) {
   const { isAuthenticated } = useAuth()
@@ -62,6 +63,9 @@ export default function App() {
             unvan. Eski bağlantılar (yer imi, tur adımı) kırık kalmasın diye yönlendiriliyor;
             işlem geçmişi Derslerim'e taşındı. */}
         <Route path="/cuzdan" element={<Navigate to="/dersler" replace />} />
+        {/* Yan menünün alt bağlantısı: misyon sayfası. Kabuğun (Layout) içinde, çünkü
+            tek erişim yolu menü ve menü yalnızca giriş yapmış kullanıcıda var. */}
+        <Route path="/hakkimizda" element={<Hakkimizda />} />
         {/* Tek bileşen: parametresiz kendi profilin, id ile başkasınınki. */}
         <Route path="/profil" element={<Profile />} />
         <Route path="/profil/:userId" element={<Profile />} />
