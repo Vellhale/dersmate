@@ -9,6 +9,23 @@ import { formatDateTime, formatTime } from '../lib/format'
 import { Badge, Button, EmptyState, ErrorBox, Loading } from '../components/ui'
 import { PersonLink } from '../components/PersonLink'
 
+/*
+  SOHBET SAYFASI EKRANA SIĞAR: sayfanın kendisi kaymaz; kaydırma, listenin ve konuşmanın
+  KENDİ İÇİNDEDİR. İki panel de aynı yüksekliği kullanır (aşağıda), böylece lg'de aynı
+  hizada başlayıp aynı hizada biterler.
+
+  Çıkarılan değerler, panellerin DIŞINDA kalan sabit yüksekliklerin ölçülmüş toplamıdır —
+  tahmin değil, tarayıcıda ölçüldü (2026-08-21):
+    mobil 390x844 : üst bar 64 + main dolgusu 48 + başlık satırı 48 + altbilgi 68 = 228px
+  Önceki değer 11rem (176px) idi ve sayfa tam 52px taşıyordu: başlık ile yazma alanı
+  ekrandan çıkıyor, kullanıcı konuşmaya dönmek için yukarı kaydırmak zorunda kalıyordu.
+  14.5rem (232px) birkaç piksel pay bırakır; altbilgi bağlantıları dar ekranda sarılırsa
+  yüksekliği artabildiği için sıfır paya güvenilmiyor.
+
+  lg değeri (16rem) ölçümle doğrulandı: 1360x900 ve 1360x700'de sayfa hiç kaymıyor.
+*/
+const PANEL_YUKSEKLIGI = 'h-[calc(100dvh-14.5rem)] lg:h-[calc(100vh-16rem)] lg:min-h-[420px]'
+
 /**
  * Güvenli sohbet (Modül 2.1 + 2.2).
  * Kanal bağımsızlığı: platform video barındırmaz — Zoom/Meet/Discord linkleri buradan paylaşılır.
@@ -183,7 +200,20 @@ export default function Chat() {
            yarım ekran kalıyor, hiçbiri seçilmemişken de "Soldaki listeden seç" yazan boş
            bir panel tüm ekranı kaplıyordu — üstelik mobilde "sol" diye bir yer yok. */
         <div className="grid gap-4 lg:grid-cols-[300px_1fr]">
-          <aside className={`space-y-1.5 ${conversationId ? 'hidden lg:block' : 'block'}`}>
+          {/* Liste KENDİ İÇİNDE kaydırılır, sayfayı uzatmaz. Yüksekliği sağdaki konuşma
+              paneliyle birebir aynı (aşağıdaki section ile aynı calc'lar): iki sütun lg'de
+              aynı hizada başlayıp aynı hizada biter.
+
+              Neden gerekli: sohbet sayısı arttıkça (elli sohbetli bir eğitmen olağan) liste
+              sayfayı aşağı uzatıyordu; başlık ve yazma alanı ekrandan çıkıyor, kullanıcı
+              konuşmaya dönmek için yukarı kaydırmak zorunda kalıyordu.
+
+              overscroll-contain: liste sonuna gelince kaydırma sayfaya SIÇRAMASIN.
+              pr-1: kaydırma çubuğu seçili öğenin sağ kenarlığını örtmesin. */}
+          <aside
+            className={`space-y-1.5 overflow-y-auto overscroll-contain pr-1 ${PANEL_YUKSEKLIGI}
+                        ${conversationId ? 'hidden lg:block' : 'block'}`}
+          >
             {(conversations.data ?? []).map((conversation) => {
               const isActive = conversation.conversationId === conversationId
               // Açık sohbette rozet daima 0: sunucu tazelemesi dönene kadar yanıp sönmesin.
@@ -215,11 +245,10 @@ export default function Chat() {
           </aside>
 
           {/* Yükseklik mobilde dvh ile: vh, mobil tarayıcının adres çubuğunu saymadığı için
-              yazma alanı ekranın altında kalıyordu. min-h yalnızca lg'de anlamlı — mobilde
-              sabit bir taban vermek sayfayı ikinci kez kaydırılır hâle getirirdi. */}
+              yazma alanı ekranın altında kalıyordu. Yükseklik listeyle ORTAK sabitten gelir
+              (bkz. PANEL_YUKSEKLIGI) — ikisi ayrı ayarlanırsa lg'de sütunlar hizasız kalır. */}
           <section
-            className={`h-[calc(100dvh-11rem)] flex-col rounded-xl border border-slate-200/80 bg-white
-                        lg:flex lg:h-[calc(100vh-16rem)] lg:min-h-[420px]
+            className={`${PANEL_YUKSEKLIGI} flex-col rounded-xl border border-slate-200/80 bg-white lg:flex
                         ${conversationId ? 'flex' : 'hidden'}`}
           >
             {!conversationId ? (

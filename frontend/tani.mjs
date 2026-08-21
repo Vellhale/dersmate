@@ -4,17 +4,29 @@ const bekle = (ms) => new Promise((r) => setTimeout(r, ms))
 const y = await fetch(`${API}/api/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({ email: 'ayse@demo.dev', password: 'Demo12345', hwidHash: 'demo-hwid-abdullah' }) })
 const oturum = await y.json()
-const liste = await (await fetch(`${API}/api/conversations`, { headers: { Authorization: `Bearer ${oturum.accessToken}` } })).json()
-const dizi = Array.isArray(liste) ? liste : (liste.items ?? [])
-// Aysenin yanit verdigi bir sohbet bul (iki tarafli gorunsun)
-const t = await chromium.launch({ headless: false, slowMo: 150 })
+const t = await chromium.launch({ headless: true })
 const s = await (await t.newContext({ viewport: { width: 1360, height: 900 }, locale: 'tr-TR' })).newPage()
 await s.goto(KOK); await s.evaluate((o) => localStorage.setItem('peerlearn.session', JSON.stringify(o)), oturum)
-for (const [ad, sohbet] of [['26-konusma', dizi[0]], ['27-konusma-yanitli', dizi.find(c => c.otherDisplayName === 'Ege Karaca') ?? dizi[3]]]) {
-  await s.goto(`${KOK}/sohbet/${sohbet.conversationId}`)
-  await s.waitForLoadState('networkidle').catch(() => {})
-  await bekle(2500)
-  await s.screenshot({ path: `gezinti-goruntuleri/${ad}.png` })
-  console.log(' ', ad + '.png', '->', sohbet.otherDisplayName)
+
+async function olc(ad, g, yk, ekran) {
+  await s.setViewportSize({ width: g, height: yk })
+  await s.goto(`${KOK}/sohbet`); await s.waitForLoadState('networkidle').catch(() => {})
+  const z = s.getByRole('button', { name: /Yalnızca zorunlu/i }); if (await z.count()) await z.first().click().catch(() => {})
+  await bekle(1500)
+  const o = await s.evaluate(() => {
+    const d = document.documentElement
+    const l = [...document.querySelectorAll('aside')].find((a) => a.querySelectorAll('button').length > 3)
+    return { fazla: d.scrollHeight - d.clientHeight, pencere: l ? Math.round(l.clientHeight) : 0, icerik: l ? Math.round(l.scrollHeight) : 0 }
+  })
+  console.log(` ${ad.padEnd(14)} sayfa fazlasi: ${String(o.fazla).padStart(3)}px | liste ${o.pencere}px pencere / ${o.icerik}px icerik -> ${o.icerik > o.pencere ? 'liste kayiyor' : 'kaymiyor'}`)
+  // Listeyi kaydir: sayfa yine kaymamali
+  await s.evaluate(() => { const l = [...document.querySelectorAll('aside')].find(a => a.querySelectorAll('button').length > 3); l.scrollTop = 1500 })
+  await bekle(600)
+  const sonra = await s.evaluate(() => { const d = document.documentElement; const l = [...document.querySelectorAll('aside')].find(a => a.querySelectorAll('button').length > 3); return { sayfa: d.scrollTop, liste: Math.round(l.scrollTop) } })
+  console.log(`                kaydirma sonrasi -> liste scrollTop: ${sonra.liste}px, SAYFA scrollTop: ${sonra.sayfa}px`)
+  if (ekran) await s.screenshot({ path: `gezinti-goruntuleri/${ekran}.png` })
 }
-await bekle(3000); await t.close()
+await olc('masaustu', 1360, 900, '31-liste-kaydirildi')
+await olc('dizustu-kisa', 1360, 700, null)
+await olc('mobil', 390, 844, '32-mobil-kaydirildi')
+await t.close()
