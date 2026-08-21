@@ -60,14 +60,14 @@ public sealed class GetWalletHandler : IRequestHandler<GetWalletQuery, WalletDto
 
         // Unvan tek yerde hesaplanıyor (profil sorgusuyla aynı saf fonksiyon); eşikler
         // iki ayrı yerde yazılsaydı er geç birbirinden ayrılırlardı.
-        var rank = UserRankCalculator.Hesapla(toplamKazanc);
+        var rank = UserLevelCalculator.Hesapla(toplamKazanc);
 
         var wallet = await _db.Wallets.AsNoTracking()
             .SingleOrDefaultAsync(w => w.UserId == request.UserId, ct);
 
         if (wallet is null)
         {
-            return new WalletDto(toplamKazanc, 0, rank.Title, rank.Emoji, rank.NextRankAt, []);
+            return new WalletDto(toplamKazanc, 0, rank.Title, rank.Emoji, rank.NextLevelAt, []);
         }
 
         var now = _clock.UtcNow;
@@ -86,7 +86,7 @@ public sealed class GetWalletHandler : IRequestHandler<GetWalletQuery, WalletDto
             lots.Sum(l => l.RemainingAmount),
             rank.Title,
             rank.Emoji,
-            rank.NextRankAt,
+            rank.NextLevelAt,
             lots.Select(l => new CreditLotDto(l.RemainingAmount, l.Source.ToString(), l.ExpiresAtUtc)).ToList());
     }
 }

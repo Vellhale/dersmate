@@ -116,24 +116,18 @@ export function FilterPanel({
       />
 
       {/*
-        Gönüllülük filtresi aralık değil AÇIK/KAPALI: iki durumlu bir nitelik
-        (eğitmen puan kazanıyor ya da kazanmıyor). Kaydırıcı yanlış bir zihinsel
-        model kurardı. Öğrenci her iki durumda da ücret ödemez.
+        "Yalnızca gönüllü dersler" filtresi KALDIRILDI (2026-08-21).
+
+        Öğrenci hiçbir derste ücret ödemez — bu ürünün temel kuralı. Filtrenin ayırdığı
+        şey öğrencinin ödeyeceği bir bedel değil, EĞİTMENİN puan kazanıp kazanmadığıydı;
+        yani ders arayan kişinin kararını değiştiren bir bilgi taşımıyordu ve "bazı
+        dersler ücretli mi?" sorusunu akla getirerek yanlış bir zihinsel model kuruyordu.
+
+        Kavramın kendisi (PortfolioEntry.IsVolunteer, LessonSession.IsVolunteer ve
+        CreditLedgerService'teki 0 basım kuralı) YERİNDE duruyor — kaldırılan yalnızca
+        arama filtresi. Sunucu tarafındaki OnlyVolunteer parametresi de sözleşmede kaldı;
+        arayüz artık göndermiyor.
       */}
-      <label className="flex min-h-11 cursor-pointer items-start gap-3 rounded-lg border border-slate-200/80 p-3 lg:min-h-0">
-        <input
-          type="checkbox"
-          className="mt-0.5 accent-brand-600"
-          checked={Boolean(value.onlyVolunteer)}
-          onChange={(e) => set({ onlyVolunteer: e.target.checked })}
-        />
-        <span className="text-sm text-slate-700">
-          🤝 Yalnızca gönüllü dersler
-          <span className="block text-xs text-slate-500">
-            Eğitmenin puan kazanmadan, gönüllü olarak anlattığı dersler.
-          </span>
-        </span>
-      </label>
 
       <div className="flex items-center justify-between gap-3 border-t border-slate-200/80 pt-4">
         <span className="text-sm text-slate-500">

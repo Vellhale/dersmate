@@ -216,12 +216,16 @@ function HoldsForUser($userId) { SqlInt "SELECT COUNT(*) FROM information_schema
 
 # Unvan eşikleri: alt sınır DAHİL, üst sınır HARİÇ.
 function RankFor([int]$total) {
-    if     ($total -ge 10000) { return 'Ustat' }
-    elseif ($total -ge 5000)  { return 'Mentor' }
-    elseif ($total -ge 2500)  { return 'Usta' }
-    elseif ($total -ge 1000)  { return 'Uzman' }
-    elseif ($total -ge 500)   { return 'Ogretici' }
-    else                      { return 'Cirak' }
+    if     ($total -ge 25000) { return '10. Seviye' }
+    elseif ($total -ge 16000) { return '9. Seviye' }
+    elseif ($total -ge 10000) { return '8. Seviye' }
+    elseif ($total -ge 6000)  { return '7. Seviye' }
+    elseif ($total -ge 3500)  { return '6. Seviye' }
+    elseif ($total -ge 2000)  { return '5. Seviye' }
+    elseif ($total -ge 1000)  { return '4. Seviye' }
+    elseif ($total -ge 500)   { return '3. Seviye' }
+    elseif ($total -ge 200)   { return '2. Seviye' }
+    else                      { return '1. Seviye' }
 }
 
 # Unvan başlıkları diyakritikli döner ("Çırak"). Ham string karşılaştırması sırf harf
@@ -385,7 +389,7 @@ else { Fail "cüzdan totalEarnedCredits=$($tw2after.totalEarnedCredits), veritab
 $beklenenUnvan = RankFor $te2after
 if ((NormTr $tw2after.rankTitle) -eq (NormTr $beklenenUnvan)) { OK "unvan eşikle uyumlu: $($tw2after.rankTitle) / $te2after puan" }
 else { Fail "unvan: $($tw2after.rankTitle) — $te2after puan için beklenen: $beklenenUnvan" }
-if ([int]$tw2after.nextRankAt -eq 500) { OK 'bir sonraki unvan eşiği 500 döndü' } else { Fail "nextRankAt: $($tw2after.nextRankAt) (beklenen 500)" }
+if ([int]$tw2after.nextRankAt -eq 200) { OK 'bir sonraki seviye esigi 200 dondu' } else { Fail "nextRankAt: $($tw2after.nextRankAt) (beklenen 500)" }
 
 $earnLots2 = SqlInt "SELECT COUNT(*) FROM economy.""CreditLots"" WHERE ""SourceSessionId"" = '$($b2.sessionId)';"
 if ($earnLots2 -eq 1) { OK 'tek kazanç lotu oluştu' } else { Fail "kazanç lotu sayısı: $earnLots2" }

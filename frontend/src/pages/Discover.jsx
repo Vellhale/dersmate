@@ -22,7 +22,6 @@ const DEFAULT_FILTERS = {
   sort: 'Relevance',
   minLevel: null,
   minRating: null,
-  onlyVolunteer: false,
   page: 1,
   pageSize: 20,
 }
@@ -51,7 +50,6 @@ export default function Discover() {
     filters.categoryId !== null ||
     filters.minLevel !== null ||
     filters.minRating !== null ||
-    filters.onlyVolunteer ||
     filters.sort !== DEFAULT_FILTERS.sort
 
   const searchMode = debouncedTerm.trim().length > 0 || filtersTouched
@@ -72,7 +70,6 @@ export default function Discover() {
       filters.sort,
       filters.minLevel,
       filters.minRating,
-      filters.onlyVolunteer,
       filters.page,
     ],
   )
@@ -83,7 +80,6 @@ export default function Discover() {
   const activeFilterCount = useMemo(
     () =>
       [filters.categoryId, filters.minLevel, filters.minRating].filter((v) => v !== null).length +
-      (filters.onlyVolunteer ? 1 : 0) +
       (filters.sort !== DEFAULT_FILTERS.sort ? 1 : 0),
     [filters],
   )

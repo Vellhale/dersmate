@@ -238,7 +238,7 @@ public sealed class GetUserProfileHandler : IRequestHandler<GetUserProfileQuery,
           Hesap saf bir fonksiyon ve User satırı zaten okunmuş durumda; ek sorgu yok.
           Eşikler değişirse geçmişe dönük kendiliğinden düzelir.
         */
-        var rank = UserRankCalculator.Hesapla(user.TotalEarnedCredits);
+        var rank = UserLevelCalculator.Hesapla(user.TotalEarnedCredits);
 
         var portfolio = await (
                 from entry in _db.PortfolioEntries.AsNoTracking()
@@ -300,7 +300,7 @@ public sealed class GetUserProfileHandler : IRequestHandler<GetUserProfileQuery,
             user.TotalEarnedCredits,
             rank.Title,
             rank.Emoji,
-            rank.NextRankAt,
+            rank.NextLevelAt,
             IsSelf: kendisi,
             aday,
             portfolio.Where(e => e.Direction == PortfolioDirection.Offer).Select(e =>

@@ -35,10 +35,17 @@ export function MenuIkonu(props) {
   )
 }
 
-export function PusulaIkonu(props) {
+/*
+  Keşfet = arama. Önceki simge pusulaydı; pusula "yön bulma" der, oysa bu ekranda
+  yapılan şey konu/eğitmen ARAMAK. Büyüteç, kullanıcının aradığı eylemi doğrudan
+  adlandırıyor ve gezinme listesindeki tek soyut simge olmaktan çıkıyor.
+  Sap, çemberin 45°'sinden çıkar (7.5→10.5 x/y) — klasik büyüteç açısı.
+*/
+export function BuyutecIkonu(props) {
   return (
     <Cizgi {...props}>
-      <circle cx="12" cy="12" r="10" /><path d="M14.8 9.2 13 15l-5.8-1.2L9 8z" />
+      <circle cx="11" cy="11" r="7" />
+      <path d="M20 20l-3.9-3.9" />
     </Cizgi>
   )
 }

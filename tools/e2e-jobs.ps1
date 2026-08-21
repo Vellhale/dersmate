@@ -216,8 +216,8 @@ $sayacDb = EarnedDb $due.tutor.userId
 if ($sayacDb -eq "$MINT_60") { OK 'identity."Users"."TotalEarnedCredits" tabloda da doğru' }
 else { Fail "tablodaki sayaç: $sayacDb" }
 
-# Unvan puandan türetiliyor; 100 puan ilk kademede kalmalı (0-500 Çırak).
-if ($tutorAfter.rankTitle -eq 'Çırak' -and $tutorAfter.nextRankAt -eq 500) { OK "unvan: $($tutorAfter.rankEmoji) $($tutorAfter.rankTitle), sonraki eşik 500" }
+# Seviye puandan turetiliyor; 100 puan ilk kademede kalmali (0-200 -> 1. Seviye).
+if ($tutorAfter.rankTitle -eq '1. Seviye' -and $tutorAfter.nextRankAt -eq 200) { OK "unvan: $($tutorAfter.rankEmoji) $($tutorAfter.rankTitle), sonraki eşik 500" }
 else { Fail "unvan: $($tutorAfter.rankTitle) / sonraki: $($tutorAfter.nextRankAt)" }
 
 # Basılan lot SÜRESİZ açılmalı — D senaryosunun dayanağı da bu.

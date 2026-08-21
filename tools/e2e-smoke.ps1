@@ -157,7 +157,7 @@ else { Fail "beklenen totalEarnedCredits 0, gelen $($w.totalEarnedCredits)" }
 
 # Unvan sunucudan geliyor; 0 puanda ilk kademe ve sonraki eşik 500 olmalı.
 # Unvan METNİ yerine eşik sayısı doğrulanıyor: ad/emoji ürün kararı, eşik ise sözleşme.
-if ($w.rankTitle -and $w.rankEmoji -and $w.nextRankAt -eq 500) { OK "başlangıç unvanı: $($w.rankEmoji) $($w.rankTitle) — sonraki eşik $($w.nextRankAt)" }
+if ($w.rankTitle -and $w.rankEmoji -and $w.nextRankAt -eq 200) { OK "başlangıç unvanı: $($w.rankEmoji) $($w.rankTitle) — sonraki eşik $($w.nextRankAt)" }
 else { Fail "unvan alanları eksik/yanlış: title=$($w.rankTitle) emoji=$($w.rankEmoji) next=$($w.nextRankAt)" }
 
 # ---------------------------------------------------------------- 3. PORTFÖY
@@ -368,7 +368,7 @@ if ($earnedAfter -eq ($earnedBefore + 100)) { OK "identity.Users.TotalEarnedCred
 else { Fail "veritabanı sayacı $earnedBefore -> $earnedAfter, beklenen +100" }
 
 # Unvan hâlâ ilk kademede (100 < 500) ama bir sonraki eşiği göstermeye devam etmeli.
-if ($wb.rankTitle -and $wb.nextRankAt -eq 500) { OK "eğitmenin unvanı: $($wb.rankEmoji) $($wb.rankTitle) — sonraki eşik $($wb.nextRankAt)" }
+if ($wb.rankTitle -and $wb.nextRankAt -eq 200) { OK "eğitmenin unvanı: $($wb.rankEmoji) $($wb.rankTitle) — sonraki eşik $($wb.nextRankAt)" }
 else { Fail "unvan alanları yanlış: title=$($wb.rankTitle) next=$($wb.nextRankAt)" }
 
 # Kazanç lotu artık SÜRESİZ açılıyor (eski model 30 gün vadeliydi): kazanılan puan yanmaz.

@@ -151,7 +151,7 @@ function ExchangeArt({ onDark = false }) {
 
 const VAATLER = [
   ['🎓', 'Ders almak ücretsiz', 'Öğrenirken hiçbir şey ödemezsin, puan da harcamazsın.'],
-  ['⏱️', 'Anlattıkça kazan', 'Verdiğin her ders puana dönüşür, puan biriktikçe unvanın yükselir.'],
+  ['⏱️', 'Anlattıkça kazan', 'Verdiğin her ders puana dönüşür, puan biriktikçe seviyen yükselir.'],
   ['🛡️', 'Doğrulanmış dersler', 'Her ders kanıtla kapanır; değerlendirmeler yalnızca gerçek derslerden gelir.'],
 ]
 
@@ -266,7 +266,7 @@ export function AuthShell({ title, subtitle, children }) {
 
           <p className="mt-6 text-center text-xs leading-relaxed text-slate-500 lg:text-left">
             dersmate'te para transferi yoktur. Ders almak ücretsizdir; ders anlattığında puan
-            kazanır, puan biriktikçe unvanın yükselir.
+            kazanır, puan biriktikçe seviyen yükselir.
           </p>
 
           <div className="mt-3 text-center lg:text-left">

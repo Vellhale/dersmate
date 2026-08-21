@@ -123,7 +123,7 @@ function ProfileHeader({ profile }) {
 }
 
 /**
- * Unvan rozeti — eski "Rozetler" bloğunun tamamının yerine geçen tek işaret.
+ * Seviye rozeti — eski "Rozetler" bloğunun tamamının yerine geçen tek işaret.
  *
  * Bir sonraki eşiğe kalan puan SUNUCUDAN geliyor (nextRankAt). Eşikleri buraya
  * kopyalamak, bu projede fiyat formülünde bir kez yaşanan sapmanın aynısını üretirdi:
@@ -135,8 +135,8 @@ function RankChip({ profile }) {
 
   const baslik =
     kalan != null
-      ? `${profile.totalEarnedCredits} puan · sonraki unvana ${kalan} puan`
-      : `${profile.totalEarnedCredits} puan · en üst unvan`
+      ? `${profile.totalEarnedCredits} puan · sonraki seviyeye ${kalan} puan`
+      : `${profile.totalEarnedCredits} puan · en üst seviye`
 
   return (
     <span
@@ -207,8 +207,8 @@ function StatsRow({ profile }) {
     "Deneyim / 0 dk" alanı kaldırıldı ve yerine UNVAN geldi.
 
     O alan yeni hesaplarda her zaman "0 dk" yazıyordu — profile giren ilk kişiye
-    söylediği tek şey "bu kullanıcı hiçbir şey yapmamış" oluyordu. Unvan aynı yeri
-    kullanır ama en baştan anlamlı bir şey söyler (🌱 Çırak) ve ilerledikçe değişir.
+    söylediği tek şey "bu kullanıcı hiçbir şey yapmamış" oluyordu. Seviye aynı yeri
+    kullanır ama en baştan anlamlı bir şey söyler (🌱 1. Seviye) ve ilerledikçe değişir.
   */
   const kalan =
     profile.nextRankAt != null ? profile.nextRankAt - profile.totalEarnedCredits : null
@@ -221,9 +221,9 @@ function StatsRow({ profile }) {
     },
     { label: 'Anlatılan ders', value: profile.taughtSessionCount, hint: 'Tamamlanmış' },
     {
-      label: 'Unvan',
+      label: 'Seviye',
       value: `${profile.rankEmoji} ${profile.rankTitle}`,
-      hint: kalan != null ? `Sonraki unvana ${kalan} puan` : `${profile.totalEarnedCredits} puan`,
+      hint: kalan != null ? `Sonraki seviyeye ${kalan} puan` : `${profile.totalEarnedCredits} puan`,
     },
     { label: 'Üyelik', value: new Date(profile.joinedAtUtc).getFullYear(), hint: 'Katılım yılı' },
   ]

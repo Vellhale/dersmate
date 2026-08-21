@@ -23,7 +23,7 @@
 #   puan, birikimli toplam, ondan türeyen unvan) DOĞRU gösteriyor mu.
 #
 # NOT (kodlama): Bu dosya UTF-8 BOM ile saklanmalı. PS 5.1, BOM'suz betiği ANSI okuyup
-# Türkçe harfleri bozar; B bölümünde unvan adları ('Çırak', 'Üstat') SUNUCUDAN dönen
+# Türkçe harfleri bozar; B bölümünde seviye adları ('1. Seviye') SUNUCUDAN dönen
 # değerle karşılaştırıldığı için bozulan bir literal testi sahte kırmızıya düşürür.
 
 $ErrorActionPreference = 'Stop'
@@ -155,7 +155,7 @@ else { Fail "cüzdan hâlâ eski alan dönüyor: $($eskiAlanlar -join ', ')" }
 $eksikAlanlar = @(@('totalEarnedCredits', 'currentBalance', 'rankTitle', 'rankEmoji', 'activeLots') | Where-Object { $null -eq $w0.$_ })
 if ($eksikAlanlar.Count -eq 0) { OK 'yeni cüzdan alanları eksiksiz dönüyor' }
 else { Fail "cüzdanda eksik alan: $($eksikAlanlar -join ', ')" }
-if ($w0.rankTitle -eq 'Çırak') { OK 'yeni kullanıcı Çırak unvanıyla başlıyor' } else { Fail "başlangıç unvanı: $($w0.rankTitle)" }
+if ($w0.rankTitle -eq '1. Seviye') { OK 'yeni kullanici 1. Seviye ile basliyor' } else { Fail "başlangıç unvanı: $($w0.rankTitle)" }
 
 # Mutlak değil FARK karşılaştırıyoruz: hoş geldin kredisinin birikimli toplama sayılıp
 # sayılmadığı bu bölümün konusu değil, testi ona bağlamak kırılganlık olurdu.
@@ -231,14 +231,20 @@ if ($ogrSon.currentBalance -eq $oncekiOgr.currentBalance -and $ogrSon.totalEarne
 # demekti. Burada sınanan zaten OKUMA yolu — cüzdan, birikmiş toplamı doğru unvana çeviriyor mu.
 $unvanKul = NewUser 'fixunv' $stamp
 $esikler = @(
-    @{ Puan = 0;     Unvan = 'Çırak';    Sonraki = 500 },
-    @{ Puan = 499;   Unvan = 'Çırak';    Sonraki = 500 },
-    @{ Puan = 500;   Unvan = 'Öğretici'; Sonraki = 1000 },
-    @{ Puan = 999;   Unvan = 'Öğretici'; Sonraki = 1000 },
-    @{ Puan = 1000;  Unvan = 'Uzman';    Sonraki = 2500 },
-    @{ Puan = 2500;  Unvan = 'Usta';     Sonraki = 5000 },
-    @{ Puan = 5000;  Unvan = 'Mentor';   Sonraki = 10000 },
-    @{ Puan = 10000; Unvan = 'Üstat';    Sonraki = $null }
+    # SEVIYE SISTEMI (2026-08-21): unvan adlari yerine 1-10 arasi seviye. Esikler arasi
+    # fark her adimda buyur - yukselmek gittikce zorlassin diye. Sinir ALT DAHIL, UST HARIC.
+    @{ Puan = 0;     Unvan = '1. Seviye';  Sonraki = 200 },
+    @{ Puan = 199;   Unvan = '1. Seviye';  Sonraki = 200 },
+    @{ Puan = 200;   Unvan = '2. Seviye';  Sonraki = 500 },
+    @{ Puan = 499;   Unvan = '2. Seviye';  Sonraki = 500 },
+    @{ Puan = 500;   Unvan = '3. Seviye';  Sonraki = 1000 },
+    @{ Puan = 1000;  Unvan = '4. Seviye';  Sonraki = 2000 },
+    @{ Puan = 2000;  Unvan = '5. Seviye';  Sonraki = 3500 },
+    @{ Puan = 3500;  Unvan = '6. Seviye';  Sonraki = 6000 },
+    @{ Puan = 6000;  Unvan = '7. Seviye';  Sonraki = 10000 },
+    @{ Puan = 10000; Unvan = '8. Seviye';  Sonraki = 16000 },
+    @{ Puan = 16000; Unvan = '9. Seviye';  Sonraki = 25000 },
+    @{ Puan = 25000; Unvan = '10. Seviye'; Sonraki = $null }
 )
 $emojiEksik = 0
 foreach ($e in $esikler) {

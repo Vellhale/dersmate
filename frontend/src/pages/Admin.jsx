@@ -1090,7 +1090,7 @@ function CreditAdjustmentPanel({ onDone }) {
       <Card>
         <p className="mb-4 text-sm text-slate-600">
           Pozitif tutar <strong>ekler</strong>, negatif <strong>düşer</strong>. Gerekçe denetim
-          izine yazılır. Bu işlem <strong>unvanı değiştirmez</strong> — unvan yalnızca ders
+          izine yazılır. Bu işlem <strong>seviyeyi değiştirmez</strong> — seviye yalnızca ders
           anlatarak yükselir.
         </p>
 

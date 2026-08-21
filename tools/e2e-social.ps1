@@ -369,10 +369,10 @@ else { Fail "totalEarnedCredits: $($profil2.totalEarnedCredits)" }
 # Unvan adları Türkçe; betik BOM'suz UTF-8 olduğu için PS 5.1 karakterleri güvenilir
 # okuyamayabilir. Bu yüzden karşılaştırma unvanın ASCII kalan kuyruğuyla yapılıyor
 # (kuyruklar unvan kümesinde birbirinden ayırt edici).
-if ($profil2.rankTitle -like '*rak') { OK "unvan kartı geldi: $($profil2.rankTitle) $($profil2.rankEmoji)" }
+if ($profil2.rankTitle -like '*Seviye') { OK "seviye karti geldi: $($profil2.rankTitle) $($profil2.rankEmoji)" }
 else { Fail "unvan: $($profil2.rankTitle)" }
 if ($profil2.rankEmoji) { OK 'unvan simgesi dolu' } else { Fail 'rankEmoji boş' }
-if ($profil2.nextRankAt -eq 500) { OK 'bir sonraki unvan eşiği bildirildi (500)' } else { Fail "nextRankAt: $($profil2.nextRankAt)" }
+if ($profil2.nextRankAt -eq 200) { OK 'bir sonraki seviye esigi bildirildi (200)' } else { Fail "nextRankAt: $($profil2.nextRankAt)" }
 
 if ($profil2.teacherCandidate -and -not $profil2.teacherCandidate.isVerified) {
     OK 'öğretmen adaylığı "beyan" olarak işaretli (doğrulanmış değil)'
@@ -504,17 +504,20 @@ $unvanci = NewUser 'socu' $stamp
 # kuyruklar unvan kümesinde birbirinden ayırt edici ('*rak' Çırak, '*retici' Öğretici,
 # '*stat' Üstat; Uzman/Usta/Mentor zaten ASCII).
 $esikler = @(
-    @{ Puan = 0    ; Desen = '*rak'     ; Ad = 'Cirak'    ; Sonraki = 500 },
-    @{ Puan = 499  ; Desen = '*rak'     ; Ad = 'Cirak'    ; Sonraki = 500 },
-    @{ Puan = 500  ; Desen = '*retici'  ; Ad = 'Ogretici' ; Sonraki = 1000 },
-    @{ Puan = 999  ; Desen = '*retici'  ; Ad = 'Ogretici' ; Sonraki = 1000 },
-    @{ Puan = 1000 ; Desen = 'Uzman'    ; Ad = 'Uzman'    ; Sonraki = 2500 },
-    @{ Puan = 2499 ; Desen = 'Uzman'    ; Ad = 'Uzman'    ; Sonraki = 2500 },
-    @{ Puan = 2500 ; Desen = 'Usta'     ; Ad = 'Usta'     ; Sonraki = 5000 },
-    @{ Puan = 4999 ; Desen = 'Usta'     ; Ad = 'Usta'     ; Sonraki = 5000 },
-    @{ Puan = 5000 ; Desen = 'Mentor'   ; Ad = 'Mentor'   ; Sonraki = 10000 },
-    @{ Puan = 9999 ; Desen = 'Mentor'   ; Ad = 'Mentor'   ; Sonraki = 10000 },
-    @{ Puan = 10000; Desen = '*stat'    ; Ad = 'Ustat'    ; Sonraki = 0 }
+    # SEVIYE SISTEMI (2026-08-21): "3. Seviye" tamamen ASCII oldugu icin eski Turkce
+    # karakter sorunu (Desen/-like hilesi) ortadan kalkti; artik dogrudan esitlik.
+    @{ Puan = 0    ; Desen = '1. Seviye' ; Ad = '1. Seviye' ; Sonraki = 200 },
+    @{ Puan = 199  ; Desen = '1. Seviye' ; Ad = '1. Seviye' ; Sonraki = 200 },
+    @{ Puan = 200  ; Desen = '2. Seviye' ; Ad = '2. Seviye' ; Sonraki = 500 },
+    @{ Puan = 499  ; Desen = '2. Seviye' ; Ad = '2. Seviye' ; Sonraki = 500 },
+    @{ Puan = 500  ; Desen = '3. Seviye' ; Ad = '3. Seviye' ; Sonraki = 1000 },
+    @{ Puan = 1000 ; Desen = '4. Seviye' ; Ad = '4. Seviye' ; Sonraki = 2000 },
+    @{ Puan = 2000 ; Desen = '5. Seviye' ; Ad = '5. Seviye' ; Sonraki = 3500 },
+    @{ Puan = 3500 ; Desen = '6. Seviye' ; Ad = '6. Seviye' ; Sonraki = 6000 },
+    @{ Puan = 6000 ; Desen = '7. Seviye' ; Ad = '7. Seviye' ; Sonraki = 10000 },
+    @{ Puan = 10000; Desen = '8. Seviye' ; Ad = '8. Seviye' ; Sonraki = 16000 },
+    @{ Puan = 16000; Desen = '9. Seviye' ; Ad = '9. Seviye' ; Sonraki = 25000 },
+    @{ Puan = 25000; Desen = '10. Seviye'; Ad = '10. Seviye'; Sonraki = 0 }
 )
 
 $unvanHatasi = @()
@@ -538,12 +541,12 @@ else { Fail "yanlış eşik: $($esikHatasi -join ' | ')" }
 
 # Aynı kullanıcı için cüzdan ve profil AYNI unvanı söylemeli (iki ayrı DTO, tek kaynak).
 $unvanciCuzdan = Get_ '/api/wallet' $unvanci.Token
-if ($unvanciCuzdan.rankTitle -like '*stat' -and $unvanciCuzdan.totalEarnedCredits -eq 10000) {
-    OK "cüzdan ve profil aynı unvanı bildiriyor ($($unvanciCuzdan.rankTitle) $($unvanciCuzdan.rankEmoji))"
+if ($unvanciCuzdan.rankTitle -eq '10. Seviye' -and $unvanciCuzdan.totalEarnedCredits -eq 25000) {
+    OK "cuzdan ve profil ayni seviyeyi bildiriyor ($($unvanciCuzdan.rankTitle) $($unvanciCuzdan.rankEmoji))"
 } else { Fail "cüzdan unvanı: $($unvanciCuzdan.rankTitle) / $($unvanciCuzdan.totalEarnedCredits)" }
 
 # Unvan HARCANABİLİR bakiyeden değil, BİRİKİMLİ kazançtan hesaplanmalı: bu kullanıcı hiç
-# ders vermeden 10.000 kazanç sayacına sahip ama cüzdanı boş sayılır; unvan yine de en üst.
+# ders vermeden 25.000 kazanc sayacina sahip ama cuzdani bos sayilir; seviye yine de en ust.
 if ($unvanciCuzdan.currentBalance -ne $unvanciCuzdan.totalEarnedCredits) {
     OK "unvan, harcanabilir bakiyeden bağımsız (bakiye $($unvanciCuzdan.currentBalance), kazanç $($unvanciCuzdan.totalEarnedCredits))"
 } else { Fail "bakiye ve birikimli kazanç ayrışmadı: $($unvanciCuzdan.currentBalance)" }
@@ -551,7 +554,7 @@ if ($unvanciCuzdan.currentBalance -ne $unvanciCuzdan.totalEarnedCredits) {
 # Birikimli sayaç ASLA azalmaz: eğitmenin puanı harcansa bile unvanı geri gitmemeli.
 # (Harcama ucu bu pakette yok; sayacın bakiyeden bağımsızlığı yukarıda gösterildi.)
 $unvanciSatir = (Sql "SELECT ""TotalEarnedCredits"" FROM identity.""Users"" WHERE ""Id"" = '$($unvanci.UserId)';").Trim()
-if ($unvanciSatir -eq '10000') { OK 'birikimli kazanç sütunu profil ile tutarlı' } else { Fail "sütun: $unvanciSatir" }
+if ($unvanciSatir -eq '25000') { OK 'birikimli kazanc sutunu profil ile tutarli' } else { Fail "sütun: $unvanciSatir" }
 
 <#
   KURULUM GERİ ALINIYOR — bu adım atlanırsa BAŞKA BİR PAKET kırılır.

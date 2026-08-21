@@ -27,7 +27,7 @@ export const TOUR_STEPS = [
     title: 'Ders almak ücretsiz 🌱',
     body:
       'Burada para da, ödediğin bir kredi de yok. Ders ALMAK tamamen ücretsiz. ' +
-      'Ders ANLATTIĞINDA puan kazanırsın; biriken puan buradaki unvanını yükseltir ' +
+      'Ders ANLATTIĞINDA puan kazanırsın; biriken puan buradaki seviyeni yükseltir ' +
       '(Çırak → Öğretici → Uzman → …). Yani puan harcanan bir bakiye değil, emeğinin karşılığı.',
   },
   {
@@ -45,7 +45,7 @@ export const TOUR_STEPS = [
     title: 'Ders Portföyü — ne anlatabilirsin',
     body:
       'Anlatabildiğin konuları buraya ekle; Keşfet’te başkalarına böyle görünürsün. ' +
-      'Puan kazanmanın tek yolu ders anlatmak olduğu için portföyün boşsa unvanın da yerinde sayar.',
+      'Puan kazanmanın tek yolu ders anlatmak olduğu için portföyün boşsa seviyen de yerinde sayar.',
   },
   {
     id: 'sessions',

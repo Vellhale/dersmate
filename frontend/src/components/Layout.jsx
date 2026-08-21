@@ -9,7 +9,7 @@ import { ProductTour, RestartTourLink } from './ProductTour'
 import { Avatar } from './Avatar'
 import {
   MenuIkonu,
-  PusulaIkonu,
+  BuyutecIkonu,
   KitapIkonu,
   KisilerIkonu,
   MesajIkonu,
@@ -48,7 +48,7 @@ import {
   yedek, hedef değil.
 */
 const NAV = [
-  { to: '/kesfet', label: 'Keşfet', tour: 'discover', Ikon: PusulaIkonu },
+  { to: '/kesfet', label: 'Keşfet', tour: 'discover', Ikon: BuyutecIkonu },
   { to: '/portfolio', label: 'Ders Portföyü', tour: 'portfolio', Ikon: KitapIkonu },
   { to: '/eslesmeler', label: 'Eşleşmeler', Ikon: KisilerIkonu },
   { to: '/sohbet', label: 'Sohbet', Ikon: MesajIkonu },
@@ -122,8 +122,13 @@ function LayoutShell() {
   return (
     <div className="min-h-[100dvh]">
       <header className="sticky top-0 z-40 h-16 bg-slate-900">
-        <div className="flex h-full items-center justify-between px-3 sm:px-6">
-          <div className="flex items-center gap-1">
+        {/* ÜÇ BÖLMELİ BAR: [hamburger] [esnek orta — logo] [kimlik kümesi].
+            Logo ortadaki flex-1 alanda ortalandığı için hamburger ile unvan çipinin TAM
+            ORTASINDA durur. Önceki hâlde logo hamburgerin hemen yanındaydı ve barın sol
+            ucuna yığılıyordu; justify-between ile üç öğe koymak da işe yaramaz, çünkü sol
+            ve sağ kümeler eşit genişlikte değil. */}
+        <div className="flex h-full items-center px-3 sm:px-6">
+          <div className="flex shrink-0 items-center gap-1">
             {/* İki hamburger, iki iş: lg altında çekmeceyi açar, lg üstünde rayı daraltır.
                 Tek düğmeye iki işlev yüklemek aria-expanded'ı anlamsızlaştırıyordu. */}
             <button
@@ -148,28 +153,33 @@ function LayoutShell() {
               <MenuIkonu />
             </button>
 
-            {/* Logo kilidi marka adını zaten içeriyor — yanına ayrıca metin konmaz.
-                onDark: koyu barda ölçülü varyant (beyaz + brand-100), bkz. Logo.jsx. */}
-            {/* -my-2/py-2: logonun görünen boyu değişmeden dokunma alanı 48px'e çıkıyor. */}
-            <NavLink to="/" className="-my-2 flex shrink-0 items-center py-2 pl-1" aria-label="Ana sayfa">
-              <Logo onDark className="h-8 w-auto sm:h-9" />
+          </div>
+
+          {/* Orta bölme: logo burada ortalanır. min-w-0, dar ekranda taşmayı önler. */}
+          {/* Logo kilidi marka adını zaten içeriyor — yanına ayrıca metin konmaz.
+              onDark: koyu barda ölçülü varyant (beyaz + brand-100), bkz. Logo.jsx. */}
+          {/* -my-2/py-2: logonun görünen boyu değişmeden dokunma alanı büyür. */}
+          <div className="flex min-w-0 flex-1 justify-center px-2">
+            <NavLink to="/" className="-my-2 flex shrink-0 items-center py-2" aria-label="Ana sayfa">
+              <Logo onDark className="h-9 w-auto sm:h-11" />
             </NavLink>
           </div>
 
-          <div className="flex items-center gap-2 sm:gap-4">
-            {/* Bakiye rozeti yerine UNVAN. Harcanmayan bir sayıyı her sayfada göstermenin
-                anlamı yok; unvan ise kullanıcının biriktirdiği şeyi tek bakışta söylüyor
-                ve profile götürüyor. Zemin brand-300: slate-900 metinle 8.19:1. */}
+          <div className="flex shrink-0 items-center gap-2 sm:gap-4">
+            {/* Bakiye rozeti yerine SEVİYE. Harcanmayan bir sayıyı her sayfada göstermenin
+                anlamı yok; seviye ise kullanıcının biriktirdiği şeyi tek bakışta söylüyor
+                ve profile götürüyor. Zemin brand-300: slate-900 metinle 8.19:1.
+                "3. Seviye" kısa olduğu için mobilde de tam gösteriliyor — eski unvan
+                adları ("Öğretici") sığmadığı için orada puana düşülüyordu. */}
             <NavLink
               to="/profil"
               data-tour="rank"
               className="-my-2 flex min-h-11 shrink-0 items-center py-2"
-              title={`${wallet?.rankTitle ?? 'Unvan'} — ${wallet?.totalEarnedCredits ?? 0} puan`}
+              title={`${wallet?.rankTitle ?? 'Seviye'} — ${wallet?.totalEarnedCredits ?? 0} puan`}
             >
               <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-brand-300 px-3 py-1 text-xs font-semibold text-slate-900">
                 <span aria-hidden="true">{wallet?.rankEmoji ?? '🌱'}</span>
-                <span className="hidden sm:inline">{wallet?.rankTitle ?? '—'}</span>
-                <span className="sm:hidden">{wallet?.totalEarnedCredits ?? 0}</span>
+                <span>{wallet?.rankTitle ?? '—'}</span>
               </span>
             </NavLink>
 
