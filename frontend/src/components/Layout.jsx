@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useAuth } from '../state/AuthContext'
+import { useConsent } from '../state/ConsentContext'
+import { RAIL_KEY } from '../lib/consent'
 import { WalletProvider, useWallet } from '../state/WalletContext'
 import { InboxProvider, useInbox } from '../state/InboxContext'
 import { Logo } from './Logo'
@@ -53,8 +55,11 @@ import {
 const NAV = [
   { to: '/kesfet', label: 'Keşfet', tour: 'discover', Ikon: AramaIkonu },
   { to: '/portfolio', label: 'Ders Portföyü', tour: 'portfolio', Ikon: KitapIkonu },
-  { to: '/eslesmeler', label: 'Eşleşmeler', Ikon: KisilerIkonu },
-  { to: '/sohbet', label: 'Sohbet', Ikon: MesajIkonu },
+  // matches / chat çıpaları rehber altı adıma çıkarken eklendi (2026-08-24): eşleşme ve
+  // sohbet eskiden tek bir "kanıt ve onay" paragrafının içinde geçiyordu, kendi adımları
+  // yoktu. Adım ekleyip çıpa eklememek, adımı sessizce ekranın ortasına düşürürdü.
+  { to: '/eslesmeler', label: 'Eşleşmeler', tour: 'matches', Ikon: KisilerIkonu },
+  { to: '/sohbet', label: 'Sohbet', tour: 'chat', Ikon: MesajIkonu },
   { to: '/dersler', label: 'Derslerim', tour: 'sessions', Ikon: KepIkonu },
 ]
 
@@ -73,9 +78,17 @@ const SOSYAL = [
   { ad: 'X', kullanici: 'dersmate_', href: 'https://x.com/dersmate_', Ikon: XIkonu },
 ]
 
-// localStorage anahtarları peerlearn.* biçiminde (bkz. api.js, hwid.js) — F4: bu ad
-// kullanıcıya görünmez, altyapı kimliğidir.
-const RAY_KEY = 'peerlearn.raydar'
+/*
+  Ray tercihinin anahtarı ARTIK BURADA TANIMLI DEĞİL, consent.js'ten geliyor.
+
+  Sebebi bu projede ısırmış bir hata: anahtar burada duruyordu ve cihaza yazılıyordu ama
+  çerez aydınlatma metninde hiçbir kategoride görünmüyordu — yani fonksiyonel çerezleri
+  REDDETMİŞ kullanıcının cihazına da yazılıyordu. Anahtarı rızanın listesiyle aynı yerde
+  tutmak, ikisinin bir daha ayrışmamasını sağlıyor.
+
+  (Adlandırma peerlearn.* biçiminde — bkz. api.js, hwid.js. F4: bu ad kullanıcıya
+  görünmez, altyapı kimliğidir.)
+*/
 
 export default function Layout() {
   /*
@@ -97,13 +110,46 @@ function LayoutShell() {
   const navigate = useNavigate()
   const [menuOpen, setMenuOpen] = useState(false)
 
-  // Ray tercihi kalıcı: her sayfa yenilemesinde daraltmayı yeniden yapmak, tercihi
-  // hiç hatırlamamakla aynı şey olurdu.
-  const [rayDar, setRayDar] = useState(() => localStorage.getItem(RAY_KEY) === '1')
+  /*
+    RAY TERCİHİ FONKSİYONEL ÇEREZ RIZASINA TABİ.
+
+    Tercih kalıcı olmalı — her sayfa yenilemesinde daraltmayı yeniden yapmak, tercihi hiç
+    hatırlamamakla aynı şey olurdu. Ama "kalıcı" demek cihaza yazmak demek ve kullanıcı
+    fonksiyonel çerezleri reddetmişse yazacak bir şeyimiz yok.
+
+    Reddedildiğinde ray her açılışta GENİŞ başlar ve daraltma yalnızca o sayfa ömrü
+    boyunca hatırlanır. Banner'ın "kapatırsan bunlar her açılışta sıfırlanır" cümlesinin
+    karşılığı tam olarak bu. Daha önce yazılmış değeri silmek buranın işi değil —
+    ConsentProvider'daki temizlik kapısı yapıyor (clearFunctionalStorage).
+
+    Okuma da rızaya bakıyor: reddedilmişken eski bir değer cihazda kalmış olabilir
+    (temizlik kapısı henüz çalışmamış olabilir) ve onu okumak, reddedilen tercihi geri
+    getirirdi.
+  */
+  const { functionalAllowed } = useConsent()
+
+  const [rayDar, setRayDar] = useState(() => {
+    if (!functionalAllowed) return false
+    try {
+      return localStorage.getItem(RAIL_KEY) === '1'
+    } catch {
+      // Depolama erişilemez (gizli sekme kısıtları). Bu okuma RENDER SIRASINDA çalışıyor;
+      // sarmalanmazsa fırlayan hata tüm kabuğu düşürürdü. Varsayılan: geniş ray.
+      return false
+    }
+  })
+
   const rayiDegistir = () => {
     setRayDar((v) => {
-      localStorage.setItem(RAY_KEY, v ? '0' : '1')
-      return !v
+      const yeni = !v
+      if (functionalAllowed) {
+        try {
+          localStorage.setItem(RAIL_KEY, yeni ? '1' : '0')
+        } catch {
+          // Depolama kapalı (gizli sekme): tercih bu oturum boyunca yine de geçerli.
+        }
+      }
+      return yeni
     })
   }
 
