@@ -102,14 +102,37 @@ export function Logo({ boyut = 'md', zemin = 'acik', className = '', title = 'de
         Erişilebilir ad BURADA: kelime markası `aria-hidden`, yani ekran okuyucu
         "dersmate" ifadesini bir kez duyuyor.
       */}
+      {/*
+        viewBox'TA 1 BİRİMLİK PAY VAR (2026-08-25). Eski kutu 40×18'di ve daireler
+        kenarlara SIFIR payla oturuyordu: cy=9, r=9 → üst/alt kenar tam 0 ve 18'de,
+        ikinci dairenin sağ kenarı tam 40'ta. Kenar yumuşatması (antialiasing) son
+        piksel şeridini kutunun DIŞINA taşırıyor ve tarayıcı onu kırpıyordu — koyu
+        zeminde beyaz dairenin kenarında görünen "kesik" tam buydu. Şimdi her kenarda
+        1 birim nefes payı var; daireler kutuya değmiyor.
+
+        BAĞ YAYI GERİ GELDİ — ama eski hatasıyla DEĞİL. İlk çizimde daireler üst üste
+        biniyor ve ayrım, zemin rengiyle çizilmiş bir yayla yapılıyordu; koyu temada o
+        yay görünmez olup daireleri tek kütleye dönüştürüyordu (bu yüzden kaldırılmıştı).
+        Yeni yay GERÇEK renkte (vurgu tonu — her zeminde zaten ölçülü) ve dairelerin
+        ARKASINA çiziliyor: uçları noktaların altında kayboluyor, görünen kısım iki
+        düğümü birbirine bağlayan köprü. Daireler ayrık kaldığı için eski bulanıklaşma
+        geri gelmiyor; işaret favicon'daki "bağlı iki akran" fikrini geri kazanıyor.
+      */}
       <svg
-        viewBox="0 0 40 18"
+        viewBox="0 0 42 20"
         role="img"
         aria-label={title}
         className={`${b.isaret} w-auto shrink-0`}
       >
-        <circle cx="9" cy="9" r="9" fill={z.nokta} />
-        <circle cx="31" cy="9" r="9" fill={z.ikinciNokta} />
+        <path
+          d="M 10 10 Q 21 0, 32 10"
+          stroke={z.nokta}
+          strokeWidth="2.5"
+          fill="none"
+          strokeLinecap="round"
+        />
+        <circle cx="10" cy="10" r="9" fill={z.nokta} />
+        <circle cx="32" cy="10" r="9" fill={z.ikinciNokta} />
       </svg>
 
       {/*
@@ -117,8 +140,13 @@ export function Logo({ boyut = 'md', zemin = 'acik', className = '', title = 'de
         dikeyde noktalarla aynı eksene oturtuyor. Yazı tipi ayrıca TANIMLANMADI: gövde
         yazı tipiyle aynı yığın kullanılıyor, çünkü logo arayüzün içinde yaşıyor ve
         farklı bir yazı tipi burada yamalı görünürdü.
+
+        font-bold → font-semibold (2026-08-25): 700 ağırlık bu puntolarda gövdeleri
+        şişiriyor ve marka "kaba" okunuyordu (sahibin geri bildirimi). 600, aynı
+        okunurluğu daha ince gövdeyle veriyor; iki hece arasındaki renk ayrımı da
+        kalın siyah kütleye boğulmadan seçiliyor.
       */}
-      <span aria-hidden="true" className={`font-bold leading-none tracking-tight ${b.yazi}`}>
+      <span aria-hidden="true" className={`font-semibold leading-none tracking-tight ${b.yazi}`}>
         <span className={z.ders}>ders</span>
         <span className={z.mate}>mate</span>
       </span>
