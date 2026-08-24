@@ -13,7 +13,7 @@ import {
   remainingText,
   signedCredit,
 } from '../lib/format'
-import { Badge, Button, Card, EmptyState, ErrorBox, Field, Loading, Modal, Notice, Pagination, SectionTitle } from '../components/ui'
+import { Badge, Button, Card, EmptyState, ErrorBox, Field, Loading, Modal, Notice, Pagination } from '../components/ui'
 
 /*
   DURUM → TON TABLOSU. TEK KAYNAK.
@@ -138,11 +138,39 @@ export default function Sessions() {
     }
   }
 
+  const hicDersYok =
+    groups.action.length + groups.upcoming.length + groups.past.length === 0
+
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
+    /*
+      ─────────────────────────────────────────────────────────────────────────
+      EKRANA SABİT İKİ SÜTUN (2026-08-24).
+
+      Eski düzen üç bölümü alt alta yığıyordu: aksiyon bekleyenler, yaklaşanlar, geçmiş.
+      Otuz dersi olan bir kullanıcıda sayfa dört ekran boyu uzuyor ve "yarın dersim var
+      mı" sorusu ile "geçen ay ne yapmıştım" sorusu aynı kaydırma çubuğunu paylaşıyordu —
+      oysa bunlar birbirinden bağımsız iki iş.
+
+      Artık lg üstünde iki sütun: SOLDA yaklaşan, SAĞDA geçmiş. Sayfanın kendisi
+      kaymıyor; her sütun KENDİ İÇİNDE kayıyor. Geçmişi gezerken yaklaşan dersler
+      ekranda kalıyor.
+
+      lg ALTINDA sütun yok ve bu bilinçli: dar ekranda yan yana iki kaydırma alanı
+      birbirini yiyor, parmak hangisini sürüklediğini şaşırıyor. Orada normal akış
+      sürüyor (sayfa kayar, bölümler alt alta) — aynı içerik, ekrana uygun düzen.
+
+      Yükseklik: 100dvh − 10.5rem. Üç parça: 4rem sabit üst bar + 3rem <main> dolgusu
+      (py-6) + 3.5rem altbilgi (çerez tercihleri / turu yeniden başlat — Layout.jsx:280).
+      Altbilgi ilk hesapta ATLANMIŞTI ve sayfa tam 56px kayıyordu: iki sütun ekrana
+      sığıyor ama altbilgi taşıyordu, yani "sayfa kaymasın" kuralı sessizce bozuluyordu.
+      Tarayıcıda ölçüldü.
+      vh DEĞİL dvh: mobil adres çubuğu vh'ye dahil değil ve alt kenar kırpılırdı.
+      ─────────────────────────────────────────────────────────────────────────
+    */
+    <div className="flex flex-col gap-4 lg:h-[calc(100dvh-10.5rem)] lg:min-h-[520px] lg:overflow-hidden">
+      <div className="flex shrink-0 flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Derslerim</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Derslerim</h1>
           <p className="mt-1 text-sm text-slate-600">
             Ders almak ücretsizdir. Ders onaylandığında anlatan tarafa puan yazılır.
           </p>
@@ -151,86 +179,112 @@ export default function Sessions() {
       </div>
 
       {notice && (
-        <Notice tone="success" onDismiss={() => setNotice(null)}>
-          {notice}
-        </Notice>
+        <div className="shrink-0">
+          <Notice tone="success" onDismiss={() => setNotice(null)}>
+            {notice}
+          </Notice>
+        </div>
       )}
 
-      <ErrorBox error={sessions.error} onRetry={sessions.reload} />
+      <div className="shrink-0 empty:hidden">
+        <ErrorBox error={sessions.error} onRetry={sessions.reload} />
+      </div>
 
       {sessions.loading ? (
         <Loading />
-      ) : groups.action.length + groups.upcoming.length + groups.past.length === 0 ? (
+      ) : hicDersYok ? (
         <EmptyState
           title="Henüz dersin yok"
           description="Kabul edilmiş bir eşleşmen varsa hemen ders saati belirleyebilirsin."
           action={<Button onClick={() => setBookOpen(true)}>Ders rezerve et</Button>}
         />
       ) : (
-        <div className="space-y-8">
-          {/* Kesme SESSİZ olmaz: kullanıcı listenin tamamını görmediğini bilmeli. */}
-          {activeTruncated && (
-            <Notice tone="warning">
-              {sessions.data.activeTotal} aktif dersinden ilk {sessions.data.active.length} tanesi
-              gösteriliyor. Listeyi kısaltmak için tamamlanan dersleri onayla.
-            </Notice>
-          )}
+        <div className="grid gap-4 lg:min-h-0 lg:flex-1 lg:grid-cols-2">
+          {/* ── SOL: YAKLAŞAN ─────────────────────────────────────────────── */}
+          <Sutun
+            baslik="Yaklaşan dersler"
+            sayi={groups.action.length + groups.upcoming.length}
+            vurgulu={groups.action.length > 0}
+          >
+            {/* Kesme SESSİZ olmaz: kullanıcı listenin tamamını görmediğini bilmeli. */}
+            {activeTruncated && (
+              <Notice tone="warning">
+                {sessions.data.activeTotal} aktif dersinden ilk {sessions.data.active.length}{' '}
+                tanesi gösteriliyor. Listeyi kısaltmak için tamamlanan dersleri onayla.
+              </Notice>
+            )}
 
-          {groups.action.length > 0 && (
-            <section>
-              <SectionTitle>Senden aksiyon bekleyenler</SectionTitle>
-              <div className="space-y-3">
+            {/*
+              AKSİYON BEKLEYENLER EN ÜSTTE ve ayrı bir başlık altında. Bunlar da aktif
+              ders ama kullanıcıdan bir şey bekliyorlar; yaklaşanların arasına
+              karıştırmak "bugün ne yapmam gerek" sorusunu görünmez yapardı.
+            */}
+            {groups.action.length > 0 && (
+              <>
+                <AltBaslik tone="amber">Senden aksiyon bekleyenler ({groups.action.length})</AltBaslik>
                 {groups.action.map((s) => (
                   <SessionCard key={s.sessionId} session={s} onAction={setDialog} />
                 ))}
-              </div>
-            </section>
-          )}
+              </>
+            )}
 
-          {groups.upcoming.length > 0 && (
-            <section>
-              <SectionTitle>Yaklaşan dersler</SectionTitle>
-              <div className="space-y-3">
+            {groups.upcoming.length > 0 && (
+              <>
+                {groups.action.length > 0 && <AltBaslik>Planlanmış ({groups.upcoming.length})</AltBaslik>}
                 {groups.upcoming.map((s) => (
                   <SessionCard key={s.sessionId} session={s} onAction={setDialog} />
                 ))}
-              </div>
-            </section>
-          )}
+              </>
+            )}
 
-          {groups.past.length > 0 && (
-            <section>
-              <SectionTitle>
-                Geçmiş ({pastTotal}){pastTotalPages > 1 ? ` · sayfa ${pastPage}/${pastTotalPages}` : ''}
-              </SectionTitle>
-              <div className="space-y-3">
-                {groups.past.map((s) => (
-                  <SessionCard key={s.sessionId} session={s} onAction={setDialog} past />
-                ))}
-              </div>
-
-              <ErrorBox error={pastError} onRetry={() => sayfayaGit(pastPage)} />
-
-              <Pagination
-                page={pastPage}
-                totalPages={pastTotalPages}
-                onChange={sayfayaGit}
-                disabled={pastLoading}
+            {groups.action.length + groups.upcoming.length === 0 && (
+              <BosSutun
+                baslik="Yaklaşan ders yok"
+                metin="Eşleşmelerinden birine ders saati belirleyerek başla."
               />
-            </section>
-          )}
+            )}
+          </Sutun>
+
+          {/* ── SAĞ: GEÇMİŞ ───────────────────────────────────────────────── */}
+          <Sutun
+            baslik="Geçmiş dersler"
+            sayi={pastTotal}
+            altBilgi={
+              pastTotalPages > 1 ? (
+                <Pagination
+                  page={pastPage}
+                  totalPages={pastTotalPages}
+                  onChange={sayfayaGit}
+                  disabled={pastLoading}
+                />
+              ) : null
+            }
+          >
+            {groups.past.length > 0 ? (
+              groups.past.map((s) => (
+                <SessionCard key={s.sessionId} session={s} onAction={setDialog} past />
+              ))
+            ) : (
+              <BosSutun
+                baslik="Geçmiş ders yok"
+                metin="Tamamlanan dersler onaylandıktan sonra burada birikir."
+              />
+            )}
+
+            <ErrorBox error={pastError} onRetry={() => sayfayaGit(pastPage)} />
+
+            {/*
+              PUAN GEÇMİŞİ SAĞ SÜTUNUN İÇİNDE.
+
+              Eskiden iki listenin ALTINDA, sayfanın devamındaydı. Sayfa artık kaymadığı
+              için "altında" diye bir yer kalmadı; defteri sağ sütuna almak ayrıca doğru
+              yer: her puan hareketinin kaynağı tamamlanmış bir derstir, yani tam olarak
+              bu sütunda duran şey. Ayrı bir sekme aynı olayı iki yere bölerdi.
+            */}
+            <PointHistory />
+          </Sutun>
         </div>
       )}
-
-      {/*
-        Puan geçmişi, ders listesinin ALTINDA ve ders akışıyla AYNI sayfada.
-
-        Eskiden ayrı bir Cüzdan ekranıydı; o ekran kalkınca defter erişilemez hâle geldi
-        (uç duruyordu, çağıran kalmamıştı). Buraya taşındı çünkü her puan hareketinin
-        kaynağı bir derstir — "bu puan nereden geldi" sorusunun yanıtı hemen üstündeki
-        listede duruyor. Ayrı bir sekme, aynı olayı iki yere bölerdi.
-      */}
-      <PointHistory />
 
       {/*
         Modallar KOŞULLU render edilir ve session id ile key'lenir.
@@ -309,6 +363,80 @@ export default function Sessions() {
           onDone={() => refresh('Ders iptal edildi.')}
         />
       )}
+    </div>
+  )
+}
+
+
+/*
+  SÜTUN KABUĞU — başlık sabit, gövde kayar.
+
+  ZEMİN BİLEREK BEYAZ DEĞİL. Sayfa zemini slate-50, kartlar beyaz; ikisinin arasına
+  hiçbir şey konmadığında ekran "beyaz kartların yüzdüğü beyazımsı bir alan" gibi
+  duruyordu — sınırların nerede olduğu belli değildi. Sütun gövdesi bir ton daha koyu
+  (slate-100/60), böylece beyaz kartlar ondan AYRILIYOR ve sütunun nerede bitip
+  nerede başladığı görünüyor. Başlık şeridi beyaz kalıyor: kayan gövdenin üstünde
+  sabit duran bir yüzey, gövdeden farklı olmalı ki "bu satır kaymıyor" anlaşılsın.
+
+  min-h-0 ŞART: flex çocuğunun varsayılan min-height'ı `auto`, yani içerik kadar. Onu
+  sıfırlamadan `overflow-y-auto` hiçbir şey yapmaz — sütun içeriği kadar uzar ve
+  kaydırma sayfaya taşar. Bu, ekrana sabitlenen her düzenin ilk tuzağı.
+*/
+function Sutun({ baslik, sayi, children, altBilgi = null, vurgulu = false }) {
+  return (
+    <section className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-slate-200/70 bg-slate-100/60">
+      <header className="flex shrink-0 items-center justify-between gap-2 border-b border-slate-200/70 bg-white px-4 py-3">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-600">{baslik}</h2>
+        {/*
+          Sayaç rozeti. Aksiyon bekleyen ders varsa sol sütunun sayacı amber'a dönüyor:
+          kullanıcı sütunun içine bakmadan da "burada iş var" bilgisini alıyor. Renk tek
+          sinyal değil — aksiyon grubunun kendi başlığı da listede duruyor.
+        */}
+        <span
+          className={`rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums ${
+            vurgulu ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-600'
+          }`}
+        >
+          {sayi}
+        </span>
+      </header>
+
+      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-3 sm:p-4">
+        {children}
+      </div>
+
+      {altBilgi && (
+        <div className="shrink-0 border-t border-slate-200/70 bg-white px-3 py-2">{altBilgi}</div>
+      )}
+    </section>
+  )
+}
+
+/** Sütun içindeki gruplama başlığı. Kartlardan küçük, sütun başlığından ince. */
+function AltBaslik({ children, tone = 'slate' }) {
+  return (
+    <p
+      className={`px-0.5 pt-1 text-xs font-semibold uppercase tracking-wide ${
+        tone === 'amber' ? 'text-amber-700' : 'text-slate-500'
+      }`}
+    >
+      {children}
+    </p>
+  )
+}
+
+/**
+ * Sütun boşken görünen kısa metin.
+ *
+ * ui.jsx'teki EmptyState KULLANILMADI: o, sayfanın tamamı boşken çıkan büyük bir blok
+ * (başlık + açıklama + eylem düğmesi) ve bir sütunun içinde orantısız duruyor. Burada
+ * boşluk bir hata değil, normal bir durum — o kadar yer kaplamamalı.
+ */
+function BosSutun({ baslik, metin }) {
+  return (
+    <div className="rounded-xl border border-dashed border-slate-300 bg-white/60 px-4 py-8 text-center">
+      <p className="text-sm font-medium text-slate-600">{baslik}</p>
+      <p className="mt-1 text-xs text-slate-500">{metin}</p>
     </div>
   )
 }
@@ -459,8 +587,19 @@ function SessionCard({ session, onAction, past = false }) {
       kenarda eziyor; kalan üç kenar kart dilinin bir parçası olarak duruyor. Şerit,
       listeyi taramakta olan gözün durumu OKUMADAN ayırt etmesini sağlıyor — okuma
       rozetle yapılıyor.
+
+      GÖLGE `!` İLE EZİLİYOR ve bu Tailwind'in bir tuzağı: çakışan iki yardımcı sınıfta
+      (shadow-md ↔ shadow-sm) kazanan, class attribute'undaki SIRA değil üretilen CSS'teki
+      sıradır — shadow-md sonra tanımlandığı için sade `shadow-sm` hiçbir şey yapmazdı.
+      Kart burada bilerek hafif: sütun içinde alt alta duran on kartın her biri shadow-md
+      taşıyınca liste kabartmalı bir duvara dönüşüyor. Ağırlık hover'da geliyor.
+
+      p-4 (Card'ın p-5'i yerine): sütun genişliği tam sayfadan dar, aynı dolgu içeriği
+      sıkıştırıyordu.
     */
-    <Card className={`border-l-4 ${stil.serit}`}>
+    <Card
+      className={`border-l-4 !p-4 !shadow-sm transition-shadow duration-200 hover:!shadow-md ${stil.serit}`}
+    >
       {/*
         Üst satır: SOLDA kimlik (konu + karşı taraf), SAĞDA durum.
         Eski düzende konu adı iki rozetin arasına sıkışmış bir <span>'di ve kart
