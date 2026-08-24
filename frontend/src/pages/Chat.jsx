@@ -258,10 +258,15 @@ export default function Chat() {
             ) : (
               <>
                 <header className="flex shrink-0 items-center gap-2 border-b border-slate-200/80 px-4 py-3">
-                  {/* Mobilde listeye dönüş: lg'de liste zaten solda durduğu için gizli. */}
+                  {/* Mobilde listeye dönüş: lg'de liste zaten solda durduğu için gizli.
+
+                      44px (h-11): bu düğme YALNIZCA dokunmatik boyutlarda var — lg'de
+                      hiç çizilmiyor. 40px'ti ve projenin dokunma eşiğinin altındaydı;
+                      görünürlüğü zaten `lg:hidden` ile mobile bağlı olan bir düğmenin
+                      masaüstü ölçüsünde durması için bir sebep yok. */}
                   <button
                     onClick={() => navigate('/sohbet')}
-                    className="-ml-2 grid h-10 w-10 shrink-0 place-items-center rounded-lg text-slate-500 hover:bg-slate-100 lg:hidden"
+                    className="-ml-2 grid h-11 w-11 shrink-0 place-items-center rounded-lg text-slate-500 hover:bg-slate-100 lg:hidden"
                     aria-label="Sohbet listesine dön"
                   >
                     ←
