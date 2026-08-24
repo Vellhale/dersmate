@@ -41,24 +41,41 @@ function Section($m) { Write-Host "`n=== $m ===" -ForegroundColor Cyan }
 # psql erişimi: yerel kurulum ya da docker compose. İkisi de destekleniyor çünkü
 # docker-compose.yml geldikten sonra makinede ayrıca psql kurulu olmayabilir.
 # ---------------------------------------------------------------------------
-$LocalPsql = 'C:\Program Files\PostgreSQL\17\bin\psql.exe'
-$UseDocker = -not (Test-Path $LocalPsql)
-if (-not $UseDocker) { $env:PGPASSWORD = 'PeerLearnDev2026' }
+$env:PGPASSWORD = 'PeerLearnDev2026'
+
+<#
+  psql'e üç yoldan erişilebilir; ilk bulunan kullanılır:
+    1. Windows kurulumu   — geliştiricinin makinesinde tipik yol.
+    2. PATH üzerinde psql — Linux/macOS ve GitHub Actions koşucuları (postgresql-client).
+    3. docker compose     — makinede psql yok ama compose yığını ayakta.
+
+  CI için 2. yol şart: koşucuda ne Windows kurulumu ne de compose var, ama psql PATH'te.
+#>
+$WindowsPsql = 'C:\Program Files\PostgreSQL\17\bin\psql.exe'
+$PathPsql = (Get-Command psql -ErrorAction SilentlyContinue)?.Source
+
+if (Test-Path $WindowsPsql) { $PsqlExe = $WindowsPsql }
+elseif ($PathPsql) { $PsqlExe = $PathPsql }
+else { $PsqlExe = $null }   # docker compose yoluna düş
+
+# Sunucu adresi ortamdan geçersiz kılınabilir (CI'da servis konteyneri).
+$PgHost = if ($env:PGHOST) { $env:PGHOST } else { 'localhost' }
+$PgPort = if ($env:PGPORT) { $env:PGPORT } else { '5432' }
 
 function Sql($q) {
-    if ($UseDocker) {
-        $q | docker compose exec -T db psql -U peerlearn -d peerlearn -t -A 2>$null
+    if (-not $PsqlExe) {
+        return ($q | docker compose exec -T db psql -U peerlearn -d peerlearn -t -A 2>$null)
     }
-    else {
-        $f = Join-Path $env:TEMP "pl-yks-$([Guid]::NewGuid().ToString('N')).sql"
-        [IO.File]::WriteAllText($f, $q, [Text.UTF8Encoding]::new($false))
-        try { & $LocalPsql -h localhost -U peerlearn -d peerlearn -t -A -f $f } finally { Remove-Item $f -Force }
-    }
+
+    $dizin = if ($env:TEMP) { $env:TEMP } else { '/tmp' }
+    $f = Join-Path $dizin "pl-yks-$([Guid]::NewGuid().ToString('N')).sql"
+    [IO.File]::WriteAllText($f, $q, [Text.UTF8Encoding]::new($false))
+    try { & $PsqlExe -h $PgHost -p $PgPort -U peerlearn -d peerlearn -t -A -f $f } finally { Remove-Item $f -Force }
 }
 function SqlInt($q) { $r = (Sql $q); if ([string]::IsNullOrWhiteSpace($r)) { 0 } else { [int]("$r".Trim()) } }
 
 Write-Host 'PeerLearn — YKS müfredatı + branş rozetleri' -ForegroundColor White
-Write-Host "psql erişimi: $(if ($UseDocker) { 'docker compose exec db' } else { $LocalPsql })"
+Write-Host "psql erişimi: $(if ($PsqlExe) { "$PsqlExe (${PgHost}:${PgPort})" } else { 'docker compose exec db' })"
 
 # ---------------------------------------------------------------------------
 Section 'A. Derleme ve göç'
@@ -78,9 +95,12 @@ $migrations = & dotnet ef migrations list --project src/PeerLearn.Infrastructure
 if ($LASTEXITCODE -ne 0) {
     Note 'dotnet ef çalıştırılamadı (dotnet-ef kurulu mu? `dotnet tool install --global dotnet-ef`)'
 }
-elseif ($migrations -match 'SubjectBranchesAndBadges') { OK 'SubjectBranchesAndBadges göçü mevcut' }
+elseif ($migrations -match 'SubjectBranchAndSubjectBadges') { OK 'SubjectBranchAndSubjectBadges göçü mevcut' }
 else {
-    Fail 'göç üretilmemiş — çalıştır: dotnet ef migrations add SubjectBranchesAndBadges --project src/PeerLearn.Infrastructure --startup-project src/PeerLearn.Api'
+    # Göç adı, üretildiği gündeki adla BİREBİR eşleşmeli. Bu kontrol bir süre yanlış adı
+    # (SubjectBranchesAndBadges) aradı ve göç yerinde olmasına rağmen kırmızı verdi;
+    # adı değiştirirsen burayı da değiştir.
+    Fail 'SubjectBranchAndSubjectBadges göçü yok — çalıştır: dotnet ef migrations add SubjectBranchAndSubjectBadges --project src/PeerLearn.Infrastructure --startup-project src/PeerLearn.Api'
 }
 
 # ---------------------------------------------------------------------------
@@ -95,7 +115,7 @@ foreach ($slug in 'yks-tyt', 'yks-ayt') {
     if ($n -eq 8) { OK "$slug altında 8 aktif ders" } else { Fail "$slug altında $n ders (8 olmalı)" }
 
     $bransiz = SqlInt "SELECT COUNT(*) FROM catalog.""Subjects"" s JOIN catalog.""EducationCategories"" c ON c.""Id"" = s.""CategoryId"" WHERE c.""Slug"" = '$slug' AND s.""IsActive"" AND s.""Branch"" IS NULL;"
-    if ($bransiz -eq 0) { OK "$slug derslerinin hepsinde branş dolu" } else { Fail "$slug: $bransiz dersin branşı boş — rozet hesabı bu dersleri saymaz" }
+    if ($bransiz -eq 0) { OK "$slug derslerinin hepsinde branş dolu" } else { Fail "${slug}: $bransiz dersin branşı boş — rozet hesabı bu dersleri saymaz" }
 }
 
 # Sekiz branşın tamamı hem TYT hem AYT tarafında olmalı; biri eksikse müfredat yarım demektir.
@@ -298,12 +318,12 @@ else { Note 'hem TYT hem AYT anlatan eğitmen yok — TYT+AYT birleşmesi bu ver
 # ---------------------------------------------------------------------------
 Write-Host "`n================================" -ForegroundColor White
 if ($script:Fail -eq 0) {
-    Write-Host "TÜM ADIMLAR BAŞARILI ($script:Pass kontrol, $script:Warn not)" -ForegroundColor Green
+    Write-Host "TÜM ADIMLAR BAŞARILI ($($script:Pass) kontrol, $($script:Warn) not)" -ForegroundColor Green
     if ($script:Warn -gt 0) {
         Write-Host 'Notlar sınanamayan durumları gösterir; run-all-tests.ps1 sonrası tekrar koş.' -ForegroundColor Yellow
     }
 }
 else {
-    Write-Host "$script:Fail KONTROL BAŞARISIZ ($script:Pass geçti, $script:Warn not)" -ForegroundColor Red
+    Write-Host "$($script:Fail) KONTROL BAŞARISIZ ($($script:Pass) geçti, $($script:Warn) not)" -ForegroundColor Red
     exit 1
 }
