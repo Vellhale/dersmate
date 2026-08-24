@@ -1,6 +1,8 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useAuth } from '../state/AuthContext'
+import { useConsent } from '../state/ConsentContext'
+import { RAIL_KEY } from '../lib/consent'
 import { WalletProvider, useWallet } from '../state/WalletContext'
 import { InboxProvider, useInbox } from '../state/InboxContext'
 import { Logo } from './Logo'
@@ -53,8 +55,11 @@ import {
 const NAV = [
   { to: '/kesfet', label: 'Keşfet', tour: 'discover', Ikon: AramaIkonu },
   { to: '/portfolio', label: 'Ders Portföyü', tour: 'portfolio', Ikon: KitapIkonu },
-  { to: '/eslesmeler', label: 'Eşleşmeler', Ikon: KisilerIkonu },
-  { to: '/sohbet', label: 'Sohbet', Ikon: MesajIkonu },
+  // matches / chat çıpaları rehber altı adıma çıkarken eklendi (2026-08-24): eşleşme ve
+  // sohbet eskiden tek bir "kanıt ve onay" paragrafının içinde geçiyordu, kendi adımları
+  // yoktu. Adım ekleyip çıpa eklememek, adımı sessizce ekranın ortasına düşürürdü.
+  { to: '/eslesmeler', label: 'Eşleşmeler', tour: 'matches', Ikon: KisilerIkonu },
+  { to: '/sohbet', label: 'Sohbet', tour: 'chat', Ikon: MesajIkonu },
   { to: '/dersler', label: 'Derslerim', tour: 'sessions', Ikon: KepIkonu },
 ]
 
@@ -73,9 +78,17 @@ const SOSYAL = [
   { ad: 'X', kullanici: 'dersmate_', href: 'https://x.com/dersmate_', Ikon: XIkonu },
 ]
 
-// localStorage anahtarları peerlearn.* biçiminde (bkz. api.js, hwid.js) — F4: bu ad
-// kullanıcıya görünmez, altyapı kimliğidir.
-const RAY_KEY = 'peerlearn.raydar'
+/*
+  Ray tercihinin anahtarı ARTIK BURADA TANIMLI DEĞİL, consent.js'ten geliyor.
+
+  Sebebi bu projede ısırmış bir hata: anahtar burada duruyordu ve cihaza yazılıyordu ama
+  çerez aydınlatma metninde hiçbir kategoride görünmüyordu — yani fonksiyonel çerezleri
+  REDDETMİŞ kullanıcının cihazına da yazılıyordu. Anahtarı rızanın listesiyle aynı yerde
+  tutmak, ikisinin bir daha ayrışmamasını sağlıyor.
+
+  (Adlandırma peerlearn.* biçiminde — bkz. api.js, hwid.js. F4: bu ad kullanıcıya
+  görünmez, altyapı kimliğidir.)
+*/
 
 export default function Layout() {
   /*
@@ -97,13 +110,46 @@ function LayoutShell() {
   const navigate = useNavigate()
   const [menuOpen, setMenuOpen] = useState(false)
 
-  // Ray tercihi kalıcı: her sayfa yenilemesinde daraltmayı yeniden yapmak, tercihi
-  // hiç hatırlamamakla aynı şey olurdu.
-  const [rayDar, setRayDar] = useState(() => localStorage.getItem(RAY_KEY) === '1')
+  /*
+    RAY TERCİHİ FONKSİYONEL ÇEREZ RIZASINA TABİ.
+
+    Tercih kalıcı olmalı — her sayfa yenilemesinde daraltmayı yeniden yapmak, tercihi hiç
+    hatırlamamakla aynı şey olurdu. Ama "kalıcı" demek cihaza yazmak demek ve kullanıcı
+    fonksiyonel çerezleri reddetmişse yazacak bir şeyimiz yok.
+
+    Reddedildiğinde ray her açılışta GENİŞ başlar ve daraltma yalnızca o sayfa ömrü
+    boyunca hatırlanır. Banner'ın "kapatırsan bunlar her açılışta sıfırlanır" cümlesinin
+    karşılığı tam olarak bu. Daha önce yazılmış değeri silmek buranın işi değil —
+    ConsentProvider'daki temizlik kapısı yapıyor (clearFunctionalStorage).
+
+    Okuma da rızaya bakıyor: reddedilmişken eski bir değer cihazda kalmış olabilir
+    (temizlik kapısı henüz çalışmamış olabilir) ve onu okumak, reddedilen tercihi geri
+    getirirdi.
+  */
+  const { functionalAllowed } = useConsent()
+
+  const [rayDar, setRayDar] = useState(() => {
+    if (!functionalAllowed) return false
+    try {
+      return localStorage.getItem(RAIL_KEY) === '1'
+    } catch {
+      // Depolama erişilemez (gizli sekme kısıtları). Bu okuma RENDER SIRASINDA çalışıyor;
+      // sarmalanmazsa fırlayan hata tüm kabuğu düşürürdü. Varsayılan: geniş ray.
+      return false
+    }
+  })
+
   const rayiDegistir = () => {
     setRayDar((v) => {
-      localStorage.setItem(RAY_KEY, v ? '0' : '1')
-      return !v
+      const yeni = !v
+      if (functionalAllowed) {
+        try {
+          localStorage.setItem(RAIL_KEY, yeni ? '1' : '0')
+        } catch {
+          // Depolama kapalı (gizli sekme): tercih bu oturum boyunca yine de geçerli.
+        }
+      }
+      return yeni
     })
   }
 
@@ -121,6 +167,38 @@ function LayoutShell() {
   const items = (
     session?.isAdmin ? [...NAV, { to: '/admin', label: 'Yönetim', Ikon: KalkanIkonu }] : NAV
   ).map((item) => (item.to === '/sohbet' ? { ...item, badge: unreadTotal } : item))
+
+  /*
+    ÇEKMECE AÇIKKEN: Esc kapatır, arkadaki sayfa kaymaz (2026-08-24).
+
+    Çekmece `<header>`in içinde duruyor ve barın 64px'lik yüksekliğinden TAŞARAK
+    altındaki içeriğin üstüne biniyor — yani görsel olarak bir katman, ama akışta
+    değil. Bu yüzden altındaki sayfa hâlâ kaydırılabiliyordu: kullanıcı menü açıkken
+    parmağını sürükleyince menü yerinde duruyor, arkadaki liste kayıyordu; menüyü
+    kapattığında bambaşka bir yerdeydi.
+
+    Kilit ile perde (aşağıda) BİRLİKTE anlamlı: perde dokunuşu yakalar, kilit de
+    perdeye düşen hareketin gövdeye sızmasını keser.
+
+    Önceki `overflow` değeri geri yazılıyor, sabit '' değil — aynı anda başka bir kip
+    (örn. filtre çekmecesi) kilit koymuş olabilir ve onu sessizce açmamalıyız.
+  */
+  useEffect(() => {
+    if (!menuOpen) return
+
+    const oncekiOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+
+    const esc = (e) => {
+      if (e.key === 'Escape') setMenuOpen(false)
+    }
+    document.addEventListener('keydown', esc)
+
+    return () => {
+      document.body.style.overflow = oncekiOverflow
+      document.removeEventListener('keydown', esc)
+    }
+  }, [menuOpen])
 
   const cikisYap = () => {
     logout()
@@ -151,9 +229,26 @@ function LayoutShell() {
           eksende geriliyordu; dikey konumu tarayıcının mutlak konumlu flex çocuğu nereye
           koyduğuna kalmıştı. `inset-0 + items-center` bunu belirsizlikten çıkarıyor:
           logo, hamburger ve rozetle aynı dikey merkeze oturuyor.
+
+          ÇOK DAR EKRANDA MERKEZ TERK EDİLİYOR (2026-08-24, max-[359px]).
+
+          Mutlak merkez barın geometrisine bakar, komşularına değil — genişlik yettiği
+          sürece doğru davranış bu. 320px'te yetmiyor: tarayıcıda ölçüldü, kelime
+          markasının sağ kenarı 208'de bitiyor, seviye rozeti 218'de başlıyordu. Aradaki
+          10px, "dersmate" ile mavi rozeti tek bir küme gibi okutuyordu — bitişik
+          değillerdi ama bitişik görünüyorlardı.
+
+          `left-14 right-24`, sarmalayıcıyı iki kümenin arasında kalan boş banda
+          daraltır (56px hamburger tarafı, 96px rozet + çıkış tarafı) ve logo O BANDIN
+          merkezine oturur: 320px'te iki yana da ~30px. Logo barın matematiksel
+          merkezinden birkaç piksel kayar; sıkışıklığın yanında görünmeyen bir bedel.
+
+          Yalnızca 359px ve altında: 360px'ten itibaren boşluk zaten ~30px'e çıkıyor ve
+          mutlak merkez kuralı olduğu gibi geçerli kalıyor. Eşik ölçümle seçildi, yuvarlak
+          bir sayı olduğu için değil.
         */}
         <div className="relative flex h-full items-center justify-between px-3 sm:px-6">
-          <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center max-[359px]:left-14 max-[359px]:right-24">
             <NavLink
               to="/"
               className="pointer-events-auto flex h-11 items-center"
@@ -270,6 +365,32 @@ function LayoutShell() {
             ))}
             <AltKume onTikla={() => setMenuOpen(false)} />
           </nav>
+        )}
+
+        {/*
+          PERDE — çekmecenin dışına dokununca kapansın diye (2026-08-24).
+
+          Çekmeceyi kapatmanın tek yolu hamburgere geri dönmekti; menü ekranın yarısını
+          kaplarken kullanıcının ilk refleksi ise açıkta kalan yere dokunmak oluyor ve
+          orada hiçbir şey olmuyordu. Karartma ayrıca "arkadaki sayfa şu an devre dışı"
+          diyor — menü kapalıymış gibi görünen tıklanabilir bir alan bırakmıyor.
+
+          top-16: perde barın ALTINDAN başlar. Barı da karartsaydı hamburger ile çıkış
+          düğmesi perdenin altında kalır, menüyü hamburgerle kapatmak imkânsızlaşırdı.
+
+          z-30: `<header>` z-40'ta, yani çekmece perdenin ÜSTÜNDE kalır; perde yalnızca
+          onun dışındaki her şeyi örter.
+
+          aria-hidden: perde saf dekor, ekran okuyucuya söyleyecek bir şeyi yok —
+          kapatma eylemi zaten hamburgerin `aria-expanded`'ı ve menü öğeleriyle
+          erişilebilir durumda.
+        */}
+        {menuOpen && (
+          <div
+            className="fixed inset-x-0 bottom-0 top-16 z-30 bg-slate-900/40 lg:hidden"
+            onClick={() => setMenuOpen(false)}
+            aria-hidden="true"
+          />
         )}
       </header>
 

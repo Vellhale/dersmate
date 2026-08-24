@@ -21,8 +21,8 @@ public sealed record MatchListItemDto(
     Guid MatchId,
     Guid OtherUserId,
     string OtherDisplayName,
-    Guid RequestedTopicId,
-    string RequestedTopicName,
+    Guid? RequestedTopicId,
+    string? RequestedTopicName,
     Guid? OfferedTopicId,
     string? OfferedTopicName,
     string Status,
@@ -56,7 +56,11 @@ public sealed class GetMyMatchesHandler : IRequestHandler<GetMyMatchesQuery, MyM
                       (m.Status == MatchStatus.Pending || m.Status == MatchStatus.Accepted)
                 join initiator in _db.Users.AsNoTracking() on m.InitiatorUserId equals initiator.Id
                 join responder in _db.Users.AsNoTracking() on m.ResponderUserId equals responder.Id
-                join requested in _db.Topics.AsNoTracking() on m.RequestedTopicId equals requested.Id
+                // LEFT JOIN, INNER DEGIL: konusuz (universite agi) eslesmede RequestedTopicId null
+                // ve INNER JOIN o satiri sorgudan tamamen dusururdu — kullanici kendisine gelen
+                // istegi hic goremez, kabul edemez, sohbete ulasamazdi. OfferedTopicId icin zaten
+                // bu kalip kullaniliyordu; iki nullable alan artik ayni yolu izliyor.
+                from requested in _db.Topics.AsNoTracking().Where(t => t.Id == m.RequestedTopicId).DefaultIfEmpty()
                 from offered in _db.Topics.AsNoTracking().Where(t => t.Id == m.OfferedTopicId).DefaultIfEmpty()
                 from conversation in _db.Conversations.AsNoTracking().Where(c => c.MatchId == m.Id).DefaultIfEmpty()
                 orderby m.CreatedAtUtc descending
@@ -68,7 +72,7 @@ public sealed class GetMyMatchesHandler : IRequestHandler<GetMyMatchesQuery, MyM
                     InitiatorName = initiator.DisplayName,
                     ResponderName = responder.DisplayName,
                     m.RequestedTopicId,
-                    RequestedTopicName = requested.Name,
+                    RequestedTopicName = requested != null ? requested.Name : null,
                     m.OfferedTopicId,
                     OfferedTopicName = offered != null ? offered.Name : null,
                     m.Status,

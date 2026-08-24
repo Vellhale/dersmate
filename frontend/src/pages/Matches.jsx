@@ -6,10 +6,26 @@ import { formatDateTime } from '../lib/format'
 import { Badge, Button, Card, EmptyState, ErrorBox, Loading, Notice } from '../components/ui'
 import { PersonLink } from '../components/PersonLink'
 
+/*
+  Sekmelerin İKİ ADI var: dar ekranda `kisa`, sm üstünde `label`.
+
+  Uzun adlar telefonda üç sekmeye bölününce sığmıyordu. 375px'te bir sekmeye ~109px
+  düşüyor ve "Aktif eşleşmeler (62)" tek satıra sığmayıp İKİ SATIRA kırılıyordu:
+  komşuları tek satırdı, şerit tırtıklı görünüyordu. 320px'te daha kötüsü oluyordu —
+  metin kendi sekmesinden taşıp yanındakinin üstüne biniyordu.
+
+  Sayaç kırılmayı tetikleyen şeydi ama sayaç bilgi taşıyor; atılacak olan uzun ad.
+  "Gelen / Giden / Aktif" bağlamda tek başına anlaşılıyor: sayfanın başlığı zaten
+  "Eşleşmeler" ve altında ne olduğunu anlatan bir satır var.
+
+  Kısa ad yalnızca yer açmıyor, PUNTOYU DA GERİ GETİRİYOR: şerit mobilde text-xs
+  (12px) kullanmak zorunda kalmıştı — sırf uzun adlar sığsın diye. Kısa adla text-sm
+  (14px) rahat sığıyor, yani okunaklılık kırpmanın bedeli olmaktan çıkıyor.
+*/
 const TABS = [
-  { key: 'incoming', label: 'Gelen istekler' },
-  { key: 'outgoing', label: 'Gönderdiklerim' },
-  { key: 'active', label: 'Aktif eşleşmeler' },
+  { key: 'incoming', label: 'Gelen istekler', kisa: 'Gelen' },
+  { key: 'outgoing', label: 'Gönderdiklerim', kisa: 'Giden' },
+  { key: 'active', label: 'Aktif eşleşmeler', kisa: 'Aktif' },
 ]
 
 export default function Matches() {
@@ -64,17 +80,23 @@ export default function Matches() {
           <button
             key={item.key}
             onClick={() => setTab(item.key)}
-            // Dar ekranda üç sekmeye ~110px düşüyor ve "Gelen istekler" iki satıra kırılıyordu;
-            // mobilde bir punto küçültüp yatay boşluğu kısınca tek satırda kalıyor.
-            // sm: genişlikle ilgili (dar ekranda üç sekme sığmıyor), lg: dokunmayla ilgili.
-            className={`min-h-11 min-w-0 rounded-md px-1.5 py-2 text-xs font-medium leading-tight
-                        transition sm:flex-1 sm:px-3 sm:text-sm lg:min-h-0 ${
+            // whitespace-nowrap: artık kırılmasına gerek yok — kısa ad + sayaç en dar
+            // ekranda bile tek satıra sığıyor. Yine de açıkça yasaklıyoruz ki uzun bir
+            // sayı (dört haneli) şeridi iki satıra düşürüp aynı hatayı geri getirmesin.
+            // sm: genişlikle ilgili (dar ekranda uzun ad sığmıyor), lg: dokunmayla ilgili.
+            className={`min-h-11 min-w-0 whitespace-nowrap rounded-md px-1.5 py-2 text-sm
+                        font-medium leading-tight transition sm:flex-1 sm:px-3 lg:min-h-0 ${
                           tab === item.key
                             ? 'bg-white text-brand-700 shadow-sm'
                             : 'text-slate-600 hover:text-slate-800'
                         }`}
           >
-            {item.label}
+            {/* İki ad da DOM'da; görünmeyen `display:none` ile kapalı. Bu, ekran
+                okuyucudan da gizler — yani her boyutta TEK ad duyurulur. `sr-only`
+                kullanılsaydı ikisi birden okunurdu; kırılımı medya sorgusuna bırakmanın
+                sebebi bu. */}
+            <span className="sm:hidden">{item.kisa}</span>
+            <span className="hidden sm:inline">{item.label}</span>
             {(lists[item.key]?.length ?? 0) > 0 && (
               <span className="ml-1.5 text-xs text-slate-400">({lists[item.key].length})</span>
             )}
@@ -212,12 +234,27 @@ function MatchCard({ match, tab, onChanged }) {
             {match.offeredTopicId && <Badge tone="success">Takas teklifi</Badge>}
           </div>
 
-          <p className="mt-1.5 text-sm text-slate-600">
-            <span className="text-slate-500">
-              {match.iAmInitiator ? 'Almak istediğin:' : 'Senden istediği:'}
-            </span>{' '}
-            <strong>{match.requestedTopicName}</strong>
-          </p>
+          {/*
+            KONUSUZ EŞLEŞME = ÜNİVERSİTE AĞI İSTEĞİ.
+
+            `requestedTopicName` null geliyor (Match.RequestedTopicId nullable). Koşulsuz
+            basılırsa "Almak istediğin:" yazıp yanına BOŞ bir <strong> koyuyordu — kart
+            yüklenememiş bir veri gibi görünüyordu. Üniversite ağı isteğinde alınan bir
+            konu yok; anlatılacak şey isteğin NE OLDUĞU: tanışma.
+          */}
+          {match.requestedTopicName ? (
+            <p className="mt-1.5 text-sm text-slate-600">
+              <span className="text-slate-500">
+                {match.iAmInitiator ? 'Almak istediğin:' : 'Senden istediği:'}
+              </span>{' '}
+              <strong>{match.requestedTopicName}</strong>
+            </p>
+          ) : (
+            <p className="mt-1.5 text-sm text-slate-600">
+              <span className="text-slate-500">Üniversite ağı ·</span>{' '}
+              <strong>Sohbet isteği</strong>
+            </p>
+          )}
 
           {match.offeredTopicName && (
             <p className="text-sm text-slate-600">
@@ -250,9 +287,14 @@ function MatchCard({ match, tab, onChanged }) {
               {match.conversationId && (
                 <Button onClick={() => navigate(`/sohbet/${match.conversationId}`)}>Sohbet</Button>
               )}
-              <Button variant="secondary" onClick={() => navigate('/dersler')}>
-                Ders rezerve et
-              </Button>
+              {/* Üniversite ağı eşleşmesinden ders rezerve EDİLEMEZ (sunucu da reddeder,
+                  bkz. BookSession'daki muhafız). Düğmeyi göstermek kullanıcıyı Derslerim'e
+                  gönderip orada kendisini bir hata mesajıyla karşılamak olurdu. */}
+              {match.requestedTopicName && (
+                <Button variant="secondary" onClick={() => navigate('/dersler')}>
+                  Ders rezerve et
+                </Button>
+              )}
               <Button variant="secondary" onClick={() => setConfirmClose(true)}>
                 Sonlandır
               </Button>

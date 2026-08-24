@@ -153,6 +153,18 @@ export const api = {
     return request(`/api/discovery/offers?${params.toString()}`)
   },
 
+  /** Üniversite ağı araması. searchOffers ile aynı kural: boş/null filtreler sorguya eklenmez. */
+  searchUniversityPeers: (filters) => {
+    const params = new URLSearchParams()
+    // Yalnızca uçun tanıdığı dört alan geçsin; ekrandaki diğer durum sorguya sızmasın.
+    const { university, department, page, pageSize } = filters
+    for (const [key, value] of Object.entries({ university, department, page, pageSize })) {
+      if (value === null || value === undefined || value === '') continue
+      params.set(key, String(value))
+    }
+    return request(`/api/discovery/users?${params.toString()}`)
+  },
+
   // --- Portföy & eşleştirme ---
   myPortfolio: () => request('/api/portfolio/entries'),
   addPortfolioEntry: (payload) => request('/api/portfolio/entries', { method: 'POST', body: payload }),
@@ -160,6 +172,7 @@ export const api = {
   suggestions: (limit = 20) => request(`/api/portfolio/suggestions?limit=${limit}`),
 
   myMatches: () => request('/api/matches'),
+  // Konusuz (üniversite ağı) istekte requestedTopicId null gönderilebilir.
   createMatch: (payload) => request('/api/matches', { method: 'POST', body: payload }),
   respondMatch: (matchId, accept) =>
     request(`/api/matches/${matchId}/respond`, { method: 'POST', body: { accept } }),

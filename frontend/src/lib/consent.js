@@ -17,8 +17,51 @@ const STORAGE_KEY = 'peerlearn.consent'
  * Aydınlatma metninin sürümü. Metin DEĞİŞİRSE bu değer artırılmalıdır: eski metne
  * verilmiş onay, yeni işleme kapsamını meşrulaştırmaz ve rıza yeniden sorulmalıdır.
  * Sürüm artınca kullanıcı banner'ı tekrar görür (bkz. needsConsent).
+ *
+ * 2026-08-16 → 2026-08-24: fonksiyonel kategoriye MENÜ GENİŞLİĞİ TERCİHİ eklendi.
+ * Gezinme kabuğu yenilenirken cihazda yeni bir şey saklanmaya başlanmıştı
+ * (`peerlearn.raydar`) ama aydınlatma metni bundan hiç söz etmiyordu. Kapsam
+ * genişlediği için eski onay bu saklamayı meşrulaştırmıyor — herkes banner'ı bir kez
+ * daha görecek. Bedeli bilerek ödeniyor: sürümü sabit bırakmak, açıklanmamış bir
+ * saklamayı eski onayla örtmek olurdu.
  */
-export const CONSENT_VERSION = '2026-08-16'
+export const CONSENT_VERSION = '2026-08-24'
+
+/** Menü dar mı bırakıldı (Layout). localStorage: oturumlar arası kalır. */
+export const RAIL_KEY = 'peerlearn.raydar'
+
+/** Rehber bu oturumda "geç"ildi mi (ProductTour). sessionStorage: sekmeyle ölür. */
+export const TOUR_SKIP_KEY = 'peerlearn.tour-skipped'
+
+/**
+ * FONKSİYONEL RIZAYA TABİ SAKLAMA — tek liste.
+ *
+ * Buradaki her kayıt, kullanıcı fonksiyonel çerezleri reddettiğinde YAZILMAZ ve varsa
+ * SİLİNİR (bkz. clearFunctionalStorage, ConsentProvider). Listeyi tek yerde tutmanın
+ * sebebi ısırmış bir hata: menü genişliği tercihi kabuk yenilenirken eklendi, ne
+ * kategorilere ne de bir temizlik yoluna girdi — reddeden kullanıcının cihazına yine
+ * de yazılıyordu.
+ *
+ * YENİ BİR CİHAZ TERCİHİ EKLEYEN: anahtarı buraya da ekle, kategorinin `details`
+ * listesine de yaz ve CONSENT_VERSION'ı artır. Üçü birlikte yapılmazsa sessizce
+ * açıklanmamış bir saklama doğar.
+ */
+export const FUNCTIONAL_STORAGE = [
+  { key: RAIL_KEY, store: 'local' },
+  { key: TOUR_SKIP_KEY, store: 'session' },
+]
+
+/** Fonksiyonel rıza yokken cihazda bunlardan hiçbiri kalmamalı. */
+export function clearFunctionalStorage() {
+  for (const { key, store } of FUNCTIONAL_STORAGE) {
+    try {
+      const depo = store === 'session' ? sessionStorage : localStorage
+      depo.removeItem(key)
+    } catch {
+      // Depolama erişilemez (gizli sekme kısıtları): silinecek bir şey de yoktur.
+    }
+  }
+}
 
 /** Rızaya tabi kategoriler. "Zorunlu" burada YOK — reddedilemez, saklanacak tercih de yok. */
 export const CONSENT_CATEGORIES = [
@@ -42,13 +85,19 @@ export const CONSENT_CATEGORIES = [
     title: 'Fonksiyonel çerezler',
     required: false,
     description:
-      'Tanıtım turunda nerede kaldığını hatırlar. Kapatırsan site çalışır ama tur, ' +
-      'kapatmadığın sürece yeni oturumlarda yeniden görünebilir.',
+      'Arayüzle ilgili küçük tercihlerini hatırlar: rehberde nerede kaldığın ve menüyü ' +
+      'dar mı geniş mi bıraktığın. Kapatırsan site çalışır ama bunlar her açılışta ' +
+      'sıfırlanır ve rehber yeni oturumlarda yeniden görünebilir.',
     // Dürüstlük: "bir daha gösterme" gibi AÇIK talimatın bu kategoriden bağımsız olarak
     // kaydedildiği söyleniyor — aksi halde kullanıcı kapatamadığı bir turla baş başa kalırdı.
+    //
+    // Menü genişliği maddesi 2026-08-24'te EKLENDİ. Gezinme kabuğu yenilenirken cihaza
+    // yazılmaya başlanmıştı ama hiçbir kategoride görünmüyordu; yani kullanıcı fonksiyonel
+    // çerezleri reddetse bile yazılıyordu (bkz. FUNCTIONAL_STORAGE).
     details: [
-      'Ürün turunda kaldığın adım',
-      'Aynı oturumda turu "geç" işaretin',
+      'Rehberde kaldığın adım (hesabına yazılır)',
+      'Aynı oturumda rehberi "geç" işaretin',
+      'Menüyü dar bıraktığın bilgisi',
       'Not: "bir daha gösterme" talimatın, bu tercihten bağımsız olarak hesabına kaydedilir.',
     ],
   },

@@ -5,7 +5,7 @@ import { formatDateTime } from '../lib/format'
 import { Avatar } from './Avatar'
 import { Badge, Button, Card, EmptyState, ErrorBox, Loading } from './ui'
 import { SubjectBadges } from './SubjectBadges'
-import { SeviyeRozeti } from './SeviyeRozeti'
+import { UniversiteRozetleri } from './UniversiteRozetleri'
 import { seviyeEtiketi, seviyeHesapla, seviyeIlerlemeMetni } from '../lib/seviye'
 
 /**
@@ -50,6 +50,17 @@ export function UserProfileView({ userId }) {
           sorusunu yanıtlıyor, konu panellerinden ("ne yapabilir") önce gelmeli.
           Bileşen, rozet de ilerleme de yoksa kendini tamamen gizler. */}
       <SubjectBadges userId={userId} />
+
+      {/*
+        ÜNİVERSİTE ROZETLERİ yalnızca üniversite bilgisi olan profilde.
+
+        İki şerit birden görünebilir ve bu bir tutarsızlık değil: branş rozetleri "hangi
+        derste ne kadar anlattı", görüşme rozeti "toplamda ne kadar görüştü" diyor. Aynı
+        kişide ikisi de doğru olabilir. Üniversite bilgisi olmayan profilde ikinci şerit
+        hiç çizilmiyor; üniversite bilgisi olup hiç oturumu olmayanda ise bileşen kendini
+        gizliyor (bkz. UniversiteRozetleri).
+      */}
+      {p.university && <UniversiteRozetleri userId={userId} />}
 
       <div className="grid gap-4 lg:grid-cols-2">
         <TopicPanel
@@ -116,14 +127,21 @@ function ProfileHeader({ profile }) {
         />
 
         <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center justify-center gap-x-2.5 gap-y-1.5 sm:justify-start">
-            <h1 className="text-2xl font-bold tracking-tight text-slate-900">
-              {profile.displayName}
-            </h1>
-            {/* Üst bardaki rozetle AYNI bileşen, küçük/açık varyantı: burada rozet
-                başlık değil, başlığa iliştirilen bir nitelik (bkz. SeviyeRozeti.jsx). */}
-            <SeviyeRozeti kaynak={profile} boyut="sm" ton="acik" className="shrink-0" />
-          </div>
+          {/*
+            ADIN YANINDAKİ SEVİYE ROZETİ KALDIRILDI (2026-08-24).
+
+            Aynı bilgi bu ekranda ÜÇ kez duruyordu: üst barda (her sayfada görünen rozet),
+            adın yanında ve hemen altındaki sayaç şeridinde ("8. Seviye · 4300 puan ·
+            sonraki seviyeye 1200"). Üçünden yalnızca sayaç şeridi bir şey EKLİYOR —
+            seviyenin kaçıncı olduğunu, puanı ve sonraki eşiğe kalanı birlikte söylüyor.
+            Adın yanındaki rozet aynı sayıyı üçüncü kez tekrarlıyor, üstelik en az bilgiyle.
+
+            Tekrar zararsız değil: başlık satırı ad + rozet + (dar ekranda) sarma taşıyor
+            ve rozet, adın kendisiyle vurgu yarışına giriyordu.
+          */}
+          <h1 className="text-center text-2xl font-bold tracking-tight text-slate-900 sm:text-left">
+            {profile.displayName}
+          </h1>
 
           {/* OKUL SATIRI: adın hemen altında ve marka renginde değil nötr — kimlik
               bilgisi, vurgu değil. Biri boşsa ayraç da düşüyor. */}
@@ -207,11 +225,25 @@ function TopicPanel({ title, tone, topics, emptyText }) {
       <p className="mb-2 text-sm font-medium text-slate-700">{title}</p>
       {topics?.length ? (
         <div className="flex flex-wrap gap-1.5">
+          {/*
+            KONU ADI VE DERS TEK METİN AKIŞI — iki flex öğesi değil.
+
+            Badge `inline-flex items-center` (ui.jsx). İçeride iki ayrı çocuk olunca
+            bunlar iki flex ÖĞESİ oluyordu: uzun bir konu adı ("Geometrik Kavramlar
+            (Nokta, Doğru, Düzlem)") telefonda kendi içinde iki satıra kırılıyor, ders
+            adı ise yanında dikey ortalanmış tek bir parça olarak kalıyordu — etiketin
+            sağında kocaman bir boşluk ve tek başına asılı bir "· Geometri".
+
+            Tek `<span>` içine alınca ikisi aynı satır akışının parçası oluyor ve normal
+            metin gibi sarıyor. Nokta ayracı da artık `ml-1` yerine gerçek bir boşluk
+            karakteriyle geliyor: kırılma noktası oradaysa satır oradan bölünsün.
+          */}
           {topics.map((topic) => (
             <Badge key={topic.topicId} tone={tone}>
-              {topic.topicName}
-              {/* Gönüllülük işareti kaldırıldı: konular arasında böyle bir ayrım yok. */}
-              <span className="ml-1 opacity-70">· {topic.subjectName}</span>
+              <span>
+                {topic.topicName}
+                <span className="opacity-70"> · {topic.subjectName}</span>
+              </span>
             </Badge>
           ))}
         </div>
@@ -289,10 +321,23 @@ function ReviewsSection({ reviews, page, onPage }) {
           <MetrikCubugu label="Anlatım" value={data.averageTeachingScore} />
           <MetrikCubugu label="Zamanlama" value={data.averagePunctualityScore} />
 
+          {/*
+            Dokunma hedefi: metin 12px olduğu için düğmenin kendisi de 16px yüksekti ve
+            telefonda ıskalanıyordu. `min-h-11` (44px) dokunma alanını büyütür, punto
+            aynı kalır — burada küçük punto bilinçli, ikincil bir eylem.
+
+            lg:min-h-0: eşik projede DOKUNMAYA bağlı, genişliğe değil (bkz. CLAUDE.md).
+            Fare olan boyutlarda 44px'lik boşluk, metrik çubuklarıyla düğmenin arasını
+            gereksiz açardı.
+
+            -mb-2: eklenen yükseklik kartın alt dolgusunu şişirmesin diye geri alınıyor;
+            büyüyen şey dokunma alanı, düzenin ritmi değil.
+          */}
           <button
             type="button"
             onClick={() => setDetayAcik((v) => !v)}
-            className="text-xs font-medium text-brand-700 transition hover:text-brand-800 hover:underline"
+            className="-mb-2 flex min-h-11 items-center text-xs font-medium text-brand-700
+                       transition hover:text-brand-800 hover:underline lg:mb-0 lg:min-h-0"
             aria-expanded={detayAcik}
           >
             {detayAcik ? 'Dağılımı gizle' : 'Yıldız dağılımını gör'}

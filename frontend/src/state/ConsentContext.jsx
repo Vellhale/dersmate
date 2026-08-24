@@ -3,6 +3,7 @@ import { api } from '../lib/api'
 import { useAuth } from './AuthContext'
 import {
   CONSENT_VERSION,
+  clearFunctionalStorage,
   needsConsent,
   readLocalConsent,
   writeLocalConsent,
@@ -71,6 +72,23 @@ export function ConsentProvider({ children }) {
     }
   }, [isAuthenticated, session?.userId])
 
+  /*
+    FONKSİYONEL RIZA KAPISI — AnalyticsGate'in yaptığının aynısı, fonksiyonel taraf için.
+
+    Analitikte "izni geri çektim" demek gerçekten bir şey siliyordu (disableAnalytics,
+    _ga çerezlerini temizler). Fonksiyonel tarafta böyle bir yol hiç yoktu: rıza
+    reddedilse bile daha önce yazılmış menü/rehber tercihleri cihazda kalıyordu.
+    Saklamayı durdurmak yetmez, saklanmış olanı da kaldırmak gerekir.
+
+    Rızaya değil TÜRETİLMİŞ İZNE bakıyor ve her yoldan geçiyor: ilk açılış, banner'dan
+    kaydetme ve girişte sunucu kaydıyla uzlaşma. Tek kural, üç giriş kapısı.
+  */
+  const functionalAllowed = Boolean(consent?.functional)
+
+  useEffect(() => {
+    if (!functionalAllowed) clearFunctionalStorage()
+  }, [functionalAllowed])
+
   const save = useCallback(
     async ({ analytics, functional }) => {
       const next = {
@@ -110,7 +128,7 @@ export function ConsentProvider({ children }) {
         birebir aynı kalıyordu. Rıza alıp uygulamamak, hiç sormamaktan daha kötü bir
         konumdur — banner'da verilen taahhüt yerine getirilmiş olmaz.
       */
-      functionalAllowed: Boolean(consent?.functional),
+      functionalAllowed,
       settingsOpen,
       openSettings: () => setSettingsOpen(true),
       closeSettings: () => setSettingsOpen(false),

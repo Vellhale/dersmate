@@ -56,4 +56,29 @@ public sealed class DiscoveryController : ControllerBase
                 PageSize: pageSize),
             ct);
     }
+
+    /// <summary>
+    /// Üniversite ağı araması. Sonuç birimi KULLANICI, ilan değil.
+    ///
+    /// Yalnızca iki ölçüt alır — üniversite ve bölüm. Ders, konu ve konu seviyesi
+    /// parametreleri BİLEREK yok: üniversite ağı bu kavramları taşımıyor (gerekçe
+    /// SearchUniversityPeersQuery'de).
+    /// </summary>
+    [HttpGet("users")]
+    public async Task<PagedResult<UniversityPeerDto>> SearchUniversityPeers(
+        [FromQuery] string? university,
+        [FromQuery] string? department,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        CancellationToken ct = default)
+    {
+        return await _mediator.Send(
+            new SearchUniversityPeersQuery(
+                CurrentUserId: User.GetUserId(),
+                University: university,
+                Department: department,
+                Page: page,
+                PageSize: pageSize),
+            ct);
+    }
 }
