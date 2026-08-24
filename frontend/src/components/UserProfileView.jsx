@@ -5,18 +5,20 @@ import { formatDateTime } from '../lib/format'
 import { Avatar } from './Avatar'
 import { Badge, Button, Card, EmptyState, ErrorBox, Loading } from './ui'
 import { SubjectBadges } from './SubjectBadges'
+import { SeviyeRozeti } from './SeviyeRozeti'
+import { seviyeEtiketi, seviyeHesapla } from '../lib/seviye'
 
 /**
  * Samimi profil görünümü — CV değil, sosyal profil.
  *
- * TASARIM KARARI: en üstte kimlik ve unvan, hemen altında ders/puan sayaçları, sonra
+ * TASARIM KARARI: en üstte kimlik ve seviye, hemen altında ders/puan sayaçları, sonra
  * "ne anlatır / ne öğrenmek ister" etiketleri, en altta doğrulanmış yorumlar. Sıralama
  * "bu kişiyle ders yapar mıyım" sorusunu yukarıdan aşağıya yanıtlar; resmi bir özgeçmiş
  * sıralaması (eğitim → deneyim → referanslar) burada işe yaramaz çünkü karar puan ve
  * yorumlarla veriliyor.
  *
  * ROZET DUVARI KALDIRILDI: her başarı ayrı bir rozetken hepsi aynı görsel ağırlıktaydı
- * ve hiçbiri bir şey söylemiyordu. Yerini tek bir unvan aldı — karşılaştırılabilir ve
+ * ve hiçbiri bir şey söylemiyordu. Yerini tek bir seviye aldı — karşılaştırılabilir ve
  * tek bakışta okunur.
  */
 
@@ -76,7 +78,7 @@ export function UserProfileView({ userId }) {
  * Önceki hâlde 80 piksellik dekoratif bir bant, taşan bir avatar ve altında ayrı bir
  * rozet duvarı vardı; kart tek başına ekranın yarısını yiyordu ve asıl bilgi (bu kişi
  * ne anlatıyor, ne kadar deneyimli) kaydırma gerektiriyordu. Bant kaldırıldı, avatar
- * satır içine alındı ve unvan doğrudan adın yanına taşındı — profilin ilk ekranında
+ * satır içine alındı ve seviye doğrudan adın yanına taşındı — profilin ilk ekranında
  * artık karar için gereken her şey var.
  */
 function ProfileHeader({ profile }) {
@@ -100,7 +102,9 @@ function ProfileHeader({ profile }) {
             <h1 className="truncate text-lg font-bold text-slate-900 sm:text-xl">
               {profile.displayName}
             </h1>
-            <RankChip profile={profile} />
+            {/* Üst bardaki rozetin aynısı (bkz. Layout.jsx): aynı bilgi her yerde
+                aynı biçimde görünsün diye tek bileşenden geliyor. */}
+            <SeviyeRozeti kaynak={profile} className="shrink-0" />
           </div>
 
           {(profile.university || profile.department) && (
@@ -117,102 +121,24 @@ function ProfileHeader({ profile }) {
         </div>
       </div>
 
-      {profile.teacherCandidate && <TeacherCandidateBlock candidate={profile.teacherCandidate} />}
+      {/* Öğretmen adaylığı kutusu kaldırıldı: adaylık kavramı üründen çıktı, profilde
+          kullanıcıları ikiye ayıran bir işaret kalmadı. */}
     </Card>
-  )
-}
-
-/**
- * Unvan rozeti — eski "Rozetler" bloğunun tamamının yerine geçen tek işaret.
- *
- * Bir sonraki eşiğe kalan puan SUNUCUDAN geliyor (nextRankAt). Eşikleri buraya
- * kopyalamak, bu projede fiyat formülünde bir kez yaşanan sapmanın aynısını üretirdi:
- * sunucu değişir, arayüz eski sayıyı göstermeye devam eder ve kimse fark etmez.
- */
-function RankChip({ profile }) {
-  const kalan =
-    profile.nextRankAt != null ? profile.nextRankAt - profile.totalEarnedCredits : null
-
-  const baslik =
-    kalan != null
-      ? `${profile.totalEarnedCredits} puan · sonraki unvana ${kalan} puan`
-      : `${profile.totalEarnedCredits} puan · en üst unvan`
-
-  return (
-    <span
-      title={baslik}
-      className="inline-flex shrink-0 items-center gap-1 rounded-full border border-brand-200/80
-                 bg-brand-50 px-2.5 py-0.5 text-sm font-medium text-brand-800"
-    >
-      <span aria-hidden="true">{profile.rankEmoji}</span>
-      {profile.rankTitle}
-    </span>
-  )
-}
-
-/**
- * Öğretmen adaylığı kutusu.
- *
- * Üç durum üç ayrı renk taşır çünkü üçü farklı şey söyler: doğrulanmış (yönetim belge
- * gördü), beyan (henüz bakılmadı), reddedildi (bakıldı, kabul edilmedi). "Reddedildi"
- * yalnızca kişinin KENDİ profilinde görünür — sunucu başkasına bu durumu hiç göndermez,
- * arayüz de ayrıca göstermez.
- */
-function TeacherCandidateBlock({ candidate }) {
-  const reddedildi = candidate.reviewStatus === 'Rejected'
-
-  const stil = candidate.isVerified
-    ? 'border-emerald-200 bg-emerald-50'
-    : reddedildi
-      ? 'border-amber-200 bg-amber-50'
-      : 'border-slate-200/80 bg-slate-50'
-
-  return (
-    <div className={`mt-3 rounded-lg border p-3 ${stil}`}>
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="font-medium text-slate-800">🌱 Öğretmen adayı</span>
-        {/* Beyan ile doğrulanmışı AYIRT ETMEK şart: sistem okulu teyit edemiyor. */}
-        {candidate.isVerified ? (
-          <Badge tone="success">Doğrulandı</Badge>
-        ) : reddedildi ? (
-          <Badge tone="warning">Doğrulanmadı</Badge>
-        ) : (
-          <Badge tone="neutral">Beyan</Badge>
-        )}
-      </div>
-
-      <p className="mt-1 text-xs text-slate-600">
-        {candidate.university} · {candidate.faculty} · {candidate.department}
-        {candidate.gradeYear ? ` · ${candidate.gradeYear}. sınıf` : ''}
-      </p>
-
-      {/* Gerekçe yalnızca kişinin kendisine döner (sunucu tarafında filtreleniyor). */}
-      {candidate.reviewNote && (
-        <p className="mt-2 whitespace-pre-wrap rounded-md bg-white/70 p-2 text-xs text-slate-700">
-          <span className="font-medium">Yönetim notu:</span> {candidate.reviewNote}
-        </p>
-      )}
-
-      {reddedildi && (
-        <p className="mt-2 text-xs text-amber-800">
-          Bilgilerini güncelleyip yeniden gönderdiğinde beyanın tekrar incelemeye alınır.
-        </p>
-      )}
-    </div>
   )
 }
 
 function StatsRow({ profile }) {
   /*
-    "Deneyim / 0 dk" alanı kaldırıldı ve yerine UNVAN geldi.
+    "Deneyim / 0 dk" alanı kaldırıldı ve yerine SEVİYE geldi.
 
     O alan yeni hesaplarda her zaman "0 dk" yazıyordu — profile giren ilk kişiye
-    söylediği tek şey "bu kullanıcı hiçbir şey yapmamış" oluyordu. Unvan aynı yeri
-    kullanır ama en baştan anlamlı bir şey söyler (🌱 Çırak) ve ilerledikçe değişir.
-  */
-  const kalan =
-    profile.nextRankAt != null ? profile.nextRankAt - profile.totalEarnedCredits : null
+    söylediği tek şey "bu kullanıcı hiçbir şey yapmamış" oluyordu. Seviye aynı yeri
+    kullanır ama en baştan anlamlı bir şey söyler.
 
+    "Sonraki unvana X puan" hesabı KALDIRILDI: seviye artık puandan türemiyor
+    (bkz. lib/seviye.js), o cümle olmayan bir eşiğe işaret ederdi. Puan bu yüzden
+    seviyenin gerekçesi olarak değil, ayrı bir sayaç olarak alt satırda duruyor.
+  */
   const items = [
     {
       label: 'Puan',
@@ -221,9 +147,9 @@ function StatsRow({ profile }) {
     },
     { label: 'Anlatılan ders', value: profile.taughtSessionCount, hint: 'Tamamlanmış' },
     {
-      label: 'Unvan',
-      value: `${profile.rankEmoji} ${profile.rankTitle}`,
-      hint: kalan != null ? `Sonraki unvana ${kalan} puan` : `${profile.totalEarnedCredits} puan`,
+      label: 'Seviye',
+      value: seviyeEtiketi(seviyeHesapla(profile)),
+      hint: `${profile.totalEarnedCredits ?? 0} puan kazanıldı`,
     },
     { label: 'Üyelik', value: new Date(profile.joinedAtUtc).getFullYear(), hint: 'Katılım yılı' },
   ]
@@ -251,8 +177,8 @@ function TopicPanel({ title, tone, topics, emptyText }) {
           {topics.map((topic) => (
             <Badge key={topic.topicId} tone={tone}>
               {topic.topicName}
+              {/* Gönüllülük işareti kaldırıldı: konular arasında böyle bir ayrım yok. */}
               <span className="ml-1 opacity-70">· {topic.subjectName}</span>
-              {topic.isVolunteer && <span className="ml-1">🤝</span>}
             </Badge>
           ))}
         </div>
@@ -395,7 +321,7 @@ function ReviewsSection({ reviews, page, onPage }) {
               <span className="text-amber-400">{'★'.repeat(review.score)}</span>
               <span className="text-slate-400">·</span>
               <span className="text-slate-500">{review.topicName}</span>
-              {review.wasVolunteerSession && <span title="Gönüllü ders">🤝</span>}
+              {/* Dersin gönüllü olup olmadığı artık gösterilmiyor: her ders aynı ders. */}
               <span className="ml-auto text-slate-400">{formatDateTime(review.createdAtUtc)}</span>
             </div>
 
