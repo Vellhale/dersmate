@@ -47,6 +47,39 @@ const TONLAR = {
   },
 }
 
+/*
+  ─── YATAY OPTİK DÜZELTME: "1" RAKAMI ────────────────────────────────────────
+
+  Dikey merkezleme çözüldükten sonra rozet 4x yakınlaştırılıp gözle bakıldı ve "1"
+  dairede hâlâ SOLA kaçık duruyordu. İlk yatay ölçümüm bunu kaçırmıştı çünkü glif
+  KUTUSUNU ölçüyordu, MÜREKKEBİ değil — kutu kusursuz ortadaydı (sapma 0.01px).
+
+  Canvas TextMetrics ile mürekkep ölçüldü (Segoe UI bold, 40px'te ölçüp rozet
+  puntosuna oranlandı). Her rakam aynı ilerleme genişliğini alıyor (23.01) ama
+  mürekkek genişlikleri farklı:
+
+      rakam   mürekkep genişliği   merkez sapması (11px rozette)
+        1           14                    −0.41px   ← gözle görülen
+        2           20                    −0.14px
+        7, 8        21                     0.00px
+        10          42                    +0.27px
+
+  `tabular-nums` KALDIRILMADI ve kaldırılması işe de yaramaz: Segoe UI'ın
+  varsayılan rakamları zaten sabit genişlikte, yani sorun font-variant değil
+  glifin kendi çizimi. Çare, yalnızca ölçülebilir şekilde sapan rakamlara em
+  cinsinden karşı itme uygulamak.
+
+  Sapması 0.15px'in altında kalan rakamlar (2 ve diğerleri) DÜZELTİLMİYOR: o
+  ölçekte düzeltme, gözün fark ettiği bir şeyi değil yuvarlama gürültüsünü kovalar.
+
+  Em cinsinden çünkü rozetin iki boyutu var (13px ve 11px); sabit piksel küçük
+  rozette fazla iterdi.
+*/
+const YATAY_DUZELTME = {
+  1: 'translate-x-[0.038em]', // +0.41px @11px — mürekkep solda, sağa itiliyor
+  10: '-translate-x-[0.025em]', // −0.27px @11px — çift hane sağa kayıyor
+}
+
 const BOYUTLAR = {
   md: {
     kabuk: 'gap-1.5 py-1 pl-1 pr-2.5 text-xs sm:pr-3',
@@ -99,7 +132,9 @@ export function SeviyeRozeti({ kaynak, boyut = 'md', ton = 'koyu', className = '
                     leading-none tabular-nums ${t.madalyon} ${b.madalyon}`}
         aria-hidden="true"
       >
-        <span className="-translate-y-[0.04em]">{seviye}</span>
+        {/* İki eksende de optik düzeltme: dikey her rakam için aynı, yatay yalnızca
+            ölçülen sapması göze görünen rakamlar için (bkz. YATAY_DUZELTME). */}
+        <span className={`-translate-y-[0.04em] ${YATAY_DUZELTME[seviye] ?? ''}`}>{seviye}</span>
       </span>
       {/* Görünen kelime dar ekranda düşüyor ama erişilebilir ad tam kalıyor: ekran
           okuyucu her boyutta "3. Seviye" duyar, sadece "3" değil. */}
