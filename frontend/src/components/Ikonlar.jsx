@@ -35,10 +35,22 @@ export function MenuIkonu(props) {
   )
 }
 
-export function PusulaIkonu(props) {
+/*
+  KEŞFET İKONU — pusula değil BÜYÜTEÇ (2026-08-24).
+
+  Pusula "yön bul" der; Keşfet sayfasının yaptığı iş ise aramak: kullanıcı konu yazıyor,
+  filtre açıyor, eğitmen listesini süzüyor. Büyüteç bu işin evrensel işareti ve ekrandaki
+  arama kutusuyla aynı şeyi söylüyor — pusula, sayfayı hiç görmemiş birine yanlış söz
+  veriyordu.
+
+  Geometri Lucide'ın `search` ikonuyla aynı (r=8 halka + 45° sap). Lucide PAKET OLARAK
+  EKLENMEDİ: bu dosyanın başındaki gerekçe hâlâ geçerli — sekiz ikon için bir bağımlılık
+  ağacı ve sürüm takibi taşımak gereksiz. Alınan şey çizim, kütüphane değil.
+*/
+export function AramaIkonu(props) {
   return (
     <Cizgi {...props}>
-      <circle cx="12" cy="12" r="10" /><path d="M14.8 9.2 13 15l-5.8-1.2L9 8z" />
+      <circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" />
     </Cizgi>
   )
 }
