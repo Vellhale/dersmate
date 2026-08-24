@@ -452,7 +452,14 @@ function Sutun({ baslik, sayi, children, altBilgi = null, vurgulu = false }) {
   return (
     <section className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-slate-200/70 bg-slate-100/60">
       <header className="flex shrink-0 items-center justify-between gap-2 border-b border-slate-200/70 bg-white px-4 py-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-600">{baslik}</h2>
+        {/*
+          uppercase KALKTI: sütun başlığı bir kez okunan bir yer etiketi, sürekli okunan
+          içerik değil. Büyük harf + harf aralığı onu bağıran bir şeride çeviriyordu ve
+          alt gruplama başlıklarıyla (AltBaslik) aynı dili konuşuyordu — iki seviye
+          birbirinden ayırt edilemiyordu. Normal yazım görsel ağırlığı kartlara bırakıyor;
+          mikro etiket dili artık yalnızca AltBaslik'ta.
+        */}
+        <h2 className="text-sm font-semibold text-slate-800">{baslik}</h2>
         {/*
           Sayaç rozeti. Aksiyon bekleyen ders varsa sol sütunun sayacı amber'a dönüyor:
           kullanıcı sütunun içine bakmadan da "burada iş var" bilgisini alıyor. Renk tek
@@ -467,7 +474,15 @@ function Sutun({ baslik, sayi, children, altBilgi = null, vurgulu = false }) {
         </span>
       </header>
 
-      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-3 sm:p-4">
+      {/*
+        kaydirma-ince (index.css): gövde kendi içinde kayıyor ve tarayıcının varsayılan
+        kalın çubuğu sütun kenarında koca gri bir blok bırakıyordu — ince, yarı saydam
+        çubuk kaydırılabilirliği söylemeye yetiyor. p-4 SABİT (eski p-3 sm:p-4 değil):
+        kartların iç dolgusu da 16px, iki ritim aynı olunca kart kenarı her kırılımda
+        sütun kenarıyla aynı boşluğu bırakıyor — "boşluklar tutarsız" şikâyetinin kaynağı
+        tam bu tür yarım adımlardı.
+      */}
+      <div className="kaydirma-ince min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-4">
         {children}
       </div>
 
@@ -478,11 +493,17 @@ function Sutun({ baslik, sayi, children, altBilgi = null, vurgulu = false }) {
   )
 }
 
-/** Sütun içindeki gruplama başlığı. Kartlardan küçük, sütun başlığından ince. */
+/**
+ * Sütun içindeki gruplama başlığı. Sütun başlığı normal yazıma inince mikro etiket dili
+ * (küçük punto + büyük harf) yalnızca burada kaldı — göz "sütun mu, grup mu" ayrımını
+ * yazım biçiminden yapıyor. font-medium (semibold değil): bu bir etiket, vurgu kartların
+ * işi; amber ton "topun sende" gruplarını yine ayırıyor, renk tek sinyal değil çünkü
+ * sayı ve metin de yanında.
+ */
 function AltBaslik({ children, tone = 'slate' }) {
   return (
     <p
-      className={`px-0.5 pt-1 text-xs font-semibold uppercase tracking-wide ${
+      className={`px-0.5 pt-1 text-xs font-medium uppercase tracking-wider ${
         tone === 'amber' ? 'text-amber-700' : 'text-slate-500'
       }`}
     >
@@ -553,20 +574,27 @@ function PointHistory() {
 
   return (
     <section>
+      {/*
+        Card yüzeyinin birebir sınıf kopyası (rounded-2xl + border-slate-100 + shadow-sm):
+        defterin kapağı da sütundaki kartlarla aynı ailede dursun — eski rounded-xl +
+        koyu kenarlık onu sayfadaki tek "başka türlü" kutu yapıyordu. Card bileşeni
+        KULLANILAMADI çünkü bu bir <button>: div'in içine buton sarmak tıklanabilir alanı
+        daraltır, aria-expanded da yüzeyin kendisinde durmalı.
+      */}
       <button
         type="button"
         onClick={toggle}
         aria-expanded={open}
-        className="flex min-h-11 w-full items-center justify-between gap-3 rounded-xl border border-slate-200/80
-                   bg-white px-4 py-3 text-left transition hover:border-slate-300 hover:bg-slate-50"
+        className="flex min-h-11 w-full items-center justify-between gap-3 rounded-2xl border border-slate-100
+                   bg-white px-4 py-3 text-left shadow-sm transition hover:border-slate-200 hover:bg-slate-50"
       >
-        <span>
-          <span className="font-semibold text-slate-900">Puan geçmişi</span>
-          <span className="ml-2 text-sm text-slate-500">
+        <span className="min-w-0">
+          <span className="text-sm font-semibold text-slate-900">Puan geçmişi</span>
+          <span className="ml-2 text-xs text-slate-500">
             Her hareketin hangi dersten geldiği
           </span>
         </span>
-        <span aria-hidden="true" className="text-slate-400">{open ? '▲' : '▼'}</span>
+        <span aria-hidden="true" className="shrink-0 text-slate-400">{open ? '▲' : '▼'}</span>
       </button>
 
       {open && (
@@ -576,27 +604,35 @@ function PointHistory() {
           {loading && rows.length === 0 ? (
             <Loading />
           ) : rows.length === 0 && !error ? (
-            <Card>
+            /* !p-4: sütun içindeki kartların ortak dolgusu — defter de aynı ritimde. */
+            <Card className="!p-4">
               <p className="text-sm text-slate-600">
                 Henüz puan hareketin yok. Bir ders anlatıp onaylandığında ilk kaydın burada belirir.
               </p>
             </Card>
           ) : (
-            <>
-              <div className="space-y-2">
+            /*
+              TEK Card, İNCE AYRAÇLAR. Eskiden her hareket kendi kenarlıklı kutusundaydı ve
+              yirmi satırlık defter yirmi küçük karta bölünüyordu — oysa defter tek bir
+              belgedir, kart koleksiyonu değil. divide-y satırları ayırıyor, kart kenarı
+              belgeyi sarıyor; "daha eski" düğmesi de belgenin altbilgisi gibi içeride
+              duruyor ki defter uzadıkça düğme ondan kopup boşlukta yüzmesin.
+            */
+            <Card className="overflow-hidden !p-0">
+              <div className="divide-y divide-slate-100">
                 {rows.map((row, i) => (
                   <HistoryRow key={`${row.createdAtUtc}-${i}`} row={row} />
                 ))}
               </div>
 
               {rows.length < total && (
-                <div className="mt-4 flex justify-center">
+                <div className="flex justify-center border-t border-slate-100 px-4 py-3">
                   <Button variant="secondary" loading={loading} onClick={() => loadPage(page + 1)}>
                     Daha eski hareketler ({rows.length}/{total})
                   </Button>
                 </div>
               )}
-            </>
+            </Card>
           )}
         </div>
       )}
@@ -608,7 +644,12 @@ function HistoryRow({ row }) {
   const kazanc = row.amount > 0
 
   return (
-    <div className="flex items-center justify-between gap-3 rounded-lg border border-slate-200/80 bg-white px-4 py-3">
+    /*
+      Satırın kendi kart kabuğu YOK (eski rounded-lg + border kaldırıldı): satırlar artık
+      tek Card'ın içinde divide-y ile ayrılıyor. Kenarlık ve köşe yuvarlama defterin
+      sınırında bir kez çiziliyor — satır başına tekrarlamak görsel gürültüden ibaretti.
+    */
+    <div className="flex items-center justify-between gap-3 px-4 py-2.5">
       <div className="min-w-0">
         <p className="truncate text-sm font-medium text-slate-900">
           {TRANSACTION_LABELS[row.type] ?? row.type}
@@ -630,6 +671,39 @@ function HistoryRow({ row }) {
         <div className="text-xs text-slate-400">{formatDateTime(row.createdAtUtc)}</div>
       </div>
     </div>
+  )
+}
+
+/**
+ * Meta şeridindeki nokta ayracı. slate-300: ayraç mobilyadır, içerik değil — içerikle
+ * aynı tonda olduğunda satır "kelime kelime kelime" diye tek blok okunuyordu, soluk
+ * ayraç parçaları birbirinden koparıyor. Tek bileşen olması tutarlılık için: kartta kaç
+ * ayraç varsa hepsi aynı karakter ve aynı tonda.
+ */
+function Ayrac() {
+  return (
+    <span aria-hidden="true" className="text-slate-300">
+      ·
+    </span>
+  )
+}
+
+/*
+  UYARI SATIRI — Time-Lock ve otomatik onay TEK görsel dilde.
+
+  İkisi de aynı türden bilgi: "bir sayaç işliyor ve sonunda bir şey olacak". Eskiden ikisi
+  de çıplak amber metindi ve kartın diğer satırlarına karışıyordu; hafif amber zemin
+  satırı gövdeden ayırıyor ama Notice kadar bağırmıyor — bu bir hata değil, takvim
+  bilgisi. Renk yine tek sinyal değil: kum saati ve metin bilgiyi kendisi taşıyor.
+*/
+function UyariSatiri({ children }) {
+  return (
+    <p className="mt-2 flex items-start gap-1.5 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+      <span aria-hidden="true" className="shrink-0">
+        ⏳
+      </span>
+      <span>{children}</span>
+    </p>
   )
 }
 
@@ -702,44 +776,56 @@ function SessionCard({ session, onAction, past = false }) {
         bunlar doğrulama bilgisi, karar bilgisi değil. Üstündeki ince çizgi kimliği
         metadan ayırıyor.
       */}
-      <p className="mt-3 flex flex-wrap items-center gap-x-1.5 gap-y-1 border-t border-slate-100 pt-3 text-xs text-slate-500">
+      <p className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-slate-100 pt-3 text-xs text-slate-500">
         <span>{formatDateTime(session.scheduledStartUtc)}</span>
-        <span aria-hidden="true">·</span>
+        <Ayrac />
         <span>{session.durationMinutes} dk</span>
-        <span aria-hidden="true">·</span>
+        <Ayrac />
         {/* Her ders puan basar; gösterilen sayı sunucudan gelen mintAmount'tur. */}
         <span>{session.mintAmount} puan</span>
         {startsIn && !past && (
           <>
-            <span aria-hidden="true">·</span>
+            <Ayrac />
             <span className={`font-medium ${stil.vurgu}`}>{startsIn} sonra</span>
           </>
         )}
       </p>
 
       {showCode && (
-        <div className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
-          Doğrulama kodu:{' '}
-          <span className="font-mono text-sm font-semibold tracking-wider text-slate-800">
+        /*
+          Kod artık TEK SATIR + chip. Eski kutu iki cümlelik açıklama taşıyordu ve her
+          aktif kartta aynı paragraf tekrar ediyordu — açıklama baskın, kod kaybolandı.
+          Açıklamanın tam hâli zaten kararın verildiği yerde duruyor (CompleteModal ve
+          ApproveModal'daki Notice), kartta yalnızca kodu hatırlatmak yeter. title
+          masaüstünde kısa hatırlatma verir; dokunmatikte tooltip yok ama bilgi kaybı da
+          yok — kanıt yükleme/onay akışı aynı metni Notice olarak gösteriyor.
+        */
+        <p
+          className="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-500"
+          title={
+            session.iAmTutor
+              ? 'Ders ekran görüntüsünde bu kod, sistem saati ve katılımcı listesi görünmeli.'
+              : 'Kanıt görselinde bu kodun göründüğünü doğrula.'
+          }
+        >
+          <span>Doğrulama kodu</span>
+          <code className="rounded-md bg-slate-100 px-2 py-0.5 font-mono text-sm font-semibold tracking-wider text-slate-800">
             {session.verificationCode}
-          </span>
-          {session.iAmTutor
-            ? ' — ders ekran görüntüsünde bu kod, sistem saati ve katılımcı listesi görünmeli.'
-            : ' — kanıt görselinde bu kodun göründüğünü doğrula.'}
-        </div>
+          </code>
+        </p>
       )}
 
       {session.iAmTutor && session.status === 'Booked' && endsIn && (
-        <p className="mt-2 text-xs text-amber-700">
-          ⏳ Time-Lock: “Dersi Tamamladım” <strong>{endsIn}</strong> sonra (planlanan bitişte) açılır.
-        </p>
+        <UyariSatiri>
+          Time-Lock: “Dersi Tamamladım” <strong>{endsIn}</strong> sonra (planlanan bitişte) açılır.
+        </UyariSatiri>
       )}
 
       {session.canApprove && autoApproveIn && (
-        <p className="mt-2 text-xs text-amber-700">
-          ⏳ Onaylamazsan <strong>{autoApproveIn}</strong> sonra otomatik onaylanacak ve{' '}
+        <UyariSatiri>
+          Onaylamazsan <strong>{autoApproveIn}</strong> sonra otomatik onaylanacak ve{' '}
           eğitmene {session.mintAmount} puan yazılacak. İtiraz hakkın da o an kapanır.
-        </p>
+        </UyariSatiri>
       )}
 
       {/*

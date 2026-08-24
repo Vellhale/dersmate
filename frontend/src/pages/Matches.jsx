@@ -21,8 +21,28 @@ export default function Matches() {
   const current = lists[tab] ?? []
 
   return (
-    <div className="space-y-6">
-      <div>
+    /*
+      ─────────────────────────────────────────────────────────────────────────
+      EKRANA SABİT KABUK (2026-08-24) — Sessions.jsx'teki kanıtlanmış düzenin aynısı.
+
+      Uzun bir aktif eşleşme listesi SAYFANIN TAMAMINI kaydırıyordu: başlık ve sekme
+      çubuğu ekrandan çıkıyor, sekme değiştirmek için en yukarı dönmek gerekiyordu.
+      Artık lg üstünde sayfa sabit; yalnızca sekme içeriği kendi panelinde kayar
+      (bir sohbet penceresi gibi), başlık ve sekmeler hep görünür kalır.
+
+      Yükseklik: 100dvh − 10.5rem. Üç parça: 4rem sabit üst bar + 3rem <main> dolgusu
+      (py-6) + 3.5rem altbilgi. Bu toplam Sessions.jsx düzeni kurulurken TARAYICIDA
+      ÖLÇÜLDÜ — sayıyı değiştirmeden önce oradaki gerekçeyi oku (altbilgi ilk hesapta
+      atlanmış ve sayfa tam 56px kaymıştı). vh DEĞİL dvh: mobil adres çubuğu vh'ye
+      dahil değil ve alt kenar kırpılırdı.
+
+      lg ALTINDA kilitleme YOK ve bu bilinçli: dar ekranda iç içe kaydırma alanları
+      parmakla savaşıyor, hangi yüzeyin sürüklendiği belirsizleşiyor. Orada normal
+      sayfa akışı sürüyor — aynı karar Sessions.jsx'te verildi, gerekçesi orada.
+      ─────────────────────────────────────────────────────────────────────────
+    */
+    <div className="flex flex-col gap-6 lg:h-[calc(100dvh-10.5rem)] lg:min-h-[520px] lg:overflow-hidden">
+      <div className="shrink-0">
         <h1 className="text-2xl font-bold text-slate-900">Eşleşmeler</h1>
         <p className="mt-1 text-sm text-slate-600">
           İstek kabul edildiğinde sohbet otomatik açılır ve ders rezerve edebilirsin.
@@ -30,14 +50,16 @@ export default function Matches() {
       </div>
 
       {notice && (
-        <Notice tone="success" onDismiss={() => setNotice(null)}>
-          {notice}
-        </Notice>
+        <div className="shrink-0">
+          <Notice tone="success" onDismiss={() => setNotice(null)}>
+            {notice}
+          </Notice>
+        </div>
       )}
 
       {/* Mobilde ızgara: flex + flex-wrap, sekmeler tek satıra sığmayınca 2+1 gibi eğreti bir
           dizilim üretiyordu. grid-cols-3 üçünü de eşit böler ve düzen simetrik kalır. */}
-      <div className="grid grid-cols-3 gap-1 rounded-lg bg-slate-100 p-1 sm:flex">
+      <div className="grid shrink-0 grid-cols-3 gap-1 rounded-lg bg-slate-100 p-1 sm:flex">
         {TABS.map((item) => (
           <button
             key={item.key}
@@ -60,27 +82,54 @@ export default function Matches() {
         ))}
       </div>
 
-      <ErrorBox error={matches.error} onRetry={matches.reload} />
+      {/* ErrorBox hatasızken null döner; empty:hidden boş sarmalayıcının gap'te
+          fazladan bir boşluk bırakmasını engeller (Sessions.jsx'teki çözümün aynısı). */}
+      <div className="shrink-0 empty:hidden">
+        <ErrorBox error={matches.error} onRetry={matches.reload} />
+      </div>
 
-      {matches.loading ? (
-        <Loading />
-      ) : current.length === 0 ? (
-        <EmptyStateForTab tab={tab} />
-      ) : (
-        <div className="space-y-3">
-          {current.map((match) => (
-            <MatchCard
-              key={match.matchId}
-              match={match}
-              tab={tab}
-              onChanged={(message) => {
-                setNotice(message)
-                matches.reload()
-              }}
-            />
-          ))}
-        </div>
-      )}
+      {/*
+        SEKME İÇERİĞİ KENDİ PANELİNDE KAYAR — sayfa değil.
+
+        min-h-0 ŞART: flex çocuğunun varsayılan min-height'ı `auto`, yani içerik kadar.
+        Sıfırlanmazsa panel içeriğiyle birlikte uzar ve overflow-y-auto hiçbir şey
+        yapmaz — kaydırma sayfaya taşar. Ekrana sabitlenen her düzenin ilk tuzağı
+        (ayrıntı Sessions.jsx'teki Sutun yorumunda).
+
+        key={tab} SEKME DEĞİŞİNCE KAYDIRMAYI SIFIRLAR: üç sekme aynı kayan div'i
+        paylaşıyor ve React yalnızca içeriği değiştirseydi scrollTop olduğu yerde
+        kalırdı — kullanıcı yeni sekmeye listenin ORTASINDAN başlardı. Remount,
+        paneli başa alır.
+
+        Zemin bir ton koyu (bg-slate-100/60): sayfa zemini ile beyaz kartlar arasına
+        hiçbir şey konmayınca kartların ve panelin sınırı okunmuyordu. Sessions'taki
+        Sutun ile aynı gerekçe, aynı ton.
+      */}
+      <div
+        key={tab}
+        className="kaydirma-ince min-h-0 flex-1 overflow-y-auto overscroll-contain rounded-2xl
+                   border border-slate-200/70 bg-slate-100/60 p-4"
+      >
+        {matches.loading ? (
+          <Loading />
+        ) : current.length === 0 ? (
+          <EmptyStateForTab tab={tab} />
+        ) : (
+          <div className="space-y-3">
+            {current.map((match) => (
+              <MatchCard
+                key={match.matchId}
+                match={match}
+                tab={tab}
+                onChanged={(message) => {
+                  setNotice(message)
+                  matches.reload()
+                }}
+              />
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   )
 }
