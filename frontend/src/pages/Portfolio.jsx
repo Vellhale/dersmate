@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { api } from '../lib/api'
 import { KonuSecici } from '../components/KonuSecici'
 import { useAsync } from '../state/useAsync'
-import { Badge, Button, Card, ErrorBox, Field, Loading, Modal } from '../components/ui'
+import { Badge, Button, ErrorBox, Field, Loading, Modal } from '../components/ui'
+import { CamKart } from '../components/SayfaZemini'
 import { AnalyticsEvents, trackEvent } from '../lib/analytics'
 
 /**
@@ -83,6 +84,16 @@ export default function Portfolio() {
   parçaları olarak okunuyor. Satırlar ayrı kart DEĞİL — kart içinde kart, gölge üstünde
   gölge demek olurdu; satır sakin durur, hover'da bir kademe koyulaşarak üzerinde
   basılabilir bir eylem ("Kaldır") taşıdığını söyler.
+
+  KABUK CAM (2026-08-25): Card → CamKart. Yerleşim, iç yüzeyler ve işleyiş aynen kaldı;
+  değişen yalnızca sütunun dış kabuğu. Kabuğun opak beyaz kalması, arkasındaki yeni sayfa
+  zeminini iki büyük dikdörtgenle kapatmak olurdu — zemin o hâlde yalnızca sütunlar
+  arasındaki dar boşlukta görünürdü, yani neredeyse hiç.
+
+  İÇERİDEKİ KUTULAR SAYDAM YAPILMADI, bilerek: boş durum kutusu (slate-50) ile satır
+  hover'ı (slate-50) kartın KENDİ yüzeyinden ayrışmak için var. İkisi de saydamlaşsaydı
+  ayrıştıkları referans — kartın beyazı — ortadan kalkar, ikisi de zeminin lekesine göre
+  değişen bir gri olurdu. Cam olan kabuk; içerisi opak kalıyor.
 */
 function PortfolioColumn({ title, aciklama, tone, entries, emptyText, onAdd, onRemoved }) {
   const [removingId, setRemovingId] = useState(null)
@@ -98,7 +109,7 @@ function PortfolioColumn({ title, aciklama, tone, entries, emptyText, onAdd, onR
   }
 
   return (
-    <Card className="flex h-full flex-col">
+    <CamKart className="flex h-full flex-col">
       {/* Başlık şeridi çok hafif marka zemini taşıyor: sütunun "kapağı" olduğu bir
           bakışta anlaşılsın. Sayı rozeti başlığın hemen yanında — kaç konu olduğu
           liste kaydırılmadan görünür. */}
@@ -108,7 +119,7 @@ function PortfolioColumn({ title, aciklama, tone, entries, emptyText, onAdd, onR
             <h2 className="text-lg font-semibold text-slate-900">{title}</h2>
             <Badge tone={tone}>{entries.length}</Badge>
           </div>
-          <p className="mt-0.5 text-xs text-slate-500">{aciklama}</p>
+          <p className="mt-0.5 text-xs text-slate-600">{aciklama}</p>
         </div>
         <Button variant="secondary" onClick={onAdd} className="shrink-0">
           + Konu ekle
@@ -121,7 +132,7 @@ function PortfolioColumn({ title, aciklama, tone, entries, emptyText, onAdd, onR
            beyaz bir kutu görünmez olurdu; kesik kenarlık "buraya bir şey gelecek" der. */
         <div className="mt-4 flex flex-1 flex-col items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50 px-6 py-10 text-center">
           <p className="font-medium text-slate-700">Liste boş</p>
-          <p className="mx-auto mt-1 max-w-md text-sm text-slate-500">{emptyText}</p>
+          <p className="mx-auto mt-1 max-w-md text-sm text-slate-600">{emptyText}</p>
         </div>
       ) : (
         <ul className="mt-4 space-y-1">
@@ -135,7 +146,7 @@ function PortfolioColumn({ title, aciklama, tone, entries, emptyText, onAdd, onR
                   <span className="font-medium text-slate-800">{entry.topicName}</span>
                   <Badge tone={tone}>Seviye {entry.selfAssessedLevel}/5</Badge>
                 </div>
-                <p className="mt-0.5 text-xs text-slate-500">
+                <p className="mt-0.5 text-xs text-slate-600">
                   {entry.categoryName} · {entry.subjectName}
                 </p>
                 {entry.note && <p className="mt-2 text-sm text-slate-600">{entry.note}</p>}
@@ -158,7 +169,7 @@ function PortfolioColumn({ title, aciklama, tone, entries, emptyText, onAdd, onR
           ))}
         </ul>
       )}
-    </Card>
+    </CamKart>
   )
 }
 

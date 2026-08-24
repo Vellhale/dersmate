@@ -294,3 +294,77 @@ export function GrafikIkonu(props) {
     </Cizgi>
   )
 }
+
+/*
+  ── KEŞFET KARTLARININ İKONLARI ──────────────────────────────────────────────
+  Kart üstündeki etiketler (konu pili, süre, bölüm) 14px'te (h-3.5) çiziliyor.
+  O ölçekte ikon "süs" olmaya en yatkın yer: fazladan her çizgi lekeye dönüşüp
+  etiketi kirletiyor. Bu yüzden ikisi de üç-dört çizgide kalıyor — aynı gerekçe
+  YildizIkonu/GrafikIkonu'nda da geçerliydi.
+*/
+
+/** Süre: kadranlı saat. Keşfet ilan kartındaki "30 / 60 dk" etiketi için.
+    TakvimIkonu ders TARİHİNİ anlatıyor, bu ise SÜRESİNİ — ikisi ayrı kavram,
+    aynı çizimle gösterilmesi ilanı "tarihli" gibi okuturdu. */
+export function SaatIkonu(props) {
+  return (
+    <Cizgi {...props}>
+      <circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" />
+    </Cizgi>
+  )
+}
+
+/** Üniversite: sütunlu bina. Üniversite ağı kartında okulun adının başında
+    duruyor; bölüm pili KepIkonu taşıyor, yani "okul" ile "alan" ikonla da
+    ayrılıyor — ikisi aynı satırda görünüyor ve tek ikonla ayırt edilemezlerdi. */
+export function BinaIkonu(props) {
+  return (
+    <Cizgi {...props}>
+      <path d="M3 21h18" /><path d="M12 3 4 7.5h16z" />
+      <path d="M7 21v-9" /><path d="M12 21v-9" /><path d="M17 21v-9" />
+    </Cizgi>
+  )
+}
+
+/*
+  ── DERSLERİM EKRANININ İKONLARI ─────────────────────────────────────────────
+  Üçü de bir EMOJİNİN yerine geliyor (⚠️ / ▲▼ / "+"). Emoji bu arayüzde üç sorun
+  üretiyordu: platformdan platforma başka bir çizim gösteriyor, currentColor'a
+  uymadığı için satırın rengini almıyor ve punto ile birlikte ölçeklenmiyor —
+  yani metnin içindeki bir işaret her yerde kendi başına duruyordu. Aynı ızgara,
+  aynı çizgi ağırlığı; renk kullanıldığı yerden geliyor.
+*/
+
+/** Dikkat: üçgen içinde ünlem. Kullanıcıyı YAVAŞLATMASI gereken yerlerde —
+    kanıtın başka bir derste de kullanıldığı uyarısı gibi. BilgiIkonu (daire içinde i)
+    bilerek kullanılmadı: o "şunu da bil" der, bu "dur ve bak" der. */
+export function UyariIkonu(props) {
+  return (
+    <Cizgi {...props}>
+      <path d="M10.3 3.9 1.9 18a2 2 0 0 0 1.7 3h16.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" />
+      <path d="M12 9v4" /><path d="M12 17h.01" />
+    </Cizgi>
+  )
+}
+
+/** Açılır bölümün oku. TEK çizim: açık durum `rotate-180` ile gösteriliyor, ikinci
+    bir "yukarı ok" ikonu çizilmedi — aynı kavramın iki çizimi ikon dilini böler ve
+    dönüş, durum değişimini animasyonla da anlatıyor. */
+export function OkAsagiIkonu(props) {
+  return (
+    <Cizgi {...props}>
+      <path d="m6 9 6 6 6-6" />
+    </Cizgi>
+  )
+}
+
+/** Ekleme: artı. Düğme metninin başındaki düz "+" karakterinin yerine — o karakter
+    yazı tipinin artısıydı ve düğmedeki metinle aynı optik ağırlıkta değildi
+    (çizgileri ince, ortalaması yüksek kalıyordu). */
+export function ArtiIkonu(props) {
+  return (
+    <Cizgi {...props}>
+      <path d="M12 5v14" /><path d="M5 12h14" />
+    </Cizgi>
+  )
+}

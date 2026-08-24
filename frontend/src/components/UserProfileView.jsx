@@ -3,7 +3,8 @@ import { api } from '../lib/api'
 import { useAsync } from '../state/useAsync'
 import { formatDateTime } from '../lib/format'
 import { Avatar } from './Avatar'
-import { Badge, Button, Card, EmptyState, ErrorBox, Loading } from './ui'
+import { Badge, Button, EmptyState, ErrorBox, Loading } from './ui'
+import { CamKart } from './SayfaZemini'
 import { GrafikIkonu, KepIkonu, TakvimIkonu, YildizIkonu } from './Ikonlar'
 import { SubjectBadges } from './SubjectBadges'
 import { UniversiteRozetleri } from './UniversiteRozetleri'
@@ -40,63 +41,58 @@ export function UserProfileView({ userId }) {
 
   const p = profile.data
 
+  /*
+    DEKORATİF ŞERİT KALDIRILDI (bir önceki hâlde burada, kartların arkasında, üst 12 rem'i
+    boyayan bir brand-100 → şeffaf geçiş vardı). İki nedeni var:
+
+      1. Ürün kararı: proje sahibi o şeridi "ufak ve basit mavilik" diye tarif etti ve
+         yerine sayfanın tamamını kapsayan bir zemin istedi.
+      2. Teknik: şerit BU bileşenin içindeydi, yani yalnızca profil görünümünün üstünü
+         boyuyordu; sayfa başlığı ("Profilim" + düğmeler) ve sayfanın altı dışarıda
+         kalıyordu. Zemin artık Profile.jsx'te (SayfaZemini, `zengin`) ve tüm sayfayı
+         kapsıyor — burada ikinci bir dekoratif katman olsaydı ikisi üst üste binerdi.
+
+    Sarmalayıcıdan `relative` de düştü: konumlandıracak mutlak çocuk kalmadı.
+  */
   return (
-    <div className="relative">
+    <div className="space-y-6">
+      {/* StatsRow KALDIRILDI: dört ayrı sayaç kartı, profil kartının İÇİNDEKİ tek
+          şeride indi (bkz. SayacSeridi). Yüzey sayısı beşten ikiye düştü ve sayfa bir
+          gösterge paneli değil, bir kişi gibi okunmaya başladı. */}
+      <ProfileHeader profile={p} />
+
+      {/* Branş rozetleri istatistiklerin hemen altında: ikisi de "bu kişi ne yapmış"
+          sorusunu yanıtlıyor, konu panellerinden ("ne yapabilir") önce gelmeli.
+          Bileşen, rozet de ilerleme de yoksa kendini tamamen gizler. */}
+      <SubjectBadges userId={userId} />
+
       {/*
-        DEKORATİF ZEMİN ŞERİDİ: sayfanın üst kısmında, kartların ARKASINDA çok hafif
-        bir marka tonu geçişi. Kartlar bembeyaz ve zemin düz slate-50 olunca sayfa
-        steril duruyordu; bu şerit kart aralarından ve yuvarlak köşelerden sızarak
-        üst bölgeye ferahlık veriyor. Kartların kendisi beyaz kalıyor — şerit sadece
-        zeminde.
+        ÜNİVERSİTE ROZETLERİ yalnızca üniversite bilgisi olan profilde.
 
-        z-index YOK, sıralama ağaç düzeniyle: içerik sarmalayıcısı `relative` ve
-        şeritten SONRA geldiği için üstte boyanıyor. Negatif z-index kullanılsaydı
-        şerit, gövdenin slate-50 zemininin de arkasına düşüp görünmez olabilirdi.
+        İki şerit birden görünebilir ve bu bir tutarsızlık değil: branş rozetleri "hangi
+        derste ne kadar anlattı", görüşme rozeti "toplamda ne kadar görüştü" diyor. Aynı
+        kişide ikisi de doğru olabilir. Üniversite bilgisi olmayan profilde ikinci şerit
+        hiç çizilmiyor; üniversite bilgisi olup hiç oturumu olmayanda ise bileşen kendini
+        gizliyor (bkz. UniversiteRozetleri).
       */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute -inset-x-3 -top-4 h-48 rounded-[2rem] bg-gradient-to-b from-brand-100/60 via-brand-50/30 to-transparent"
-      />
+      {p.university && <UniversiteRozetleri userId={userId} />}
 
-      <div className="relative space-y-6">
-        {/* StatsRow KALDIRILDI: dört ayrı sayaç kartı, profil kartının İÇİNDEKİ tek
-            şeride indi (bkz. SayacSeridi). Yüzey sayısı beşten ikiye düştü ve sayfa bir
-            gösterge paneli değil, bir kişi gibi okunmaya başladı. */}
-        <ProfileHeader profile={p} />
-
-        {/* Branş rozetleri istatistiklerin hemen altında: ikisi de "bu kişi ne yapmış"
-            sorusunu yanıtlıyor, konu panellerinden ("ne yapabilir") önce gelmeli.
-            Bileşen, rozet de ilerleme de yoksa kendini tamamen gizler. */}
-        <SubjectBadges userId={userId} />
-
-        {/*
-          ÜNİVERSİTE ROZETLERİ yalnızca üniversite bilgisi olan profilde.
-
-          İki şerit birden görünebilir ve bu bir tutarsızlık değil: branş rozetleri "hangi
-          derste ne kadar anlattı", görüşme rozeti "toplamda ne kadar görüştü" diyor. Aynı
-          kişide ikisi de doğru olabilir. Üniversite bilgisi olmayan profilde ikinci şerit
-          hiç çizilmiyor; üniversite bilgisi olup hiç oturumu olmayanda ise bileşen kendini
-          gizliyor (bkz. UniversiteRozetleri).
-        */}
-        {p.university && <UniversiteRozetleri userId={userId} />}
-
-        <div className="grid gap-4 lg:grid-cols-2">
-          <TopicPanel
-            title="Anlatabilirim"
-            tone="brand"
-            topics={p.canTeach}
-            emptyText="Henüz konu eklenmemiş."
-          />
-          <TopicPanel
-            title="Öğrenmek istiyorum"
-            tone="success"
-            topics={p.wantsToLearn}
-            emptyText="Henüz konu eklenmemiş."
-          />
-        </div>
-
-        <ReviewsSection reviews={reviews} page={reviewPage} onPage={setReviewPage} />
+      <div className="grid gap-4 lg:grid-cols-2">
+        <TopicPanel
+          title="Anlatabilirim"
+          tone="brand"
+          topics={p.canTeach}
+          emptyText="Henüz konu eklenmemiş."
+        />
+        <TopicPanel
+          title="Öğrenmek istiyorum"
+          tone="success"
+          topics={p.wantsToLearn}
+          emptyText="Henüz konu eklenmemiş."
+        />
       </div>
+
+      <ReviewsSection reviews={reviews} page={reviewPage} onPage={setReviewPage} />
     </div>
   )
 }
@@ -126,9 +122,18 @@ export function UserProfileView({ userId }) {
  * ─────────────────────────────────────────────────────────────────────────────
  */
 function ProfileHeader({ profile }) {
+  /*
+    CAM YÜZEY. Kart artık opak beyaz değil, CamKart: zeminin mesh havuzları kartın
+    KENARLARINDAN ve blur'ından okunuyor, metnin arkası pratik olarak beyaz kalıyor
+    (ui.jsx'teki Card'a DOKUNULMADI — orası uygulamanın opak varsayılanı).
+
+    DOLGU BİR KADEME AÇILDI (p-6 → p-7, sm'de p-8 → p-10): vitrin sayfasının en üst
+    kartı ve tek portresi burada. Cam yüzeyde dar dolgu, kartı zeminin üstünde "yapışık"
+    gösteriyor; boşluk, camın işini görünür kılan şey.
+  */
   return (
-    <Card className="p-6 text-center sm:p-8 sm:text-left">
-      <div className="flex flex-col items-center gap-5 sm:flex-row sm:items-start sm:gap-7">
+    <CamKart className="p-7 text-center sm:p-10 sm:text-left">
+      <div className="flex flex-col items-center gap-6 sm:flex-row sm:items-start sm:gap-8">
         {/*
           avatarUrl bir DEPO ANAHTARI, gezinilebilir bir adres değil — doğrudan <img src>
           olarak verilemez. Avatar bileşeni görseli yetkili uçtan blob olarak çeker ve
@@ -162,23 +167,34 @@ function ProfileHeader({ profile }) {
             Tekrar zararsız değil: başlık satırı ad + rozet + (dar ekranda) sarma taşıyor
             ve rozet, adın kendisiyle vurgu yarışına giriyordu.
           */}
-          <h1 className="text-center text-2xl font-bold tracking-tight text-slate-900 sm:text-left">
+          {/*
+            AD, SAYFANIN EN BÜYÜK METNİ. Eskiden 2xl idi ve sayfa başlığıyla ("Profilim")
+            aynı boydaydı: iki farklı şey aynı sesle konuşuyordu. Bir kademe büyüyünce
+            hiyerarşi netleşiyor — başlık sayfayı, bu satır KİŞİYİ adlandırıyor.
+            Dar ekranda 3xl'de kalıyor; 4xl uzun adlarda 112px avatarın altında üç
+            satıra sarıyordu.
+          */}
+          <h1 className="text-center text-3xl font-bold leading-tight tracking-tight text-slate-900 sm:text-left sm:text-4xl">
             {profile.displayName}
           </h1>
 
           {/* OKUL SATIRI: adın hemen altında ve marka renginde değil nötr — kimlik
-              bilgisi, vurgu değil. Biri boşsa ayraç da düşüyor. */}
+              bilgisi, vurgu değil. Biri boşsa ayraç da düşüyor.
+
+              slate-500 → slate-600: kart artık cam ve altından zemin lekesi geçebiliyor;
+              projede gövde metninin tabanı slate-600 (AA eşiği testle korunuyor). */}
           {(profile.university || profile.department) && (
-            <p className="mt-1.5 text-sm font-medium text-slate-500">
+            <p className="mt-2 text-sm font-medium text-slate-600">
               {[profile.university, profile.department].filter(Boolean).join(' · ')}
             </p>
           )}
 
           {/* BİYOGRAFİ: profilin tek serbest metni, o yüzden en okunur tipografi
               buranın. leading-relaxed + max-w-prose: satır uzunluğu göz için sınırlı,
-              kart genişlese bile metin okunur kalıyor. */}
+              kart genişlese bile metin okunur kalıyor. Adın büyümesiyle birlikte üstteki
+              boşluk da açıldı; aksi halde ad, altındaki iki satıra yapışıyor. */}
           {profile.bio && (
-            <p className="mx-auto mt-3 max-w-prose whitespace-pre-wrap text-[15px] leading-relaxed text-slate-700 sm:mx-0">
+            <p className="mx-auto mt-4 max-w-prose whitespace-pre-wrap text-[15px] leading-relaxed text-slate-700 sm:mx-0">
               {profile.bio}
             </p>
           )}
@@ -186,7 +202,7 @@ function ProfileHeader({ profile }) {
           <SayacSeridi profile={profile} />
         </div>
       </div>
-    </Card>
+    </CamKart>
   )
 }
 
@@ -240,9 +256,19 @@ function SayacSeridi({ profile }) {
     kalanından koparıp ayrı bir panel gibi gösteriyordu.
   */
   return (
-    <dl className="mt-5 grid grid-cols-2 gap-3 border-t border-slate-100 pt-4 lg:grid-cols-4">
+    <dl className="mt-6 grid grid-cols-2 gap-3 border-t border-slate-200/70 pt-5 lg:grid-cols-4">
       {kalemler.map((k) => (
-        <div key={k.etiket} className="rounded-xl bg-brand-50/60 p-3">
+        /*
+          OPAKLIK /60 → /70 ve ince bir marka halkası: kutucuklar artık CAM bir kartın
+          içinde duruyor ve altlarından zeminin mesh havuzu geçebiliyor. /60'ta kutunun
+          kenarı belirsizleşip dört sayaç tek bir bulanık alan gibi okunuyordu. Renk
+          kimliği aynı kaldı (brand-50 zemin, brand-600 ikon) — değişen yalnızca kutunun
+          kendini zeminden ayırma gücü.
+        */
+        <div
+          key={k.etiket}
+          className="rounded-xl bg-brand-50/70 p-3 ring-1 ring-inset ring-brand-100/70"
+        >
           <dt className="sr-only">{k.etiket}</dt>
           <dd>
             {/* mx-auto sm:mx-0 — kart dar ekranda ortalı, sm üstünde sola yaslı
@@ -250,7 +276,7 @@ function SayacSeridi({ profile }) {
                 uymuyor, hizayı kendi taşımak zorunda. */}
             <k.Ikon className="mx-auto h-4 w-4 text-brand-600 sm:mx-0" />
             <span className="mt-1.5 block text-lg font-bold leading-tight text-slate-900">{k.deger}</span>
-            <span className="mt-0.5 block text-xs leading-snug text-slate-500">{k.etiket}</span>
+            <span className="mt-0.5 block text-xs leading-snug text-slate-600">{k.etiket}</span>
           </dd>
         </div>
       ))}
@@ -261,7 +287,7 @@ function SayacSeridi({ profile }) {
 
 function TopicPanel({ title, tone, topics, emptyText }) {
   return (
-    <Card>
+    <CamKart>
       <p className="mb-2 text-sm font-medium text-slate-700">{title}</p>
       {topics?.length ? (
         <div className="flex flex-wrap gap-1.5">
@@ -288,9 +314,9 @@ function TopicPanel({ title, tone, topics, emptyText }) {
           ))}
         </div>
       ) : (
-        <p className="text-sm text-slate-500">{emptyText}</p>
+        <p className="text-sm text-slate-600">{emptyText}</p>
       )}
-    </Card>
+    </CamKart>
   )
 }
 
@@ -340,20 +366,25 @@ function ReviewsSection({ reviews, page, onPage }) {
   }
 
   return (
-    <Card className="!p-0 overflow-hidden">
+    <CamKart className="!p-0 overflow-hidden">
       {/*
-        ÖZET — hafif renkli bir başlık şeridi. Beyaz kartın içinde beyaz bir özet,
-        yorum listesinden ayrılmıyordu; slate-50 zemin ikisi arasına görünmez bir
-        çizgi çekiyor ve "bu bölüm bir başlık" diyor.
+        ÖZET — hafif renkli bir başlık şeridi. Kartın içinde zeminle aynı tonda bir özet,
+        yorum listesinden ayrılmıyordu; slate zemin ikisi arasına görünmez bir çizgi
+        çekiyor ve "bu bölüm bir başlık" diyor.
+
+        TAM OPAK slate-50 DEĞİL /70: kart artık cam ve tam opak bir şerit, camın içinde
+        pencereyi kapatan bir levha gibi duruyordu. Yarı saydamda zemin şeridin altından
+        da geçiyor, ayrım ise duruyor — metnin arkası (beyaz kart + slate tonu) yine AA
+        eşiğinin çok üstünde.
       */}
-      <div className="grid gap-4 border-b border-slate-200/80 bg-slate-50 p-4 sm:grid-cols-[auto,1fr] sm:gap-6 sm:p-5">
+      <div className="grid gap-4 border-b border-slate-200/80 bg-slate-50/70 p-4 sm:grid-cols-[auto,1fr] sm:gap-6 sm:p-5">
         <div className="flex items-center gap-3 sm:flex-col sm:items-start sm:gap-1">
           <p className="text-3xl font-bold leading-none text-slate-900">
             {Number(data.averageScore).toFixed(1)}
           </p>
           <div>
             <Yildizlar deger={data.averageScore} />
-            <p className="mt-1 text-xs text-slate-500">{data.reviewCount} değerlendirme</p>
+            <p className="mt-1 text-xs text-slate-600">{data.reviewCount} değerlendirme</p>
           </div>
         </div>
 
@@ -389,7 +420,7 @@ function ReviewsSection({ reviews, page, onPage }) {
                 const count = data.scoreDistribution[star - 1] ?? 0
                 const pct = data.reviewCount ? (count / data.reviewCount) * 100 : 0
                 return (
-                  <div key={star} className="flex items-center gap-2 text-xs text-slate-500">
+                  <div key={star} className="flex items-center gap-2 text-xs text-slate-600">
                     <span className="w-5 shrink-0 tabular-nums">{star}★</span>
                     <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-200">
                       <div className="h-full rounded-full bg-amber-400" style={{ width: `${pct}%` }} />
@@ -430,7 +461,10 @@ function ReviewsSection({ reviews, page, onPage }) {
                 {review.reviewerDisplayName}
               </span>
               <Yildizlar deger={review.score} kucuk />
-              <span className="ml-auto text-xs text-slate-400">
+              {/* slate-400 → slate-500: 400 beyaz üzerinde 3.0:1 veriyor ve cam yüzeyde
+                  altından geçen zeminle birlikte iyice siliniyordu. 500 (4.76:1) hâlâ
+                  ikincil okunuyor ama AA'yı geçiyor. */}
+              <span className="ml-auto text-xs text-slate-600">
                 {formatDateTime(review.createdAtUtc)}
               </span>
             </div>
@@ -444,7 +478,7 @@ function ReviewsSection({ reviews, page, onPage }) {
               </p>
             )}
 
-            <p className="mt-1.5 text-xs text-slate-400">{review.topicName}</p>
+            <p className="mt-1.5 text-xs text-slate-600">{review.topicName}</p>
           </li>
         ))}
       </ul>
@@ -454,7 +488,7 @@ function ReviewsSection({ reviews, page, onPage }) {
           <Button variant="secondary" disabled={page <= 1} onClick={() => onPage(page - 1)}>
             ← Önceki
           </Button>
-          <span className="text-xs text-slate-500">
+          <span className="text-xs text-slate-600">
             {data.reviews.page} / {data.reviews.totalPages}
           </span>
           <Button
@@ -466,7 +500,7 @@ function ReviewsSection({ reviews, page, onPage }) {
           </Button>
         </div>
       )}
-    </Card>
+    </CamKart>
   )
 }
 

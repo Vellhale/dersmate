@@ -24,40 +24,63 @@ export default function Profile() {
 
   const isSelf = targetId === session?.userId
 
+  /*
+    ZEMİN "zengin" KİPTE. Profil bu üründeki vitrin sayfası: veri yoğun değil, tek bir
+    kişiyi anlatıyor ve ekranın büyük kısmı kartların ARASINDAKİ boşluk. O boşluk düz
+    slate-50 kaldığı sürece sayfa, içeriği ne kadar canlı olursa olsun steril duruyordu.
+
+    Önceki turda UserProfileView'ın içinde duran hafif brand-50 şerit KALDIRILDI (proje
+    sahibinin "ufak ve basit mavilik" dediği şey oydu): yalnızca üst 12 rem'i boyuyordu,
+    yani sayfanın geri kalanı yine bembeyazdı ve şerit bittiği yerde gözle görülür bir
+    kesme çizgisi bırakıyordu. SayfaZemini sayfanın tamamını kaplıyor, mesh havuzlarla
+    içeriden aydınlanıyor ve altta kendi kendine sönümleniyor — kesme yok.
+
+    ZEMİNİ BU SAYFA ÇİZMİYOR — Layout çiziyor (bkz. ZENGIN_ZEMIN_ROTALARI). İlk
+    uygulamada burada da bir SayfaZemini vardı ve Layout'unkiyle üst üste biniyordu:
+    iki ızgara tam örtüşünce çizgi opaklığı iki katına çıkıyordu.
+
+    Sarmalayıcıya `isolate` de KONMUYOR ve bu ölçülmüş bir karar: bu sayfadaki modallar
+    (AvatarPicker, profil düzenleme) portal kullanmıyor, `fixed inset-0 z-50` ile
+    burada çiziliyor. `isolate` bu kutuyu yığın bağlamına çevirdiğinde z-50 içeride
+    hapsoluyor ve dışarıdaki z-40 sticky üst bar modalın ÜSTÜNE çıkıyordu — perde barı
+    örtmüyor, bardaki menü ve çıkış tıklanabilir kalıyordu. Ayrıntı SayfaZemini.jsx'te.
+  */
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold text-slate-900">
-          {isSelf ? 'Profilim' : 'Profil'}
-        </h1>
+    <div>
+      <div className="space-y-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h1 className="text-2xl font-bold text-slate-900">
+            {isSelf ? 'Profilim' : 'Profil'}
+          </h1>
 
-        {isSelf && (
-          <div className="flex flex-wrap gap-2">
-            {/* hover'da marka tonu: ikincil buton normalde nötr kalır (birincilin
-                vurgusunu çalmasın) ama üzerine gelince "tıklanabilirim" der.
-                ui.jsx'e DOKUNULMADI — görünüm className ile ekleniyor; className,
-                variant sınıflarından sonra geldiği için hover'da kazanır. */}
-            <Button
-              variant="secondary"
-              className="hover:border-brand-300 hover:text-brand-700"
-              onClick={() => setDialog('avatar')}
-            >
-              Fotoğrafı değiştir
-            </Button>
-            {/* "Öğretmen adaylığı" düğmesi kaldırıldı: adaylık beyanı ve ona bağlı
-                gönüllü ders yetkisi üründen çıktı, herkes aynı yetkiye sahip. */}
-            <Button onClick={() => setDialog('edit')}>Profili düzenle</Button>
-          </div>
+          {isSelf && (
+            <div className="flex flex-wrap gap-2">
+              {/* hover'da marka tonu: ikincil buton normalde nötr kalır (birincilin
+                  vurgusunu çalmasın) ama üzerine gelince "tıklanabilirim" der.
+                  ui.jsx'e DOKUNULMADI — görünüm className ile ekleniyor; className,
+                  variant sınıflarından sonra geldiği için hover'da kazanır. */}
+              <Button
+                variant="secondary"
+                className="hover:border-brand-300 hover:text-brand-700"
+                onClick={() => setDialog('avatar')}
+              >
+                Fotoğrafı değiştir
+              </Button>
+              {/* "Öğretmen adaylığı" düğmesi kaldırıldı: adaylık beyanı ve ona bağlı
+                  gönüllü ders yetkisi üründen çıktı, herkes aynı yetkiye sahip. */}
+              <Button onClick={() => setDialog('edit')}>Profili düzenle</Button>
+            </div>
+          )}
+        </div>
+
+        {notice && (
+          <Notice tone="success" onDismiss={() => setNotice(null)}>
+            {notice}
+          </Notice>
         )}
+
+        <UserProfileView key={`${targetId}-${version}`} userId={targetId} />
       </div>
-
-      {notice && (
-        <Notice tone="success" onDismiss={() => setNotice(null)}>
-          {notice}
-        </Notice>
-      )}
-
-      <UserProfileView key={`${targetId}-${version}`} userId={targetId} />
 
       {isSelf && (
         <>

@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
 import { useAsync } from '../state/useAsync'
 import { formatDateTime } from '../lib/format'
-import { Badge, Button, Card, EmptyState, ErrorBox, Loading, Notice } from '../components/ui'
+import { Badge, Button, EmptyState, ErrorBox, Loading, Notice } from '../components/ui'
+import { CamKart } from '../components/SayfaZemini'
 import { PersonLink } from '../components/PersonLink'
 
 /*
@@ -75,7 +76,16 @@ export default function Matches() {
 
       {/* Mobilde ızgara: flex + flex-wrap, sekmeler tek satıra sığmayınca 2+1 gibi eğreti bir
           dizilim üretiyordu. grid-cols-3 üçünü de eşit böler ve düzen simetrik kalır. */}
-      <div className="grid shrink-0 grid-cols-3 gap-1 rounded-lg bg-slate-100 p-1 sm:flex">
+      {/* Şerit de bir kademe saydamlaştı (2026-08-25): opak slate-100, kabuğun yeni
+          zemininin üstünde tek parça gri bir blok gibi duruyordu. /70 + backdrop-blur
+          zeminin şeridin altından geçmesine izin veriyor, AKTİF sekme ise saf beyaz
+          kalıyor — seçili/seçili değil ayrımı taşıdığı tek görsel fark bu ve
+          zayıflatılmadı. Kenar `ring` ile veriliyor, `border` ile değil: border 2px
+          yükseklik ekler ve şerit sabit yükseklikli kabuğun (lg:h-calc) parçası. */}
+      <div
+        className="grid shrink-0 grid-cols-3 gap-1 rounded-lg bg-slate-100/70 p-1 ring-1
+                   ring-white/60 supports-[backdrop-filter]:backdrop-blur-md sm:flex"
+      >
         {TABS.map((item) => (
           <button
             key={item.key}
@@ -126,11 +136,18 @@ export default function Matches() {
         Zemin bir ton koyu (bg-slate-100/60): sayfa zemini ile beyaz kartlar arasına
         hiçbir şey konmayınca kartların ve panelin sınırı okunmuyordu. Sessions'taki
         Sutun ile aynı gerekçe, aynı ton.
+
+        PANEL KOYU KALIYOR, CAM OLMUYOR (2026-08-25). Kartlar CamKart'a geçti ve panel de
+        cam yapılsaydı cam üstünde cam olurdu: iki saydam yüzey üst üste binince kartın
+        kenarı panelin kenarından ayırt edilemez hâle geliyor — panelin tek işi ise o
+        sınırı çizmek. Tint yalnızca bir kademe açıldı (60 → 50) ve kenar slate yerine
+        beyaza döndü; böylece kabuğun zemini panelin altından okunuyor ama kartlar hâlâ
+        panelden AÇIK, panel de sayfadan KOYU kalıyor — üç kademe korunuyor.
       */}
       <div
         key={tab}
         className="kaydirma-ince min-h-0 flex-1 overflow-y-auto overscroll-contain rounded-2xl
-                   border border-slate-200/70 bg-slate-100/60 p-4"
+                   border border-white/70 bg-slate-100/50 p-4"
       >
         {matches.loading ? (
           <Loading />
@@ -223,8 +240,19 @@ function MatchCard({ match, tab, onChanged }) {
     }
   }
 
+  /*
+    CamKart (2026-08-25): eşleşme kartı listenin ana yüzeyi ve kabuktaki yeni zeminle
+    uyumlu olması gereken şey de bu. İçerideki onay kutusu (amber) ve ErrorBox opak
+    kaldı — ikisi de DİKKAT çağıran yüzeyler; saydamlaşınca kartın kendisinden ayrışmayı
+    bırakırlar, oysa "geri alınamaz" uyarısının kart zemininden ayrışması işin özü.
+
+    Kart içinde `position: fixed` bir şey YOK ve bu bir tesadüf değil, koşul: CamKart
+    backdrop-filter taşıyor ve backdrop-filter, fixed konumlu torunlar için kuşatan blok
+    üretir — buraya bir modal/perde konursa ekranın değil KARTIN içine hapsolur. Onay
+    adımının satır içi bir kutu olmasının (modal değil) bir sebebi daha var artık.
+  */
   return (
-    <Card>
+    <CamKart>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="flex flex-wrap items-center gap-2">
@@ -244,28 +272,28 @@ function MatchCard({ match, tab, onChanged }) {
           */}
           {match.requestedTopicName ? (
             <p className="mt-1.5 text-sm text-slate-600">
-              <span className="text-slate-500">
+              <span className="text-slate-600">
                 {match.iAmInitiator ? 'Almak istediğin:' : 'Senden istediği:'}
               </span>{' '}
               <strong>{match.requestedTopicName}</strong>
             </p>
           ) : (
             <p className="mt-1.5 text-sm text-slate-600">
-              <span className="text-slate-500">Üniversite ağı ·</span>{' '}
+              <span className="text-slate-600">Üniversite ağı ·</span>{' '}
               <strong>Sohbet isteği</strong>
             </p>
           )}
 
           {match.offeredTopicName && (
             <p className="text-sm text-slate-600">
-              <span className="text-slate-500">
+              <span className="text-slate-600">
                 {match.iAmInitiator ? 'Karşılığında anlatacağın:' : 'Karşılığında anlatacağı:'}
               </span>{' '}
               <strong>{match.offeredTopicName}</strong>
             </p>
           )}
 
-          <p className="mt-1 text-xs text-slate-500">{formatDateTime(match.createdAtUtc)}</p>
+          <p className="mt-1 text-xs text-slate-600">{formatDateTime(match.createdAtUtc)}</p>
         </div>
 
         <div className="flex shrink-0 flex-wrap gap-2">
@@ -326,6 +354,6 @@ function MatchCard({ match, tab, onChanged }) {
           <ErrorBox error={error} />
         </div>
       )}
-    </Card>
+    </CamKart>
   )
 }

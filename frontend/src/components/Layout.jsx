@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../state/AuthContext'
 import { useConsent } from '../state/ConsentContext'
 import { RAIL_KEY } from '../lib/consent'
@@ -10,6 +10,7 @@ import { CookieSettingsLink } from './CookieBanner'
 import { ProductTour, RestartTourLink } from './ProductTour'
 import { Avatar } from './Avatar'
 import { SeviyeRozeti } from './SeviyeRozeti'
+import { SayfaZemini } from './SayfaZemini'
 import {
   MenuIkonu,
   AramaIkonu,
@@ -72,6 +73,26 @@ const NAV = [
   bağlantısı var olmayan bir hesaba gidiyordu. Ad, href ile aynı satırda duruyor ki
   ikisi bir daha ayrışmasın: linki değiştiren, altındaki metni de görür.
 */
+/*
+  ZEMİN YOĞUNLUĞU ROTAYA GÖRE — ve zemin TEK YERDEN, buradan çiziliyor.
+
+  İlk uygulamada Profile ve Hakkımızda kendi SayfaZemini'lerini de çiziyordu; Layout
+  zaten her sayfaya bir zemin verdiği için iki ızgara üst üste biniyordu. 32px hücreler
+  tam örtüştüğü için çizgi opaklığı 0.06'dan ~0.12'ye çıkıyor, mesh havuzları da
+  toplanıyordu. Zemin artık yalnızca burada.
+
+  Rota listesi Layout'ta çünkü zemin kabuğun bir parçası: sayfa kendi arkasını
+  boyayamaz (mx-auto max-w-6xl bir şerit, zemin ise kabuğun tamamını kaplamalı).
+  Bunun bedeli küçük bir bağlılık — kabuk, iki rotanın adını biliyor. Alternatifi
+  (context + her sayfada bir efekt) yalnızca dekoratif bir tercih için taşınacak
+  yükten fazlaydı.
+
+  "Zengin" olanlar VİTRİN sayfaları: kullanıcı orada veri taramıyor, bakıyor. Veri
+  yoğun ekranlarda (Derslerim, Keşfet) zemin geri çekilir — orada dekor, okumanın
+  önüne geçmemeli.
+*/
+const ZENGIN_ZEMIN_ROTALARI = ['/profil', '/hakkimizda']
+
 const SOSYAL = [
   { ad: 'Instagram', kullanici: 'dersmate_', href: 'https://instagram.com/dersmate_', Ikon: InstagramIkonu },
   { ad: 'TikTok', kullanici: 'dersmate', href: 'https://tiktok.com/@dersmate', Ikon: TiktokIkonu },
@@ -108,6 +129,7 @@ export default function Layout() {
 function LayoutShell() {
   const { session, logout } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
   const [menuOpen, setMenuOpen] = useState(false)
 
   /*
@@ -163,6 +185,11 @@ function LayoutShell() {
     sessizce kopuyor.
   */
   const { unreadTotal } = useInbox()
+
+  // startsWith: /profil hem kendi profilini hem /profil/:userId'yi kapsıyor.
+  const zeminYogunlugu = ZENGIN_ZEMIN_ROTALARI.some((r) => location.pathname.startsWith(r))
+    ? 'zengin'
+    : 'hafif'
 
   const items = (
     session?.isAdmin ? [...NAV, { to: '/admin', label: 'Yönetim', Ikon: KalkanIkonu }] : NAV
@@ -410,7 +437,42 @@ function LayoutShell() {
           <AltKume dar={rayDar} />
         </aside>
 
-        <div className="min-w-0 flex-1">
+        {/*
+          SAYFA ZEMİNİ KABUKTA, SAYFALARDA DEĞİL (2026-08-25).
+
+          Zemin tek yerde duruyor çünkü her sayfa kendi kopyasını çizseydi: (a) sayfa
+          geçişlerinde zemin sökülüp yeniden kurulur, mesh lekeleri gözle görülür biçimde
+          "sıçrardı"; (b) desen id'si sayfa başına benzersiz tutulmak zorunda kalırdı —
+          SVG pattern id'leri BELGE genelinde tekil, çakışan iki id'de ilk desen
+          diğerinin yerine uygulanır.
+
+          Sarmalayıcı `<main>` değil onun ÜST kutusu: `<main>` mx-auto max-w-6xl, yani
+          geniş ekranda ortada bir şerit. Zemin oraya konsaydı ızgara ve lekeler o
+          şeritte kesilir, iki yanda çıplak slate-50 kalırdı — zemin, kabuğun içeriğe
+          ayırdığı alanın TAMAMINI kaplamalı. Altbilgi de bu kutunun içinde; zeminin
+          alt sönümlemesi (SayfaZemini'nin from-slate-50 geçişi) böylece gövde zeminine
+          bağlanıyor.
+
+          ⚠ `isolate` BİLEREK YOK — SayfaZemini'nin belgelediği "relative isolate"
+          kalıbından tek sapma, ve sebebi ölçülebilir:
+
+          Bu projede modal/perde bileşenleri PORTAL KULLANMIYOR (ui.jsx Modal,
+          CookieBanner, Avatar büyütme, FilterDrawer: hepsi `fixed inset-0 z-50` ile
+          bulundukları yerde çiziliyor). `isolation: isolate` bu kutuyu bir yığın
+          bağlamına çevirir ve içindeki z-50 O BAĞLAMIN İÇİNE hapsolur; dışarıda kalan
+          `<header>` ise z-40. Kök bağlamda karşılaştırma "header z-40" ile "bu kutu
+          z-auto" arasında yapılır, yani KOYU ÜST BAR MODALIN ÜSTÜNE ÇIKAR: 64px'lik
+          bar, ortalanmış modalın başlık satırını ve Kapat düğmesini örter.
+
+          İzolasyona burada gerek de yok: -z-10, ancak araya ZEMİNİ OLAN bir ata girerse
+          kaybolur. Zincirdeki hiçbir kutunun zemini yok (min-h-[100dvh] → lg:flex → bu
+          kutu) ve `body`nin bg-slate-50'si tuvale devrolduğu için negatif z katmanı onun
+          ÜSTÜNE boyanıyor. Buraya bir gün zemin sınıfı eklenirse zemin görünmez olur —
+          o zaman çözüm `isolate` değil, zemini taşıyan kutuyu ayırmaktır.
+        */}
+        <div className="relative min-w-0 flex-1">
+          <SayfaZemini yogunluk={zeminYogunlugu} desenId="dm-kabuk" />
+
           <main className="mx-auto max-w-6xl px-4 py-6">
             <Outlet />
           </main>

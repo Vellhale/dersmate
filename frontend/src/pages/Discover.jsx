@@ -2,8 +2,18 @@ import { useMemo, useState } from 'react'
 import { api } from '../lib/api'
 import { useAsync } from '../state/useAsync'
 import { useDebounced } from '../hooks/useDebounced'
+import { Avatar } from '../components/Avatar'
 import { FilterDrawer, FilterPanel, UniversiteFiltrePaneli } from '../components/FilterDrawer'
+import {
+  BinaIkonu,
+  KepIkonu,
+  KitapIkonu,
+  SaatIkonu,
+  TakasIkonu,
+  YildizIkonu,
+} from '../components/Ikonlar'
 import { PersonLink } from '../components/PersonLink'
+import { CamKart } from '../components/SayfaZemini'
 import { SeviyeRozeti } from '../components/SeviyeRozeti'
 import {
   Badge,
@@ -328,6 +338,88 @@ export default function Discover() {
   )
 }
 
+/*
+  ── KEŞFET KART DİLİ ─────────────────────────────────────────────────────────
+  Sayfada ÜÇ farklı kart var (öneri, ilan, üniversite) ve üçü de aynı soruyu
+  soruyor: "bu kişiyle ders yapar mıyım". Bu yüzden iskelet tek — avatar solda,
+  kimlik sağda, altında ayrıntı, en altta tam genişlikte aksiyon. Kartların ALAN
+  SETİ farklı (üniversite kartında konu yok, ilan kartında seviye rozeti yok);
+  ayrışan şey içerik, dil değil.
+
+  Aşağıdaki üç küçük bileşen o ortak dili tek yerde tutuyor: üç kart aynı satırı
+  üç kez elle yazsaydı biri diğerinden kayardı — bu sayfada tam olarak bu oldu ve
+  puan satırı iki kartta iki farklı biçimde basılıyordu.
+
+  AVATAR ÖNE ÇIKIYOR (size="lg", 80px): kart eskiden isim + küçük metinden ibaretti
+  ve on kart alt alta gelince ayırt edilemiyordu. Yüz, listede gözün ilk tutunduğu
+  şey. ring-2 ring-white + shadow-md, avatarı cam kartın yüzeyinden ayırıyor —
+  saydam zemin üstünde kenarlıksız bir fotoğraf karta "yapışık" duruyordu.
+*/
+
+/*
+  KART IZGARASI — üç liste de aynı kırılımları kullanıyor.
+
+  lg'de TEK SÜTUNA DÜŞÜYOR ve bu bir yazım hatası değil: filtre sütunu (260px) tam
+  lg'de görünür oluyor ve yanına iki kart sığdırınca kart 240px'e iniyor. O genişlikte
+  80px avatarın yanındaki kimlik sütunu ~100px kalıyor, isim iki satıra bölünüyor,
+  etiketler kırpılıyor. Ölçüldü: 1024–1280 bandında iki sütun, tek sütundan DAHA AZ
+  bilgi gösteriyor. xl'de yer yeniden yetiyor (kart ≈ 385px) ve iki sütuna dönülüyor.
+
+  md–lg arasında iki sütun kalabiliyor çünkü filtre sütunu orada gizli (çekmecede).
+*/
+const KART_IZGARASI = 'grid gap-4 md:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2'
+
+/** Kartların odak noktası. shrink-0 Avatar'ın kendisinden geliyor: dar ekranda
+    küçülen şey kimlik sütunu olmalı, yüz değil. */
+function KartAvatari({ userId, ad }) {
+  return <Avatar userId={userId} name={ad} size="lg" className="shadow-md ring-2 ring-white" />
+}
+
+/**
+ * Puan satırı — üç kartta da aynı.
+ *
+ * Rozet DEĞİL küçük satır: kimlik bloğundaki tek rozet vurgusu seviye rozetinde
+ * kalsın, iki rozet yan yana yarışmasın. Yıldız ikonu amber, sayı slate — renkli
+ * olan işaret, okunan şey metin.
+ *
+ * @param bosMetin  puanı olmayan kişide basılacak metin. Öneri kartında null:
+ *   orada "değerlendirilmemiş" satırı her yeni kullanıcıda tekrarlanıp listeyi
+ *   olumsuz bir tekrarla dolduruyordu. Üniversite kartında ise puan tek sinyal,
+ *   yokluğu da bilgi.
+ */
+function PuanSatiri({ ortalama, adet, bosMetin = null }) {
+  if (!(adet > 0)) {
+    return bosMetin ? <p className="mt-1.5 text-xs text-slate-600">{bosMetin}</p> : null
+  }
+
+  return (
+    <p className="mt-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-slate-600">
+      <YildizIkonu className="h-3.5 w-3.5 text-amber-500" />
+      <span className="font-semibold text-slate-700">{Number(ortalama).toFixed(1)}</span>
+      <span>({adet} değerlendirme)</span>
+    </p>
+  )
+}
+
+/**
+ * İkonlu etiket (pill).
+ *
+ * İkon 14px (h-3.5): rozet metni 12px ve ikon ondan büyük olursa etiketin ağırlık
+ * merkezi süse kayıyor. İkon burada dekor değil — konu mu, süre mi, bölüm mü
+ * olduğunu metni okumadan söylüyor.
+ *
+ * min-w-0 + truncate: uzun konu adı kartı yatay kaydırmaya sokmasın; pill satır
+ * sonunda sarmalanıyor, taşmıyor.
+ */
+function IkonluEtiket({ ikon: Ikon, tone = 'brand', className = '', children }) {
+  return (
+    <Badge tone={tone} className={`max-w-full gap-1.5 ${className}`}>
+      <Ikon className="h-3.5 w-3.5" />
+      <span className="min-w-0 truncate">{children}</span>
+    </Badge>
+  )
+}
+
 /**
  * Üniversite ağı sonuç listesi.
  *
@@ -353,7 +445,7 @@ function UniversiteSonuclari({ sonuclar, onSohbet, onSayfa }) {
         <>
           <SectionTitle>{veri.totalCount} öğrenci</SectionTitle>
 
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className={KART_IZGARASI}>
             {veri.items.map((kisi) => (
               <UniversiteKarti key={kisi.userId} kisi={kisi} onSohbet={onSohbet} />
             ))}
@@ -373,8 +465,9 @@ function UniversiteSonuclari({ sonuclar, onSohbet, onSayfa }) {
  * "Anlatabilir / öğrenmek istiyor" listeleri katalog verisinden gelir, bu uçta yoktur —
  * yer tutucu olarak konmaları boş kutular üretirdi.
  *
- * BÖLÜM VURGULU (font-medium text-slate-800), üniversite normal ağırlıkta: aranan şey
- * çoğunlukla bölüm, üniversite onu konumlandıran bağlam.
+ * BÖLÜM VURGULU (marka tonlu pill), üniversite düz metin satırı: aranan şey çoğunlukla
+ * bölüm, üniversite onu konumlandıran bağlam. Vurgu eskiden yalnızca font ağırlığıyla
+ * yapılıyordu ve iki satır yan yana konunca hangisinin ana bilgi olduğu okunmuyordu.
  *
  * 1–10 genel seviye rozeti BURADA DA VAR: seviye kişiye ait, konuya değil — üniversite
  * ağında da aynı anlamı taşıyor.
@@ -382,27 +475,47 @@ function UniversiteSonuclari({ sonuclar, onSohbet, onSayfa }) {
 function UniversiteKarti({ kisi, onSohbet }) {
   return (
     /* Hover dili öneri/arama kartlarıyla birebir aynı — gerekçesi Suggestions'ta. */
-    <Card className="flex flex-col justify-between transition hover:border-brand-200 hover:shadow-md">
+    <CamKart className="flex flex-col justify-between transition hover:border-brand-200 hover:shadow-md">
       <div>
-        {/* items-start: uzun bir isim iki satıra düştüğünde rozet ilk satırın hizasında
-            kalsın, ortalanıp aşağı kaymasın. */}
-        <div className="flex items-start justify-between gap-2">
-          <PersonLink userId={kisi.userId} className="font-semibold text-brand-700">
-            {kisi.displayName}
-          </PersonLink>
-          <SeviyeRozeti kaynak={{ level: kisi.level }} boyut="sm" ton="acik" />
+        {/* items-start: uzun bir isim iki satıra düştüğünde avatar ve rozet ilk satırın
+            hizasında kalsın, ortalanıp aşağı kaymasın. */}
+        <div className="flex items-start gap-4">
+          <KartAvatari userId={kisi.userId} ad={kisi.displayName} />
+
+          {/* min-w-0: flex çocuğunun varsayılan min-width'i "auto" ve uzun bir isim
+              sütunu kartın dışına itiyordu — truncate/wrap ancak bununla çalışır. */}
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <PersonLink userId={kisi.userId} className="font-semibold text-brand-700">
+                {kisi.displayName}
+              </PersonLink>
+              <SeviyeRozeti kaynak={{ level: kisi.level }} boyut="sm" ton="acik" />
+            </div>
+
+            {kisi.university && (
+              <p className="mt-1.5 flex items-center gap-1.5 text-sm text-slate-600">
+                <BinaIkonu className="h-3.5 w-3.5 shrink-0" />
+                <span className="min-w-0 truncate">{kisi.university}</span>
+              </p>
+            )}
+
+            <PuanSatiri
+              ortalama={kisi.averageRating}
+              adet={kisi.ratingCount}
+              bosMetin="Henüz değerlendirilmemiş"
+            />
+          </div>
         </div>
 
-        {kisi.university && <p className="mt-2 text-sm text-slate-600">{kisi.university}</p>}
+        {/* BÖLÜM PİLDE, üniversite düz satırda: aranan şey çoğunlukla bölüm, üniversite
+            onu konumlandıran bağlam. Vurgu eskiden font ağırlığındaydı; pill aynı sırayı
+            daha net söylüyor ve konu pilleriyle aynı dili konuşuyor.
+            KARTTA DERS/KONU YOK ve bu bilinçli — gerekçe bileşenin başında. */}
         {kisi.department && (
-          <p className="mt-0.5 text-sm font-medium text-slate-800">{kisi.department}</p>
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            <IkonluEtiket ikon={KepIkonu}>{kisi.department}</IkonluEtiket>
+          </div>
         )}
-
-        <p className="mt-2 text-xs text-slate-500">
-          {kisi.ratingCount > 0
-            ? `${Number(kisi.averageRating).toFixed(1)} ★ (${kisi.ratingCount} değerlendirme)`
-            : 'Henüz değerlendirilmemiş'}
-        </p>
       </div>
 
       <div className="mt-4">
@@ -410,7 +523,7 @@ function UniversiteKarti({ kisi, onSohbet }) {
           Sohbet isteği gönder
         </Button>
       </div>
-    </Card>
+    </CamKart>
   )
 }
 
@@ -498,51 +611,65 @@ function Suggestions({ suggestions, mySeekCount, portfolioLoading, onRequest }) 
           description="Almak istediğin konuları genişlet ya da yukarıdaki arama kutusundan katalogda ara."
         />
       ) : (
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className={KART_IZGARASI}>
+          {/* Öneri ve arama sonucu kartları AYNI hover dilini taşıyor (marka tonlu
+              kenarlık + koyulaşan gölge): iki mod tek sayfada yaşıyor, kartların
+              tepkisi mod değiştikçe farklılaşsaydı sayfa iki ayrı uygulama gibi
+              hissettirirdi. */}
           {suggestions.data.map((person) => (
-            /* Öneri ve arama sonucu kartları AYNI hover dilini taşıyor (marka tonlu
-               kenarlık + koyulaşan gölge): iki mod tek sayfada yaşıyor, kartların
-               tepkisi mod değiştikçe farklılaşsaydı sayfa iki ayrı uygulama gibi
-               hissettirirdi. */
-            <Card
+            <CamKart
               key={person.userId}
               className="flex flex-col justify-between transition hover:border-brand-200 hover:shadow-md"
             >
               <div>
-                {/* Kart hiyerarşisi: kimlik üstte (isim + seviye rozeti + puan), bio
-                    altında, konular sonra, aksiyon en altta — göz önce kişiyi tanısın.
-                    items-start: uzun isim ikinci satıra düşerse rozet ilk satırın
-                    hizasında kalsın (UniversiteKarti ile aynı gerekçe). */}
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <PersonLink userId={person.userId} className="font-semibold text-brand-700">
-                      {person.displayName}
-                    </PersonLink>
-                    {/* Gönüllülük rozeti kaldırıldı: gönüllü ders kavramı yok, herkes eşit. */}
-                    {person.isCrossMatch && <Badge tone="success">Karşılıklı takas</Badge>}
+                {/* Kart hiyerarşisi: avatar + kimlik üstte (isim + seviye rozeti + puan),
+                    bio altında, konular sonra, aksiyon en altta — göz önce kişiyi tanısın.
+                    items-start: uzun isim ikinci satıra düşerse avatar ve rozet ilk
+                    satırın hizasında kalsın (UniversiteKarti ile aynı gerekçe). */}
+                <div className="flex items-start gap-4">
+                  <KartAvatari userId={person.userId} ad={person.displayName} />
+
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <PersonLink userId={person.userId} className="font-semibold text-brand-700">
+                        {person.displayName}
+                      </PersonLink>
+                      <SeviyeRozeti kaynak={{ level: person.level }} boyut="sm" ton="acik" />
+                    </div>
+
+                    <PuanSatiri ortalama={person.averageRating} adet={person.ratingCount} />
                   </div>
-                  <SeviyeRozeti kaynak={{ level: person.level }} boyut="sm" ton="acik" />
                 </div>
 
-                {/* Puan rozet değil küçük satır: kimlik bloğunda tek vurgu rozette
-                    kalsın, iki rozet yan yana yarışmasın. */}
-                {person.ratingCount > 0 && (
-                  <p className="mt-1 text-xs text-slate-500">
-                    {Number(person.averageRating).toFixed(1)} ★ ({person.ratingCount})
-                  </p>
+                {/* Gönüllülük rozeti kaldırıldı: gönüllü ders kavramı yok, herkes eşit.
+                    Takas etiketi kimlik SÜTUNUNUN DIŞINDA, kartın tam genişliğinde: avatarın
+                    yanındaki sütun dar kartlarda ~100px'e iniyor ve etiket orada "Karşılıklı…"
+                    diye kırpılıyordu. Kırpılmış bir etiket bilgi vermez; tam satır verir. */}
+                {person.isCrossMatch && (
+                  <div className="mt-3">
+                    <IkonluEtiket ikon={TakasIkonu} tone="success">
+                      Karşılıklı takas
+                    </IkonluEtiket>
+                  </div>
                 )}
 
                 {/* bio null ise satır TAMAMEN düşer — boş çizgi kalmasın. */}
                 {person.bio && (
-                  <p className="mt-2 line-clamp-2 text-sm text-slate-600">{person.bio}</p>
+                  <p className="mt-3 line-clamp-2 text-sm text-slate-600">{person.bio}</p>
                 )}
 
-                <TopicList title="Sana anlatabilir" tone="brand" topics={person.theyCanTeach} />
+                <TopicList
+                  title="Sana anlatabilir"
+                  tone="brand"
+                  ikon={KepIkonu}
+                  topics={person.theyCanTeach}
+                />
 
                 {person.theyWantToLearn?.length > 0 && (
                   <TopicList
                     title="Senden öğrenmek istiyor"
                     tone="success"
+                    ikon={KitapIkonu}
                     topics={person.theyWantToLearn}
                   />
                 )}
@@ -553,7 +680,7 @@ function Suggestions({ suggestions, mySeekCount, portfolioLoading, onRequest }) 
                   Eşleşme isteği gönder
                 </Button>
               </div>
-            </Card>
+            </CamKart>
           ))}
         </div>
       )}
@@ -584,42 +711,56 @@ function SearchResults({ results, onRequest, onClearFilters, onPage }) {
         <>
           <SectionTitle>{data.totalCount} ilan</SectionTitle>
 
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className={KART_IZGARASI}>
+            {/* Öneri kartlarıyla birebir aynı hover — gerekçesi Suggestions'ta. */}
             {data.items.map((offer) => (
-              /* Öneri kartlarıyla birebir aynı hover — gerekçesi Suggestions'ta. */
-              <Card
+              <CamKart
                 key={offer.offerId}
                 className="flex flex-col justify-between transition hover:border-brand-200 hover:shadow-md"
               >
                 <div>
-                  {/* Öneri kartıyla aynı kimlik hiyerarşisi (kimlik → bio → konu):
+                  {/* Öneri kartıyla aynı kimlik hiyerarşisi (avatar + kimlik → bio → konu):
                       iki mod tek sayfada yaşıyor, kart dili moda göre ayrışmasın.
                       Puan bu yüzden rozetten küçük satıra taşındı; "Yeni" rozeti
-                      puanın yokluğunu söylediği için isim satırında kalıyor. */}
-                  <div className="flex flex-wrap items-center gap-2">
-                    <PersonLink userId={offer.tutorUserId} className="font-semibold text-brand-700">
-                      {offer.tutorDisplayName}
-                    </PersonLink>
-                    {offer.tutorRatingCount === 0 && <Badge tone="neutral">Yeni</Badge>}
-                  </div>
+                      puanın yokluğunu söylediği için isim satırında kalıyor.
+                      SEVİYE ROZETİ YOK: arama ucu ilanı döndürüyor, eğitmenin genel
+                      seviyesini değil — yer tutucu bir rozet olmayan veriyi uydururdu. */}
+                  <div className="flex items-start gap-4">
+                    <KartAvatari userId={offer.tutorUserId} ad={offer.tutorDisplayName} />
 
-                  {offer.tutorRatingCount > 0 && (
-                    <p className="mt-1 text-xs text-slate-500">
-                      {Number(offer.tutorAverageRating).toFixed(1)} ★ ({offer.tutorRatingCount})
-                    </p>
-                  )}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                        <PersonLink
+                          userId={offer.tutorUserId}
+                          className="font-semibold text-brand-700"
+                        >
+                          {offer.tutorDisplayName}
+                        </PersonLink>
+                        {offer.tutorRatingCount === 0 && <Badge tone="neutral">Yeni</Badge>}
+                      </div>
+
+                      <PuanSatiri
+                        ortalama={offer.tutorAverageRating}
+                        adet={offer.tutorRatingCount}
+                      />
+                    </div>
+                  </div>
 
                   {/* tutorBio null ise satır TAMAMEN düşer (öneri kartıyla aynı biçim). */}
                   {offer.tutorBio && (
-                    <p className="mt-2 line-clamp-2 text-sm text-slate-600">{offer.tutorBio}</p>
+                    <p className="mt-3 line-clamp-2 text-sm text-slate-600">{offer.tutorBio}</p>
                   )}
 
                   <div className="mt-3">
-                    <Badge tone="brand">{offer.topicName}</Badge>
-                    {/* Süre rozeti artık koşulsuz: gönüllülük ayrımı kalktı, her ilan
-                        aynı iki süre seçeneğiyle açılıyor. */}
-                    <Badge tone="neutral" className="ml-1.5">30 / 60 dk</Badge>
-                    <p className="mt-1.5 text-xs text-slate-500">
+                    <div className="flex flex-wrap gap-1.5">
+                      <IkonluEtiket ikon={KepIkonu}>{offer.topicName}</IkonluEtiket>
+                      {/* Süre etiketi artık koşulsuz: gönüllülük ayrımı kalktı, her ilan
+                          aynı iki süre seçeneğiyle açılıyor. */}
+                      <IkonluEtiket ikon={SaatIkonu} tone="neutral">
+                        30 / 60 dk
+                      </IkonluEtiket>
+                    </div>
+                    <p className="mt-2 text-xs text-slate-600">
                       {offer.categoryName} · {offer.subjectName} · seviye{' '}
                       {offer.selfAssessedLevel}/5
                     </p>
@@ -657,7 +798,7 @@ function SearchResults({ results, onRequest, onClearFilters, onPage }) {
                     Eşleşme isteği gönder
                   </Button>
                 </div>
-              </Card>
+              </CamKart>
             ))}
           </div>
 
@@ -670,7 +811,7 @@ function SearchResults({ results, onRequest, onClearFilters, onPage }) {
               >
                 ← Önceki
               </Button>
-              <span className="text-sm text-slate-500">
+              <span className="text-sm text-slate-600">
                 {data.page} / {data.totalPages}
               </span>
               <Button
@@ -688,18 +829,33 @@ function SearchResults({ results, onRequest, onClearFilters, onPage }) {
   )
 }
 
-function TopicList({ title, tone, topics }) {
+/**
+ * Konu listesi — başlık + pill'ler.
+ *
+ * BAŞLIK DA İKONLU: "Sana anlatabilir" ile "Senden öğrenmek istiyor" iki küçük büyük
+ * harfli satır olarak neredeyse aynı görünüyordu ve yön (kim kime anlatıyor) ancak
+ * okununca ayrılıyordu. Kep = anlatan taraf, kitap = öğrenen taraf; aynı ikon listenin
+ * içindeki pill'lerde de tekrar ediyor, yani yön pill'e bakınca da belli.
+ *
+ * @param ikon  hem başlıkta hem pill'lerde kullanılan tek ikon. Başlıkla pill'in farklı
+ *   ikon taşıması listeyi iki ayrı şey gibi gösterirdi.
+ */
+function TopicList({ title, tone, ikon, topics }) {
   if (!topics?.length) return null
+  const Ikon = ikon
   return (
     <div className="mt-3">
-      <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{title}</p>
+      <p className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-slate-600">
+        <Ikon className="h-3.5 w-3.5" />
+        {title}
+      </p>
       <div className="mt-1.5 flex flex-wrap gap-1.5">
         {/* Tek ton: konu başına gönüllülük işareti kalktı, hepsi aynı ağırlıkta. */}
         {topics.map((topic) => (
-          <Badge key={topic.topicId} tone={tone}>
+          <IkonluEtiket key={topic.topicId} ikon={ikon} tone={tone}>
             {topic.topicName}
             <span className="ml-1 opacity-70">· {topic.subjectName}</span>
-          </Badge>
+          </IkonluEtiket>
         ))}
       </div>
     </div>
