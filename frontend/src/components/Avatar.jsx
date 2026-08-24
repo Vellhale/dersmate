@@ -59,10 +59,25 @@ function useAvatarUrl(userId) {
   return url
 }
 
+/*
+  Küçük boyutlar YUVARLATILMIŞ KARE, xl ise TAM DAİRE — ve bu tutarsızlık değil, ölçek
+  farkı. Liste satırlarında kare avatar hizalanması kolay bir blok; profil başlığında
+  ise avatar tek başına duran bir portre ve orada daire, kareye göre daha az yer
+  kaplayıp daha çok yüz gösteriyor. Instagram'dan Slack'e kadar bu ayrım aynı.
+*/
 const SIZES = {
   sm: 'h-8 w-8 text-xs rounded-lg',
   md: 'h-12 w-12 text-sm rounded-xl',
   lg: 'h-20 w-20 text-2xl rounded-2xl',
+  xl: 'h-28 w-28 text-4xl rounded-full sm:h-32 sm:w-32',
+}
+
+/** Karartma katmanının köşesi. SIZES ile aynı anahtarlar — bkz. Avatar içindeki not. */
+const KOSELER = {
+  sm: 'rounded-lg',
+  md: 'rounded-xl',
+  lg: 'rounded-2xl',
+  xl: 'rounded-full',
 }
 
 /**
@@ -111,10 +126,16 @@ export function Avatar({ userId, name, size = 'md', className = '', buyutulebili
           hiç fark etmiyordu. Karartma + simge yalnızca hover/odakta çıkıyor, yani
           normal görünümü kirletmiyor.
         */}
+        {/*
+          Köşe yarıçapı AYRI TABLODAN okunuyor. Eskiden `SIZES[size].split(' ').pop()`
+          ile son sınıf alınıyordu; xl'e duyarlı sınıf (`sm:w-32`) eklenince o hile
+          sessizce yanlış sınıfı seçti ve karartma katmanı kare çıktı. Sınıf dizisinin
+          SIRASINA bağlı kod, diziye bir şey eklenince bozulur.
+        */}
         <span
           className={`pointer-events-none absolute inset-0 grid place-items-center bg-slate-900/45
                       text-white opacity-0 transition group-hover:opacity-100
-                      group-focus-visible:opacity-100 ${SIZES[size].split(' ').pop()}`}
+                      group-focus-visible:opacity-100 ${KOSELER[size] ?? 'rounded-xl'}`}
           aria-hidden="true"
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-1/3 w-1/3">

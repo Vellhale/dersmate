@@ -41,8 +41,10 @@ export function UserProfileView({ userId }) {
 
   return (
     <div className="space-y-6">
+      {/* StatsRow KALDIRILDI: dört ayrı sayaç kartı, profil kartının İÇİNDEKİ tek
+          şeride indi (bkz. SayacSeridi). Yüzey sayısı beşten ikiye düştü ve sayfa bir
+          gösterge paneli değil, bir kişi gibi okunmaya başladı. */}
       <ProfileHeader profile={p} />
-      <StatsRow profile={p} />
 
       {/* Branş rozetleri istatistiklerin hemen altında: ikisi de "bu kişi ne yapmış"
           sorusunu yanıtlıyor, konu panellerinden ("ne yapabilir") önce gelmeli.
@@ -70,101 +72,123 @@ export function UserProfileView({ userId }) {
 }
 
 /**
- * KOMPAKT PROFİL KARTI.
+ * PROFİL BAŞLIĞI — Instagram düzeni.
  *
- * Önceki hâlde 80 piksellik dekoratif bir bant, taşan bir avatar ve altında ayrı bir
- * rozet duvarı vardı; kart tek başına ekranın yarısını yiyordu ve asıl bilgi (bu kişi
- * ne anlatıyor, ne kadar deneyimli) kaydırma gerektiriyordu. Bant kaldırıldı, avatar
- * satır içine alındı ve seviye doğrudan adın yanına taşındı — profilin ilk ekranında
- * artık karar için gereken her şey var.
+ * ─────────────────────────────────────────────────────────────────────────────
+ * ÜÇÜNCÜ HÂLİ (2026-08-24). Önce dekoratif bir bant + taşan avatar + rozet duvarı
+ * vardı; kart ekranın yarısını yiyordu. Sonra hepsi tek satıra indirildi: 48px avatar,
+ * yanında ad, altında dört ayrı sayaç kartı. O hâl kompakttı ama profil olmaktan
+ * çıkmıştı — kullanıcının kendisi, sayfadaki en küçük öğeydi.
+ *
+ * Şimdiki düzen sıralamayı tersine çeviriyor: ÖNCE KİŞİ, sonra sayılar.
+ *   • Avatar 112–128px ve tek başına duran ilk şey. Tıklanınca tam ekran açılıyor.
+ *   • Hemen altında ad + seviye, sonra okul, sonra biyografi.
+ *   • Sayaçlar dört ayrı karttan çıkıp AYNI kartın içinde tek bir şeride indi.
+ *
+ * DÖRT KART NEDEN KALDIRILDI: her biri kendi kenarlığı, gölgesi ve dolgusuyla ayrı bir
+ * yüzeydi; profil sayfası "bir kişi" değil "bir gösterge paneli" gibi okunuyordu. Aynı
+ * dört sayı tek şeritte, ince ayraçlarla, kartın içinde duruyor — bilgi kaybı yok,
+ * yüzey sayısı dörtten bire indi.
+ *
+ * DAR EKRANDA ORTALI, GENİŞTE SOLA YASLI: mobilde ortalanmış bir portre doğal
+ * (Instagram da öyle yapıyor), masaüstünde ise ortalamak satırları sayfanın ortasında
+ * asılı bırakıyor ve okuma başlangıcı her satırda kayıyor.
+ * ─────────────────────────────────────────────────────────────────────────────
  */
 function ProfileHeader({ profile }) {
   return (
-    <Card className="p-4 sm:p-5">
-      <div className="flex items-start gap-4">
+    <Card className="p-6 text-center sm:p-8 sm:text-left">
+      <div className="flex flex-col items-center gap-5 sm:flex-row sm:items-start sm:gap-7">
         {/*
           avatarUrl bir DEPO ANAHTARI, gezinilebilir bir adres değil — doğrudan <img src>
           olarak verilemez. Avatar bileşeni görseli yetkili uçtan blob olarak çeker ve
           önbelleğe alır; fotoğraf yoksa baş harflere düşer.
+
+          ring-4 + ring-white + gölge: portreyi zeminden ayıran ince bir halka. Kartın
+          kendisi zaten beyaz olduğu için halka görünmüyor, gölgeyi taşıyor.
         */}
         <Avatar
           userId={profile.userId}
           name={profile.displayName}
-          size="md"
+          size="xl"
           buyutulebilir
-          className="shrink-0 shadow-sm ring-2 ring-white"
+          className="shrink-0 shadow-lg ring-4 ring-white"
         />
 
         <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            <h1 className="truncate text-lg font-bold text-slate-900 sm:text-xl">
+          <div className="flex flex-wrap items-center justify-center gap-x-2.5 gap-y-1.5 sm:justify-start">
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900">
               {profile.displayName}
             </h1>
-            {/*
-              Üst bardaki rozetle AYNI bileşen ama küçük/açık varyantı: burada rozet
-              başlık değil, başlığa iliştirilen bir nitelik. Dolgun varyant 20px’lik
-              ismin yanında onu eziyordu (bkz. SeviyeRozeti.jsx).
-            */}
+            {/* Üst bardaki rozetle AYNI bileşen, küçük/açık varyantı: burada rozet
+                başlık değil, başlığa iliştirilen bir nitelik (bkz. SeviyeRozeti.jsx). */}
             <SeviyeRozeti kaynak={profile} boyut="sm" ton="acik" className="shrink-0" />
           </div>
 
+          {/* OKUL SATIRI: adın hemen altında ve marka renginde değil nötr — kimlik
+              bilgisi, vurgu değil. Biri boşsa ayraç da düşüyor. */}
           {(profile.university || profile.department) && (
-            <p className="mt-0.5 truncate text-sm text-slate-600">
+            <p className="mt-1.5 text-sm font-medium text-slate-500">
               {[profile.university, profile.department].filter(Boolean).join(' · ')}
             </p>
           )}
 
+          {/* BİYOGRAFİ: profilin tek serbest metni, o yüzden en okunur tipografi
+              buranın. leading-relaxed + max-w-prose: satır uzunluğu göz için sınırlı,
+              kart genişlese bile metin okunur kalıyor. */}
           {profile.bio && (
-            <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-slate-700">
+            <p className="mx-auto mt-3 max-w-prose whitespace-pre-wrap text-[15px] leading-relaxed text-slate-700 sm:mx-0">
               {profile.bio}
             </p>
           )}
+
+          <SayacSeridi profile={profile} />
         </div>
       </div>
-
-      {/* Öğretmen adaylığı kutusu kaldırıldı: adaylık kavramı üründen çıktı, profilde
-          kullanıcıları ikiye ayıran bir işaret kalmadı. */}
     </Card>
   )
 }
 
-function StatsRow({ profile }) {
-  /*
-    "Deneyim / 0 dk" alanı kaldırıldı ve yerine SEVİYE geldi.
-
-    O alan yeni hesaplarda her zaman "0 dk" yazıyordu — profile giren ilk kişiye
-    söylediği tek şey "bu kullanıcı hiçbir şey yapmamış" oluyordu. Seviye aynı yeri
-    kullanır ama en baştan anlamlı bir şey söyler.
-
-    İLERLEME SATIRI SUNUCUDAN: "sonraki seviyeye X puan" hesabı `nextLevelAt` üzerinden
-    yapılıyor (bkz. lib/seviye.js). Eşikler istemciye kopyalanmıyor — kopyalansaydı
-    sunucudaki tablo değiştiğinde profil eski hedefi göstermeye devam ederdi.
-  */
-  const items = [
+/**
+ * Sayaç şeridi — dört ayrı kartın yerine tek satır.
+ *
+ * "Deneyim / 0 dk" alanı bir zamanlar buradaydı ve yeni hesaplarda her zaman "0 dk"
+ * yazıyordu: profile giren ilk kişiye söylediği tek şey "bu kullanıcı hiçbir şey
+ * yapmamış" oluyordu. Seviye aynı yeri kullanır ama en baştan anlamlı bir şey söyler.
+ *
+ * İLERLEME SATIRI SUNUCUDAN: "sonraki seviyeye X puan" hesabı `nextLevelAt` üzerinden
+ * yapılıyor (bkz. lib/seviye.js). Eşikler istemciye kopyalanmıyor — kopyalansaydı
+ * sunucudaki tablo değiştiğinde profil eski hedefi göstermeye devam ederdi.
+ *
+ * IZGARA, SARAN FLEX DEĞİL. İlk hâl `flex flex-wrap` idi ve dört kalem üç + bir olarak
+ * sarıyordu: dördüncü sayaç ("2026 katılım") tek başına alt satırda, hizasız duruyordu.
+ * Izgara sarma kararını tarayıcıya bırakmıyor — dar ekranda 2×2, sm üstünde tek satır.
+ * Dikey ayraç da yalnızca tek satıra düştüğü boyutta açılıyor; 2×2 düzende ayraçlar
+ * ızgaranın ortasında havada kalırdı.
+ */
+function SayacSeridi({ profile }) {
+  const kalemler = [
+    { deger: profile.taughtSessionCount, etiket: 'ders anlattı' },
     {
-      label: 'Puan',
-      value: profile.ratingCount > 0 ? `${Number(profile.averageRating).toFixed(1)} ★` : '—',
-      hint: profile.ratingCount > 0 ? `${profile.ratingCount} değerlendirme` : 'Henüz puan yok',
+      deger: profile.ratingCount > 0 ? `${Number(profile.averageRating).toFixed(1)} ★` : '—',
+      etiket: profile.ratingCount > 0 ? `${profile.ratingCount} değerlendirme` : 'değerlendirme yok',
     },
-    { label: 'Anlatılan ders', value: profile.taughtSessionCount, hint: 'Tamamlanmış' },
-    {
-      label: 'Seviye',
-      value: seviyeEtiketi(seviyeHesapla(profile)),
-      hint: seviyeIlerlemeMetni(profile),
-    },
-    { label: 'Üyelik', value: new Date(profile.joinedAtUtc).getFullYear(), hint: 'Katılım yılı' },
+    { deger: seviyeEtiketi(seviyeHesapla(profile)), etiket: seviyeIlerlemeMetni(profile) },
+    { deger: new Date(profile.joinedAtUtc).getFullYear(), etiket: 'katılım' },
   ]
 
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-      {items.map((item) => (
-        <Card key={item.label} className="p-4">
-          <p className="text-xs text-slate-500">{item.label}</p>
-          <p className="mt-0.5 text-2xl font-bold text-slate-900">{item.value}</p>
-          <p className="mt-0.5 text-xs text-slate-500">{item.hint}</p>
-        </Card>
+    <dl className="mt-5 grid grid-cols-2 gap-x-4 gap-y-4 border-t border-slate-100 pt-4 sm:grid-cols-4 sm:divide-x sm:divide-slate-100">
+      {kalemler.map((k, i) => (
+        <div key={k.etiket} className={i > 0 ? 'sm:pl-4' : ''}>
+          <dt className="sr-only">{k.etiket}</dt>
+          <dd>
+            <span className="block text-lg font-bold leading-tight text-slate-900">{k.deger}</span>
+            <span className="mt-0.5 block text-xs leading-snug text-slate-500">{k.etiket}</span>
+          </dd>
+        </div>
       ))}
-    </div>
+    </dl>
   )
 }
 

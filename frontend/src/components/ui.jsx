@@ -35,9 +35,30 @@ export function Button({ variant = 'primary', className = '', loading = false, c
     gölge  shadow-sm → shadow-md: kenarlık zayıflayınca kartı zeminden ayıran iş gölgeye
            geçiyor. İkisini birden zayıflatmak kartları düz bir yamaya çevirirdi.
 */
+/**
+ * Uygulamanın tek yüzey dili.
+ *
+ * 2026-08-24'te üç değer birden değişti ve üçü de aynı şikâyete bakıyor: arayüz "ruhsuz
+ * ve amatör" duruyordu.
+ *
+ *   shadow-md → shadow-sm   Ağır gölge tek bir kartta iyi görünüyor, on kart alt alta
+ *                           gelince ekran kabartmalı bir duvara dönüşüyordu. Derinlik
+ *                           kartın kendisinden değil, kartın zeminden AYRILMASINDAN
+ *                           gelir; slate-50 zemin üstünde ince bir gölge yeter.
+ *   rounded-xl → rounded-2xl  12px → 16px. Modern uygulama dilinde köşe yarıçapı,
+ *                           yüzeyin "dokunulabilir bir nesne" olduğunu söyleyen ilk
+ *                           işaret. 12px hâlâ "kutu", 16px "kart".
+ *   border-slate-200/80 → border-slate-100  Kenarlık kartı çevrelemeli, çizmemeli.
+ *                           Daha açık kenarlıkla gölge öne çıkıyor ve kart zeminden
+ *                           gölgeyle ayrılıyor — kenarlıkla değil.
+ *
+ * Buradaki her değer TÜM uygulamaya yayılıyor: dersler, yorumlar, profil, panel. Tek
+ * yerde durmasının sebebi bu — yüzey dili bir bileşende yaşamazsa her sayfada biraz
+ * farklı olur ve "amatör" hissi tam olarak o farklardan doğar.
+ */
 export function Card({ className = '', children }) {
   return (
-    <div className={`rounded-xl border border-slate-200/80 bg-white p-5 shadow-md ${className}`}>
+    <div className={`rounded-2xl border border-slate-100 bg-white p-5 shadow-sm ${className}`}>
       {children}
     </div>
   )
