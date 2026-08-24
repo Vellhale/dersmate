@@ -5,7 +5,6 @@ import { formatDateTime } from '../lib/format'
 import { Avatar } from './Avatar'
 import { Badge, Button, Card, EmptyState, ErrorBox, Loading } from './ui'
 import { SubjectBadges } from './SubjectBadges'
-import { SeviyeRozeti } from './SeviyeRozeti'
 import { seviyeEtiketi, seviyeHesapla, seviyeIlerlemeMetni } from '../lib/seviye'
 
 /**
@@ -116,14 +115,21 @@ function ProfileHeader({ profile }) {
         />
 
         <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center justify-center gap-x-2.5 gap-y-1.5 sm:justify-start">
-            <h1 className="text-2xl font-bold tracking-tight text-slate-900">
-              {profile.displayName}
-            </h1>
-            {/* Üst bardaki rozetle AYNI bileşen, küçük/açık varyantı: burada rozet
-                başlık değil, başlığa iliştirilen bir nitelik (bkz. SeviyeRozeti.jsx). */}
-            <SeviyeRozeti kaynak={profile} boyut="sm" ton="acik" className="shrink-0" />
-          </div>
+          {/*
+            ADIN YANINDAKİ SEVİYE ROZETİ KALDIRILDI (2026-08-24).
+
+            Aynı bilgi bu ekranda ÜÇ kez duruyordu: üst barda (her sayfada görünen rozet),
+            adın yanında ve hemen altındaki sayaç şeridinde ("8. Seviye · 4300 puan ·
+            sonraki seviyeye 1200"). Üçünden yalnızca sayaç şeridi bir şey EKLİYOR —
+            seviyenin kaçıncı olduğunu, puanı ve sonraki eşiğe kalanı birlikte söylüyor.
+            Adın yanındaki rozet aynı sayıyı üçüncü kez tekrarlıyor, üstelik en az bilgiyle.
+
+            Tekrar zararsız değil: başlık satırı ad + rozet + (dar ekranda) sarma taşıyor
+            ve rozet, adın kendisiyle vurgu yarışına giriyordu.
+          */}
+          <h1 className="text-center text-2xl font-bold tracking-tight text-slate-900 sm:text-left">
+            {profile.displayName}
+          </h1>
 
           {/* OKUL SATIRI: adın hemen altında ve marka renginde değil nötr — kimlik
               bilgisi, vurgu değil. Biri boşsa ayraç da düşüyor. */}
