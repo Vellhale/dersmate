@@ -749,7 +749,27 @@ function SessionCard({ session, onAction, past = false }) {
           kalmadığında rozetleri ALT SATIRA itiyor — başlık okunur kalıyor.
         */}
         <div className="min-w-0 grow basis-48">
-          <h3 className="truncate text-base font-semibold text-slate-900">{session.topicName}</h3>
+          {/*
+            MOBİLDE KIRPMA DEĞİL SARMA (2026-08-24).
+
+            `truncate` her boyutta tek satıra zorluyordu. Telefonda sütun 272px'e
+            düşüyor ve kartın EN ÖNEMLİ bilgisi ortadan kesiliyordu: "Geometrik
+            Kavramlar (Nokta, Doğr…" — parantez açılıp kapanmadığı için hangi konu
+            olduğu okunmuyordu bile.
+
+            `line-clamp-2` iki satıra izin verir, üçüncüde yine üç nokta koyar; yani
+            kart yüksekliği en uzun konu adında bile kontrolden çıkmaz. sm üstünde
+            sütun genişliyor ve tek satır zaten yetiyor — orada tekrar tek satıra iniyor,
+            liste ritmi bozulmasın diye.
+
+            sm'de `truncate` DEĞİL `line-clamp-1`: truncate `white-space:nowrap` yazıyor,
+            line-clamp ise `display:-webkit-box` — ikisi üst üste binince tek satır iki
+            farklı mekanizmayla kurulur ve davranış tarayıcıya kalır. Aynı mekanizmanın
+            iki değeri, tanımı belirsizliğe bırakmıyor.
+          */}
+          <h3 className="line-clamp-2 text-base font-semibold text-slate-900 sm:line-clamp-1">
+            {session.topicName}
+          </h3>
           <p className="mt-0.5 truncate text-sm text-slate-600">
             <PersonLink userId={session.otherUserId} className="font-medium text-brand-700">
               {session.otherDisplayName}
