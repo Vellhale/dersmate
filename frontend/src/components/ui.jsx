@@ -133,7 +133,12 @@ export function Field({ label, hint, children }) {
   )
 }
 
-export function Modal({ open, title, onClose, children, footer }) {
+/**
+ * @param genis  içeriği iki sütuna yayılan modaller için (max-w-lg → max-w-2xl).
+ *   Varsayılan DAR bırakıldı: metin ve tek sütunlu formlar geniş kutuda okunması zor
+ *   satırlara dönüşüyor. Genişlik bir seçenek, varsayılan değil.
+ */
+export function Modal({ open, title, onClose, children, footer, genis = false }) {
   useEffect(() => {
     if (!open) return
     const onKey = (e) => e.key === 'Escape' && onClose()
@@ -148,7 +153,11 @@ export function Modal({ open, title, onClose, children, footer }) {
       {/* max-h-[90dvh]: mobilde modal ekranı asla aşamaz. dvh (vh değil) çünkü mobil
           tarayıcının adres çubuğu vh'ye dahil edilmez ve alt kısım kırpılırdı —
           kaydırılamayan bir "Kaydet" düğmesi demek olurdu. */}
-      <div className="flex max-h-[90dvh] w-full max-w-lg flex-col rounded-xl bg-white shadow-xl">
+      <div
+        className={`flex max-h-[90dvh] w-full flex-col rounded-xl bg-white shadow-xl ${
+          genis ? 'max-w-2xl' : 'max-w-lg'
+        }`}
+      >
         <div className="flex shrink-0 items-center justify-between border-b border-slate-200 px-5 py-3">
           <h3 className="font-semibold text-slate-800">{title}</h3>
           <button
