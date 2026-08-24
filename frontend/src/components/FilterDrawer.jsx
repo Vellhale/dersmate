@@ -115,25 +115,8 @@ export function FilterPanel({
         display={value.minRating ? `★ ${value.minRating} ve üzeri` : 'Hepsi'}
       />
 
-      {/*
-        Gönüllülük filtresi aralık değil AÇIK/KAPALI: iki durumlu bir nitelik
-        (eğitmen puan kazanıyor ya da kazanmıyor). Kaydırıcı yanlış bir zihinsel
-        model kurardı. Öğrenci her iki durumda da ücret ödemez.
-      */}
-      <label className="flex min-h-11 cursor-pointer items-start gap-3 rounded-lg border border-slate-200/80 p-3 lg:min-h-0">
-        <input
-          type="checkbox"
-          className="mt-0.5 accent-brand-600"
-          checked={Boolean(value.onlyVolunteer)}
-          onChange={(e) => set({ onlyVolunteer: e.target.checked })}
-        />
-        <span className="text-sm text-slate-700">
-          🤝 Yalnızca gönüllü dersler
-          <span className="block text-xs text-slate-500">
-            Eğitmenin puan kazanmadan, gönüllü olarak anlattığı dersler.
-          </span>
-        </span>
-      </label>
+      {/* Gönüllülük onay kutusu kaldırıldı: ilanlar arasında böyle bir ayrım kalmadı,
+          filtrelenecek bir nitelik de yok. */}
 
       <div className="flex items-center justify-between gap-3 border-t border-slate-200/80 pt-4">
         <span className="text-sm text-slate-500">

@@ -22,7 +22,6 @@ const DEFAULT_FILTERS = {
   sort: 'Relevance',
   minLevel: null,
   minRating: null,
-  onlyVolunteer: false,
   page: 1,
   pageSize: 20,
 }
@@ -51,7 +50,6 @@ export default function Discover() {
     filters.categoryId !== null ||
     filters.minLevel !== null ||
     filters.minRating !== null ||
-    filters.onlyVolunteer ||
     filters.sort !== DEFAULT_FILTERS.sort
 
   const searchMode = debouncedTerm.trim().length > 0 || filtersTouched
@@ -72,7 +70,6 @@ export default function Discover() {
       filters.sort,
       filters.minLevel,
       filters.minRating,
-      filters.onlyVolunteer,
       filters.page,
     ],
   )
@@ -83,7 +80,6 @@ export default function Discover() {
   const activeFilterCount = useMemo(
     () =>
       [filters.categoryId, filters.minLevel, filters.minRating].filter((v) => v !== null).length +
-      (filters.onlyVolunteer ? 1 : 0) +
       (filters.sort !== DEFAULT_FILTERS.sort ? 1 : 0),
     [filters],
   )
@@ -214,9 +210,7 @@ function Suggestions({ suggestions, mySeekCount, portfolioLoading, onRequest }) 
                   <PersonLink userId={person.userId} className="font-semibold text-brand-700">
                     {person.displayName}
                   </PersonLink>
-                  {person.theyCanTeach?.some((t) => t.isVolunteer) && (
-                    <Badge tone="success">🤝 Gönüllü ders</Badge>
-                  )}
+                  {/* Gönüllülük rozeti kaldırıldı: gönüllü ders kavramı yok, herkes eşit. */}
                   {person.isCrossMatch && <Badge tone="success">Karşılıklı takas</Badge>}
                   {person.ratingCount > 0 && (
                     <Badge tone="neutral">
@@ -291,13 +285,9 @@ function SearchResults({ results, onRequest, onClearFilters, onPage }) {
 
                   <div className="mt-3">
                     <Badge tone="brand">{offer.topicName}</Badge>
-                    {/* Gönüllülük rozeti: öğrenciye bir bedel anlatmıyor (ders zaten
-                        ücretsiz), eğitmenin bu dersten puan kazanmadığını söylüyor. */}
-                    {offer.isVolunteer ? (
-                      <Badge tone="success" className="ml-1.5">🤝 Gönüllü ders</Badge>
-                    ) : (
-                      <Badge tone="neutral" className="ml-1.5">30 / 60 dk</Badge>
-                    )}
+                    {/* Süre rozeti artık koşulsuz: gönüllülük ayrımı kalktı, her ilan
+                        aynı iki süre seçeneğiyle açılıyor. */}
+                    <Badge tone="neutral" className="ml-1.5">30 / 60 dk</Badge>
                     <p className="mt-1.5 text-xs text-slate-500">
                       {offer.categoryName} · {offer.subjectName} · seviye{' '}
                       {offer.selfAssessedLevel}/5
@@ -373,13 +363,11 @@ function TopicList({ title, tone, topics }) {
     <div className="mt-3">
       <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{title}</p>
       <div className="mt-1.5 flex flex-wrap gap-1.5">
+        {/* Tek ton: konu başına gönüllülük işareti kalktı, hepsi aynı ağırlıkta. */}
         {topics.map((topic) => (
-          <Badge key={topic.topicId} tone={topic.isVolunteer ? 'success' : tone}>
+          <Badge key={topic.topicId} tone={tone}>
             {topic.topicName}
             <span className="ml-1 opacity-70">· {topic.subjectName}</span>
-            {/* Ücret bilgisi konunun yanında: hangi konunun ücretsiz olduğu kart
-                düzeyinde bir rozetle anlaşılmıyor (kişi birden çok konu anlatabilir). */}
-            {topic.isVolunteer && <span className="ml-1" title="Gönüllü ders">🤝</span>}
           </Badge>
         ))}
       </div>
