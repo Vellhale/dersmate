@@ -1,6 +1,7 @@
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using PeerLearn.Application.Abstractions;
+using PeerLearn.Domain.Community;
 using PeerLearn.Domain.Identity;
 using PeerLearn.Domain.Matchmaking;
 
@@ -17,9 +18,20 @@ namespace PeerLearn.Application.Features.Matchmaking;
 public sealed record GetMatchSuggestionsQuery(Guid UserId, int Limit = 20)
     : IRequest<IReadOnlyList<MatchSuggestionDto>>;
 
+/// <param name="Bio">
+/// Kullanıcının kendi tanıtım cümlesi. Kartta gösterilir — Keşfet kartı yalnızca konu
+/// listesi taşıyordu ve kişiler birbirinden ayırt edilemiyordu; bio, karta kimlik verir.
+/// Girilmemişse null: arayüz satırı tamamen düşürür, boş bir çizgi bırakmaz.
+/// </param>
+/// <param name="Level">
+/// Genel seviye (1-10). Krediden türer, veritabanında saklanmaz — bellekte hesaplanır
+/// (UserLevelRules; EF bu fonksiyonu SQL'e çeviremez, projeksiyon içinde çağrılamaz).
+/// </param>
 public sealed record MatchSuggestionDto(
     Guid UserId,
     string DisplayName,
+    string? Bio,
+    int Level,
     decimal AverageRating,
     int RatingCount,
     bool IsCrossMatch,
@@ -98,6 +110,8 @@ public sealed class GetMatchSuggestionsHandler
                 {
                     offer.UserId,
                     user.DisplayName,
+                    user.Bio,
+                    user.TotalEarnedCredits,
                     user.AverageRating,
                     user.RatingCount,
                     offer.TopicId,
@@ -136,10 +150,13 @@ public sealed class GetMatchSuggestionsHandler
         var reciprocalByUser = reciprocal.ToLookup(r => r.UserId);
 
         return candidates
-            .GroupBy(c => new { c.UserId, c.DisplayName, c.AverageRating, c.RatingCount })
+            .GroupBy(c => new { c.UserId, c.DisplayName, c.Bio, c.TotalEarnedCredits, c.AverageRating, c.RatingCount })
             .Select(g => new MatchSuggestionDto(
                 g.Key.UserId,
                 g.Key.DisplayName,
+                g.Key.Bio,
+                // Seviye burada, bellekte: gruplamadan sonra kişi başına BİR kez hesaplanır.
+                UserLevelRules.Hesapla(g.Key.TotalEarnedCredits).Level,
                 g.Key.AverageRating,
                 g.Key.RatingCount,
                 IsCrossMatch: reciprocalByUser[g.Key.UserId].Any(),

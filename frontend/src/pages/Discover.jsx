@@ -509,18 +509,33 @@ function Suggestions({ suggestions, mySeekCount, portfolioLoading, onRequest }) 
               className="flex flex-col justify-between transition hover:border-brand-200 hover:shadow-md"
             >
               <div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <PersonLink userId={person.userId} className="font-semibold text-brand-700">
-                    {person.displayName}
-                  </PersonLink>
-                  {/* Gönüllülük rozeti kaldırıldı: gönüllü ders kavramı yok, herkes eşit. */}
-                  {person.isCrossMatch && <Badge tone="success">Karşılıklı takas</Badge>}
-                  {person.ratingCount > 0 && (
-                    <Badge tone="neutral">
-                      ★ {Number(person.averageRating).toFixed(1)} ({person.ratingCount})
-                    </Badge>
-                  )}
+                {/* Kart hiyerarşisi: kimlik üstte (isim + seviye rozeti + puan), bio
+                    altında, konular sonra, aksiyon en altta — göz önce kişiyi tanısın.
+                    items-start: uzun isim ikinci satıra düşerse rozet ilk satırın
+                    hizasında kalsın (UniversiteKarti ile aynı gerekçe). */}
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <PersonLink userId={person.userId} className="font-semibold text-brand-700">
+                      {person.displayName}
+                    </PersonLink>
+                    {/* Gönüllülük rozeti kaldırıldı: gönüllü ders kavramı yok, herkes eşit. */}
+                    {person.isCrossMatch && <Badge tone="success">Karşılıklı takas</Badge>}
+                  </div>
+                  <SeviyeRozeti kaynak={{ level: person.level }} boyut="sm" ton="acik" />
                 </div>
+
+                {/* Puan rozet değil küçük satır: kimlik bloğunda tek vurgu rozette
+                    kalsın, iki rozet yan yana yarışmasın. */}
+                {person.ratingCount > 0 && (
+                  <p className="mt-1 text-xs text-slate-500">
+                    {Number(person.averageRating).toFixed(1)} ★ ({person.ratingCount})
+                  </p>
+                )}
+
+                {/* bio null ise satır TAMAMEN düşer — boş çizgi kalmasın. */}
+                {person.bio && (
+                  <p className="mt-2 line-clamp-2 text-sm text-slate-600">{person.bio}</p>
+                )}
 
                 <TopicList title="Sana anlatabilir" tone="brand" topics={person.theyCanTeach} />
 
@@ -577,18 +592,27 @@ function SearchResults({ results, onRequest, onClearFilters, onPage }) {
                 className="flex flex-col justify-between transition hover:border-brand-200 hover:shadow-md"
               >
                 <div>
+                  {/* Öneri kartıyla aynı kimlik hiyerarşisi (kimlik → bio → konu):
+                      iki mod tek sayfada yaşıyor, kart dili moda göre ayrışmasın.
+                      Puan bu yüzden rozetten küçük satıra taşındı; "Yeni" rozeti
+                      puanın yokluğunu söylediği için isim satırında kalıyor. */}
                   <div className="flex flex-wrap items-center gap-2">
                     <PersonLink userId={offer.tutorUserId} className="font-semibold text-brand-700">
                       {offer.tutorDisplayName}
                     </PersonLink>
-                    {offer.tutorRatingCount > 0 ? (
-                      <Badge tone="neutral">
-                        ★ {Number(offer.tutorAverageRating).toFixed(1)} ({offer.tutorRatingCount})
-                      </Badge>
-                    ) : (
-                      <Badge tone="neutral">Yeni</Badge>
-                    )}
+                    {offer.tutorRatingCount === 0 && <Badge tone="neutral">Yeni</Badge>}
                   </div>
+
+                  {offer.tutorRatingCount > 0 && (
+                    <p className="mt-1 text-xs text-slate-500">
+                      {Number(offer.tutorAverageRating).toFixed(1)} ★ ({offer.tutorRatingCount})
+                    </p>
+                  )}
+
+                  {/* tutorBio null ise satır TAMAMEN düşer (öneri kartıyla aynı biçim). */}
+                  {offer.tutorBio && (
+                    <p className="mt-2 line-clamp-2 text-sm text-slate-600">{offer.tutorBio}</p>
+                  )}
 
                   <div className="mt-3">
                     <Badge tone="brand">{offer.topicName}</Badge>
