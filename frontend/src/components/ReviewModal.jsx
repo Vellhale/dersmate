@@ -80,11 +80,8 @@ export function ReviewModal({ session, open, onClose, onSubmitted }) {
           <p className="mt-0.5 font-semibold text-slate-900">
             {session?.topicName} · {session?.otherDisplayName}
           </p>
-          {session?.isVolunteer && (
-            <span className="mt-2 inline-flex rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-700">
-              🤝 Gönüllü ders
-            </span>
-          )}
+          {/* Gönüllü ders rozeti kaldırıldı: değerlendirilen ders her durumda aynı ders,
+              rozet burada yalnızca bir ayrım hatırlatıyordu. */}
         </div>
 
         {SCORE_FIELDS.map((field) => (
