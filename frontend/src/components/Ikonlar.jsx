@@ -196,3 +196,22 @@ export function ArtanIkonu(props) {
     </Cizgi>
   )
 }
+
+/** Onay: daire içinde tik. Güvence listelerinde madde işareti olarak kullanılıyor. */
+export function OnayIkonu(props) {
+  return (
+    <Cizgi {...props}>
+      <circle cx="12" cy="12" r="9" /><path d="m8.5 12 2.5 2.5 4.5-5" />
+    </Cizgi>
+  )
+}
+
+/** Kanıt/güven: kalkan içinde tik. "Her ders kanıtla kapanır" maddesi için. */
+export function KanitIkonu(props) {
+  return (
+    <Cizgi {...props}>
+      <path d="M12 3l7 3v5.5c0 4.3-2.9 8.3-7 9.5-4.1-1.2-7-5.2-7-9.5V6z" />
+      <path d="m9 12 2 2 4-4" />
+    </Cizgi>
+  )
+}

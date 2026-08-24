@@ -1,49 +1,45 @@
+import { Link } from 'react-router-dom'
 import { Logo } from '../components/Logo'
 import {
   ArtanIkonu,
   CuzdansizIkonu,
-  EtiketsizIkonu,
   HedefIkonu,
+  KanitIkonu,
+  KisilerIkonu,
+  OnayIkonu,
   UfukIkonu,
 } from '../components/Ikonlar'
 
 /*
-  HAKKIMIZDA — düz metin değil, kutucuklu bir sunum sayfası.
+  HAKKIMIZDA — yumuşak zeminli, kartlı sunum sayfası.
 
-  Sayfa iki aşama geçirdi. Önce tek bir Card'ın içinde üç paragraftı; uygulamanın geri
-  kalanıyla aynı yüzey dilini konuşuyordu (aynı kenarlık, aynı gölge, aynı 15px metin) ve
-  bir liste ekranından ayırt edilemiyordu. Sonra kart kaldırıldı, tipografi büyütüldü —
-  okunurluk düzeldi ama sayfa bu kez DÜZ METNE dönüştü: iki paragraf yan yana, aralarında
-  hiçbir görsel işaret yok. "Kurumsal" ile "cansız" arasındaki fark tam olarak burada.
+  Sayfa üç aşama geçirdi. Önce tek bir Card içinde üç paragraftı ve bir liste ekranından
+  ayırt edilemiyordu. Sonra kart kaldırıldı, tipografi büyüdü — okunurluk düzeldi ama
+  sayfa DÜZ METNE dönüştü. Şimdiki hâl referans tasarımın diline uyarlandı: ferah bir
+  gradyan zemin, üstünde beyaz ve yuvarlak köşeli kartlar.
 
-  ŞİMDİ: her fikir kendi kutusunda, kendi ikonuyla. Gerekçe süs değil tarama davranışı —
-  bu sayfaya gelen kişi baştan sona okumuyor, GÖZ GEZDİRİYOR. İkon + başlık ikilisi,
-  paragrafı okumadan önce "burada ne var" sorusunu yanıtlıyor; metin ancak ilgi çektiğinde
-  okunuyor.
+  ZEMİN NEDEN MENTOL DEĞİL MARKA MAVİSİ: referans görselde zemin mentol yeşiline
+  çalıyor, ama bu ürünün paleti mavi (brand-*). Zemini birebir kopyalamak sayfayı
+  uygulamanın geri kalanından koparırdı — alınan şey RENK değil YÖNTEM: doygunluğu
+  düşük, yukarıdan aşağı sönen tek renkli bir gradyan. Aynı etki, kendi paletimizle.
 
-  ÜÇ BÖLÜM, ÜÇ İŞ:
-    1. Açılış      — ürünün tek cümlelik tanımı, en büyük punto.
-    2. Misyon & Vizyon — bugün ne yaptığımız / neye doğru gittiğimiz. İki kutu.
-    3. Güvence şeridi  — "ücretli mi?" sorusunun cevabı. Üç küçük kutu.
+  Gradyan `-mx-4` ile <main> dolgusunun dışına taşıyor: kart kenarında biten bir zemin,
+  zemin gibi değil kutu gibi okunur.
 
-  Güvence şeridi ayrı tutuldu çünkü kullanıcı bu sayfaya çoğu zaman bir SORUYLA geliyor,
-  manifesto okumaya değil. Paragrafın içine gömülü bir güvence uzun metinde kaybolur;
-  şerit hâlinde taranarak bulunur.
+  ÜÇ KART, TEK IZGARA. Referanstaki üçlü düzen korundu: Misyon, Vizyon, Topluluk.
+  Üçüncüsü doldurma değil — bu ürünün taşıyıcı fikri akranlık ve o fikrin misyon/vizyon
+  ikilisinde yeri yok; ikisi de "biz ne yapıyoruz" derken topluluk "bunu kim yapıyor"
+  diyor.
 
-  HOVER EFEKTİ SADECE KUTULARDA ve ölçülü: kenarlık markaya döner, gölge bir kademe
-  artar, kutu 1 piksel yükselir. Daha fazlası (renk dolgusu, büyüme, dönme) bir bilgi
-  sayfasında dikkat dağıtır — burada tıklanacak bir şey yok, hareket yalnızca sayfanın
-  canlı olduğunu söylüyor.
-
-  Ölçü sınırı max-w-5xl: kutular yan yana sığsın ama satır uzunluğu ~70 karakteri
-  geçmesin. Okunabilirlik sınırı kaldırılmadı, yalnızca ızgaraya uyarlandı.
+  HOVER ÖLÇÜLÜ: kenarlık markaya döner, gölge bir kademe artar, kutu 1px yükselir.
+  Daha fazlası (renk dolgusu, büyüme, dönme) bir bilgi sayfasında dikkat dağıtır —
+  burada tıklanacak bir şey yok, hareket yalnızca sayfanın canlı olduğunu söylüyor.
 */
 
 const DEGERLER = [
   {
     Ikon: HedefIkonu,
     baslik: 'Misyonumuz',
-    ozet: 'Anlatarak öğrenmeyi herkesin erişebileceği bir şey yapmak.',
     metin:
       'Bir konuyu gerçekten öğrenmenin en kısa yolu onu birine anlatmaktır. dersmate, ' +
       'öğrencilerin bildiklerini anlatarak öğrendiği, eksiklerini bir akranından ' +
@@ -52,19 +48,54 @@ const DEGERLER = [
   {
     Ikon: UfukIkonu,
     baslik: 'Vizyonumuz',
-    ozet: 'Sorusunu soracak birini bulamadığı için eksik kalan öğrenci olmasın.',
     metin:
       'Hiçbir öğrencinin bir konuyu, sırf sorusunu soracak birini bulamadığı için ' +
       'eksik bırakmadığı bir öğrenme ağı. Bugün YKS müfredatıyla başlıyoruz; hedef, ' +
       'her öğrencinin hem öğrenci hem öğretmen olabildiği bir topluluk.',
   },
+  {
+    Ikon: KisilerIkonu,
+    baslik: 'Topluluğumuz',
+    metin:
+      'Öğretmen yok, akran var. Anlatan da öğrenen de aynı sıralarda; bu yüzden sorular ' +
+      'çekinmeden soruluyor, cevaplar aynı dilden geliyor. Her ders iki kişiyi birden ' +
+      'ilerletiyor.',
+  },
 ]
 
+/*
+  ─────────────────────────────────────────────────────────────────────────────
+  "NASIL İŞLİYOR" MADDELERİ — biri kaldırıldı, biri eklendi (2026-08-24).
+
+  KALDIRILAN: "Ders almak ücretsiz". Proje sahibinin tespiti: "Para transferi yok"
+  maddesiyle aynı yeri kaplıyordu. İkisi teknik olarak farklı şeyler söylüyor (ücretsiz
+  olmak ile kullanıcılar arasında para dolaşmaması aynı iddia değil) ama okuyan için
+  ayrımı yok — üç maddelik bir şeritte iki madde aynı soruyu yanıtlıyordu.
+
+  ⚠️ EKLENEN MADDENİN METNİ İSTENENDEN FARKLI ve gerekçesi şu:
+
+  İstenen metin "ders aldıkça kredi harcarsın" diyordu. Sistem bunu YAPMIYOR.
+  CLAUDE.md'nin kuralı açık: "Öğrenci ders almak için hiçbir şey ödemez… Tek bacaklı
+  işlem — escrow/bloke kredi mekanizması kaldırıldı, geri getirme." Kod da öyle:
+  CreditLedgerService yalnızca anlatana puan BASIYOR, öğrenciden hiçbir şey düşmüyor
+  (bkz. Features/Scheduling/ApproveSession.cs).
+
+  Yani o cümle ekranda dururken kullanıcı, var olmayan bir mekanizmaya göre karar
+  verirdi: "kredim biterse ders alamam" diye ders almaktan çekinmek gibi. Bir güvence
+  şeridinin yapabileceği en kötü şey, güvence diye yanlış bilgi vermek.
+
+  Bu yüzden madde ADIYLA duruyor (kredi sistemi / adil takas) ama açıklaması gerçek
+  mekanizmayı anlatıyor. Ekonomi bir gün çift bacaklıya çevrilirse değişecek tek yer
+  bu metin.
+  ─────────────────────────────────────────────────────────────────────────────
+*/
 const GUVENCELER = [
   {
-    Ikon: EtiketsizIkonu,
-    baslik: 'Ders almak ücretsiz',
-    metin: 'Ders alan öğrenci hiçbir şey ödemez. Hiçbir koşulda.',
+    Ikon: ArtanIkonu,
+    baslik: 'Kredi sistemiyle adil takas',
+    metin:
+      'Anlattığın her ders puana dönüşür ve seviyeni yükseltir. Aldığın ders için ' +
+      'kimseye bir şey ödemezsin — takas para üzerinden değil, emek üzerinden.',
   },
   {
     Ikon: CuzdansizIkonu,
@@ -72,90 +103,125 @@ const GUVENCELER = [
     metin: 'Kimse kimseye ödeme yapmaz. Platformda para dolaşmaz.',
   },
   {
-    Ikon: ArtanIkonu,
-    baslik: 'Puan anlatana yazılır',
-    metin: 'Anlatan öğrenci puan kazanır; puan harcanmaz, seviyeni yükseltir.',
+    Ikon: KanitIkonu,
+    baslik: 'Doğrulanmış dersler',
+    metin: 'Her ders kanıtla kapanır; değerlendirmeler yalnızca gerçek derslerden gelir.',
   },
 ]
 
+const VAATLER = ['Akran öğrenmesi', 'Puanla ilerleme', 'Doğrulanmış dersler']
+
 export default function Hakkimizda() {
   return (
-    <div className="mx-auto max-w-5xl pb-10">
-      {/* ── AÇILIŞ ──────────────────────────────────────────────────────────── */}
-      <header className="pb-10">
-        <Logo boyut="lg" />
-        <h1 className="mt-6 max-w-3xl text-3xl font-bold leading-tight tracking-tight text-slate-900 sm:text-4xl">
-          Öğrencilerin birbirine ders anlattığı yer.
-        </h1>
-        <p className="mt-4 max-w-2xl text-lg leading-relaxed text-slate-600">
-          İyi bildiğin konuyu anlatırsın, eksik olduğun konuda başka bir öğrenciden ders
-          alırsın. Sınıfın en doğal hâli — çevrimiçi, ücretsiz ve akranlar arasında.
-        </p>
-      </header>
+    /*
+      Zemin gradyanı: brand-50 → slate-50 → saydam. Üç durak, çünkü iki duraklı bir
+      geçiş sayfanın ortasında keskin bir çizgi bırakıyordu. `-mx-4 px-4` ile <main>
+      dolgusunun dışına taşıyor, `-mt-6` ile de üst boşluğu yiyor — zemin sayfanın
+      tepesinden başlamalı, içeriğin başladığı yerden değil.
 
-      {/* ── MİSYON & VİZYON ─────────────────────────────────────────────────── */}
-      <div className="grid gap-4 sm:grid-cols-2 sm:gap-5">
-        {DEGERLER.map(({ Ikon, baslik, ozet, metin }) => (
-          <article
-            key={baslik}
-            className="group rounded-2xl border border-slate-200/80 bg-white p-6 shadow-sm
-                       transition duration-200 hover:-translate-y-0.5 hover:border-brand-300
-                       hover:shadow-lg sm:p-7"
-          >
-            {/*
-              İkon kutusu: marka tonlu, yumuşak köşeli bir kare. Hover'da zemin bir
-              kademe koyulaşıyor ve ikon beyaza dönüyor — kutunun tamamı tek bir öğe
-              gibi tepki veriyor, ikon ayrı bir şey gibi durmuyor.
-            */}
-            <span
-              className="grid h-12 w-12 place-items-center rounded-xl bg-brand-50 text-brand-600
-                         ring-1 ring-inset ring-brand-100 transition duration-200
-                         group-hover:bg-brand-600 group-hover:text-white group-hover:ring-brand-600"
-            >
-              <Ikon className="h-6 w-6" />
-            </span>
+      ⚠️ NEGATİF KENAR BOŞLUĞU <main>'İN DOLGUSUYLA BİREBİR AYNI OLMALI. İlk yazımda
+      `sm:-mx-8` vardı ama Layout.jsx'teki <main> her boyutta `px-4` kullanıyor (8 değil).
+      Sonuç: sm üstünde zemin sağa 16px taşıyordu ve SAYFA YATAY KAYIYORDU — tarayıcıda
+      ölçüldü (scrollWidth 705 / clientWidth 689). Tam kanama yapan her düzenin klasik
+      tuzağı: taşma solda görünmez (negatif konum kaydırma üretmez), sağda üretir.
+    */
+    <div className="-mx-4 -mt-6 bg-gradient-to-b from-brand-50 via-slate-50 to-transparent px-4 pb-12 pt-10">
+      <div className="mx-auto max-w-5xl">
+        {/* ── AÇILIŞ ────────────────────────────────────────────────────────── */}
+        <header>
+          <Logo boyut="lg" />
+          <h1 className="mt-6 text-4xl font-bold tracking-tight text-slate-900 sm:text-5xl">
+            Hakkımızda
+          </h1>
+          <p className="mt-4 max-w-2xl text-lg leading-relaxed text-slate-600">
+            dersmate, öğrencilerin birbirine ders anlattığı bir akran öğrenme
+            platformudur. İyi bildiğin konuyu anlatır, eksik olduğun konuda başka bir
+            öğrenciden ders alırsın.
+          </p>
+        </header>
 
-            <h2 className="mt-5 text-xl font-semibold tracking-tight text-slate-900">{baslik}</h2>
-
-            {/* ÖZET CÜMLE başlığın hemen altında ve marka renginde: tarayan göz için
-                paragrafın tek satırlık karşılığı. Paragraf, ilgi çektiyse okunuyor. */}
-            <p className="mt-2 text-[15px] font-medium leading-snug text-brand-700">{ozet}</p>
-
-            <p className="mt-3 text-[15px] leading-relaxed text-slate-600">{metin}</p>
-          </article>
-        ))}
-      </div>
-
-      {/* ── GÜVENCE ŞERİDİ ──────────────────────────────────────────────────── */}
-      <section className="mt-10">
-        <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-          Nasıl işliyor
-        </h2>
-
-        <div className="mt-4 grid gap-3 sm:grid-cols-3">
-          {GUVENCELER.map(({ Ikon, baslik, metin }) => (
-            <div
+        {/* ── MİSYON / VİZYON / TOPLULUK ────────────────────────────────────── */}
+        <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          {DEGERLER.map(({ Ikon, baslik, metin }) => (
+            <article
               key={baslik}
-              className="flex items-start gap-3 rounded-xl border border-slate-200/80 bg-white p-4
-                         shadow-sm transition duration-200 hover:border-brand-300 hover:shadow-md"
+              className="group rounded-2xl border border-slate-100 bg-white p-6 shadow-sm
+                         transition duration-200 hover:-translate-y-0.5 hover:border-brand-200
+                         hover:shadow-lg sm:p-7"
             >
-              <span className="mt-0.5 shrink-0 text-brand-600">
+              {/* İkon kutusu hover'da doluyor: kutunun tamamı tek bir öğe gibi tepki
+                  veriyor, ikon ayrı bir şey gibi durmuyor. */}
+              <span
+                className="grid h-11 w-11 place-items-center rounded-xl bg-brand-50 text-brand-600
+                           ring-1 ring-inset ring-brand-100 transition duration-200
+                           group-hover:bg-brand-600 group-hover:text-white group-hover:ring-brand-600"
+              >
                 <Ikon className="h-5 w-5" />
               </span>
-              <div className="min-w-0">
-                <p className="text-sm font-semibold text-slate-900">{baslik}</p>
-                <p className="mt-1 text-sm leading-relaxed text-slate-600">{metin}</p>
-              </div>
-            </div>
+
+              <h2 className="mt-6 text-xl font-semibold tracking-tight text-slate-900">{baslik}</h2>
+              <p className="mt-3 text-[15px] leading-relaxed text-slate-600">{metin}</p>
+            </article>
           ))}
         </div>
-      </section>
 
-      {/* Kapanış: sayfanın tezi, tek cümlede. Kutu yok — burada duracak bir şey değil,
-          okunup geçilecek bir cümle. */}
-      <p className="mt-10 border-t border-slate-200 pt-8 text-center text-sm italic text-slate-500">
-        Bir konuyu anlatabiliyorsan, onu gerçekten öğrenmişsindir.
-      </p>
+        {/* ── GENİŞ KART: NASIL İŞLİYOR ─────────────────────────────────────── */}
+        <section className="mt-6 rounded-2xl border border-slate-100 bg-white p-6 shadow-sm sm:p-8">
+          <div className="flex flex-wrap items-start justify-between gap-6">
+            <div className="min-w-0">
+              <p className="flex items-center gap-2 text-sm font-medium text-slate-500">
+                <ArtanIkonu className="h-4 w-4 text-brand-600" />
+                Nasıl işliyor
+              </p>
+              <h2 className="mt-2 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+                Anlat, öğren, ilerle
+              </h2>
+
+              {/* Vaat şeridi: tek satırlık, tik işaretli. Detay aşağıdaki üç kutuda —
+                  burası "tarayarak geçen" göz için. */}
+              <ul className="mt-5 flex flex-wrap gap-x-6 gap-y-2">
+                {VAATLER.map((v) => (
+                  <li key={v} className="flex items-center gap-2 text-sm text-slate-600">
+                    <OnayIkonu className="h-4 w-4 text-emerald-500" />
+                    {v}
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <Link
+              to="/kesfet"
+              className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-xl border
+                         border-slate-200 bg-white px-5 text-sm font-semibold text-slate-800
+                         shadow-sm transition hover:border-brand-300 hover:bg-brand-50
+                         hover:text-brand-800"
+            >
+              Keşfet’e göz at
+              <span aria-hidden="true">→</span>
+            </Link>
+          </div>
+
+          <div className="mt-8 grid gap-4 border-t border-slate-100 pt-6 sm:grid-cols-3">
+            {GUVENCELER.map(({ Ikon, baslik, metin }) => (
+              <div key={baslik} className="flex items-start gap-3">
+                <span className="mt-0.5 shrink-0 text-brand-600">
+                  <Ikon className="h-5 w-5" />
+                </span>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-slate-900">{baslik}</p>
+                  <p className="mt-1 text-sm leading-relaxed text-slate-600">{metin}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* Kapanış: sayfanın tezi, tek cümlede. Kutu yok — burada duracak bir şey
+            değil, okunup geçilecek bir cümle. */}
+        <p className="mt-10 text-center text-sm italic text-slate-500">
+          Bir konuyu anlatabiliyorsan, onu gerçekten öğrenmişsindir.
+        </p>
+      </div>
     </div>
   )
 }
