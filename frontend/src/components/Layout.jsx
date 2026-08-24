@@ -182,8 +182,24 @@ function LayoutShell() {
                 <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-rose-500" />
               )}
             </button>
+            {/*
+              lg:-ml-2 — HAMBURGER, RAYDAKİ İKON SÜTUNUYLA AYNI DİKEY EKSENE OTURUYOR.
+
+              Tarayıcıda ölçüldü (1280px): raydaki büyüteç ikonunun merkezi x=38'de
+              (nav p-3 = 12px + bağlantı px-3.5 = 14px + ikonun yarısı 12px; dar rayda
+              justify-center de aynı 38'i veriyor — iki durumda da sabit). Üst barın
+              sm:px-6 dolgusuyla hamburgerin merkezi ise x=46'daydı: 8px sağda, ve bu
+              kayma dar/geniş her ray durumunda gözle görülüyordu.
+
+              -ml-2 (8px) düğmeyi 16'ya çeker → merkez 16+22 = 38. Yalnızca lg'de:
+              mobilde ray yok, hizalanacak bir sütun da yok — orada üst barın kendi
+              dolgusu doğru referans.
+
+              Ray dolguları (p-3 / px-3.5) değişirse bu değer de değişmeli; formül
+              yukarıda, ezber değil.
+            */}
             <button
-              className="hidden h-11 w-11 shrink-0 place-items-center rounded-lg text-white hover:bg-white/10 lg:grid"
+              className="hidden h-11 w-11 shrink-0 place-items-center rounded-lg text-white hover:bg-white/10 lg:-ml-2 lg:grid"
               onClick={rayiDegistir}
               aria-label={rayDar ? 'Menüyü genişlet' : 'Menüyü daralt'}
               aria-expanded={!rayDar}
