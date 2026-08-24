@@ -5,11 +5,15 @@
 # (yalnızca rezerve + onay bekleyen), dolayısıyla profil şeridi hep boş görünüyordu ve
 # özellik "yarım kalmış" gibi duruyordu. Eksik olan koddu değil, veriydi.
 #
-# NE ÜRETİR (Ayşe eğitmen):
-#   Matematik  20 saat -> "Matematik Ustası" + "Matematik Çırağı"
-#   Geometri    5 saat -> "Geometri Çırağı"
-#   Fizik       5 saat -> "Fizik Çırağı"
-#   Toplam 30 ders x 100 puan = 3.000 puan -> 8. seviye
+# NE ÜRETİR (Ayşe eğitmen) — eşikler 2026-08-24'te 8 / 15 saate çekildi:
+#   Matematik  20 saat -> "Matematik Üstadı" (altın) + "Matematik Öğretici" (gümüş)
+#   Geometri   15 saat -> "Geometri Üstadı"  (altın) + "Geometri Öğretici"  (gümüş)
+#   Fizik       8 saat -> "Fizik Öğretici"   (gümüş)
+#
+# HEDEFLER İKİ MADALYAYI DA GÖSTERECEK ŞEKİLDE SEÇİLDİ: yalnızca altın üretmek, gümüşün
+# ekranda nasıl durduğunu hiç göstermezdi; yalnızca gümüş de tersini. Fizik bilerek tek
+# kademede bırakıldı — "bir sonraki rozete ne kadar kaldı" ilerleme satırının da gerçek
+# veriyle görünmesi gerekiyor.
 #
 # ÖNCE seed-demo.ps1 çalışmış olmalı (Ayşe hesabı ve katalog oradan geliyor).
 #
@@ -137,8 +141,8 @@ function BransKonusu($brans) {
 
 $hedefler = @(
     @{ Brans = 'Matematik'; Saat = 20 },
-    @{ Brans = 'Geometri';  Saat = 5  },
-    @{ Brans = 'Fizik';     Saat = 5  }
+    @{ Brans = 'Geometri';  Saat = 15 },
+    @{ Brans = 'Fizik';     Saat = 8  }
 )
 
 # Mevcut durumu OKU: tekrar koşumda sıfırdan başlamayalım.

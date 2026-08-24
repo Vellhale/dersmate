@@ -3,48 +3,86 @@ import { api } from '../lib/api'
 import { useAsync } from '../state/useAsync'
 
 /*
-  BRANŞ ROZETLERİ ŞERİDİ.
+  BRANŞ ROZETLERİ.
 
-  Rozet, kazanılan puana değil o derste ANLATILAN SÜREYE bakar: 5 saat → Çırak,
-  20 saat → Usta, 50 saat → Üstad. Hesap tamamen backend'de (SubjectBadgeEngine);
-  burada tek bir mantık yok, yalnızca gösterim. Başlık metni bile ("Matematik Çırağı")
-  sunucudan hazır geliyor — Türkçe ekler (Çırağı/Ustası/Üstadı) tek yerde kalsın diye.
+  Rozet, kazanılan puana değil o branşta ANLATILAN SÜREYE bakar. İki kademe var:
+    8 saat  → "Matematik Öğretici"  (gümüş)
+    15 saat → "Matematik Üstadı"    (altın)
+
+  Hesap tamamen backend'de (SubjectBadgeEngine); burada tek bir mantık yok, yalnızca
+  gösterim. Başlık metni bile ("Matematik Öğretici") sunucudan hazır geliyor — Türkçe
+  ekler tek yerde kalsın diye.
+
+  ─────────────────────────────────────────────────────────────────────────────
+  ÜÇ KADEME İKİYE İNDİ (2026-08-24). Eski merdiven 5 / 20 / 50 saatti ve iki ucu da
+  işe yaramıyordu: 5 saat rozeti neredeyse herkeste vardı, yani hiçbir şey ayırt
+  etmiyordu; 50 saat ise pratikte kimsenin ulaşamadığı bir sayıydı, yani ödül değil
+  dekordu. 8 ve 15 saat, kazanılabilir ve kazanıldığında bir şey söyleyen iki eşik.
+
+  MADALYA GÖRÜNÜMÜ. Eski rozetler branşa göre renklendirilmiş düz haplardı (Matematik
+  mavi, Fizik mor…) ve seviyeyi yalnızca halka kalınlığı ile nokta sayısı anlatıyordu —
+  yani en zor kazanılan şey en zor fark edilen şeydi. Artık renk BRANŞI değil KADEMEYİ
+  anlatıyor: gümüş ve altın, herkesin ilk bakışta sıraladığı iki metal.
+
+  Metalik his üç katmandan geliyor, hepsi CSS:
+    1. Eğik gradyan (135°) — ışığın tek yönden geldiği izlenimi
+    2. Üstte beyaz bir parlaklık şeridi (inset ring + üst yarıda beyaz/30 katman)
+    3. Kendi renginde renkli gölge — metal, kâğıt gibi nötr gölge düşürmez
+
+  Branş bilgisi kaybolmuyor: ikon rozetin içinde duruyor ve başlıkta zaten dersin adı
+  yazıyor ("Matematik Üstadı"). Kaybolan tek şey branşın RENGİ ve o renk, kademenin
+  önüne geçtiği için bilerek bırakıldı.
+  ─────────────────────────────────────────────────────────────────────────────
 */
+
+/* Branş ikonları. Renk taşımıyorlar artık — madalyanın kendi metali baskın. */
+const BRANS_IKONU = {
+  Turkce: '📖',
+  Tarih: '🏛️',
+  Cografya: '🌍',
+  Matematik: '🔢',
+  Geometri: '📐',
+  Fizik: '⚛️',
+  Kimya: '🧪',
+  Biyoloji: '🧬',
+}
 
 /*
-  Branş renkleri. Ders çağrışımına yakın, birbirinden ayırt edilebilir sekiz ton.
+  KADEME STİLLERİ.
 
-  MARKA PALETİNDEN (brand-*) BİLEREK AYRI: bunlar kategorik renklerdir, işlevleri
-  BİRBİRİNDEN AYRILMAK. Hepsini marka mavisinin tonlarına indirseydik sekiz rozet tek
-  bakışta ayırt edilemezdi. Marka rengi arayüzün "eylem" dili olarak kalıyor.
+  Sıra numarası ayrıca tutuluyor (`sira`): aynı branşta iki rozet varsa yükseği
+  seçmek için sayısal bir karşılaştırma gerekiyor ve enum adına göre alfabetik
+  sıralamak tesadüfen doğru sonuç verip yarın sessizce bozulurdu.
 
-  Her ton, kendi 700 yazısını kendi 50 zemininde taşıyor — bu çift Tailwind'de WCAG AA
-  eşiğini geçer (ölçülen en düşük oran amber'da 6.1:1).
+  Kontrast: her iki madalyada da yazı kendi zemininin en koyu tonunda
+  (amber-950 / slate-900) — ölçüldü, ikisi de AA eşiğinin üstünde. Altın rozette
+  beyaz yazı denendi ve sarı zeminde 1.9:1 ile okunamıyordu.
 */
-const BRANS_STILI = {
-  Turkce: { bg: 'bg-rose-50', text: 'text-rose-700', ring: 'ring-rose-200', ikon: '📖' },
-  Tarih: { bg: 'bg-amber-50', text: 'text-amber-800', ring: 'ring-amber-200', ikon: '🏛️' },
-  Cografya: { bg: 'bg-lime-50', text: 'text-lime-800', ring: 'ring-lime-200', ikon: '🌍' },
-  Matematik: { bg: 'bg-sky-50', text: 'text-sky-700', ring: 'ring-sky-200', ikon: '🔢' },
-  Geometri: { bg: 'bg-indigo-50', text: 'text-indigo-700', ring: 'ring-indigo-200', ikon: '📐' },
-  Fizik: { bg: 'bg-violet-50', text: 'text-violet-700', ring: 'ring-violet-200', ikon: '⚛️' },
-  Kimya: { bg: 'bg-teal-50', text: 'text-teal-700', ring: 'ring-teal-200', ikon: '🧪' },
-  Biyoloji: { bg: 'bg-emerald-50', text: 'text-emerald-700', ring: 'ring-emerald-200', ikon: '🧬' },
+const KADEME = {
+  Ogretici: {
+    sira: 1,
+    etiket: 'Gümüş',
+    madalya: '🥈',
+    kabuk:
+      'bg-gradient-to-br from-slate-200 via-slate-100 to-slate-400 text-slate-900 ' +
+      'ring-1 ring-inset ring-white/70 shadow-md shadow-slate-400/40',
+    parlama: 'from-white/70',
+  },
+  Ustad: {
+    sira: 2,
+    etiket: 'Altın',
+    madalya: '🥇',
+    kabuk:
+      'bg-gradient-to-br from-yellow-300 via-amber-200 to-yellow-500 text-amber-950 ' +
+      'ring-1 ring-inset ring-white/70 shadow-md shadow-amber-500/40',
+    parlama: 'from-white/80',
+  },
 }
 
-const VARSAYILAN_STIL = {
-  bg: 'bg-slate-50', text: 'text-slate-700', ring: 'ring-slate-200', ikon: '🎓',
-}
+const VARSAYILAN_KADEME = KADEME.Ogretici
 
-/* Seviye işareti. Halka kalınlığı seviyeyle artıyor: renk körlüğünden bağımsız bir sinyal. */
-const SEVIYE_STILI = {
-  Cirak: { halka: 'ring-1', isaret: '●', etiket: 'Çırak' },
-  Usta: { halka: 'ring-2', isaret: '●●', etiket: 'Usta' },
-  Ustad: { halka: 'ring-2 ring-offset-1', isaret: '●●●', etiket: 'Üstad' },
-}
-
-/** Bir sonraki eşiğe kalan saat — ilerleme satırı için. */
-const ESIKLER = [5, 20, 50]
+/** Bir sonraki eşiğe kalan saat — ilerleme satırı için. Kural sunucuda; bu yalnız gösterim. */
+const ESIKLER = [8, 15]
 
 function sonrakiEsik(saat) {
   return ESIKLER.find((e) => saat < e) ?? null
@@ -61,16 +99,21 @@ export function SubjectBadges({ userId, kendiProfilim = false }) {
 
   const { badges = [], progress = [] } = veri.data
 
-  // Aynı branştan yalnızca EN YÜKSEK seviye gösterilir. Backend alt seviyeleri de
-  // saklıyor (kazanım geçmişi), ama "Matematik Çırağı + Matematik Ustası" yan yana
-  // durunca şerit iki kat uzuyor ve düşük olan yükseği zayıflatıyor.
+  // Aynı branştan yalnızca EN YÜKSEK kademe gösterilir. Backend alt kademeyi de
+  // saklıyor (kazanım geçmişi), ama "Matematik Öğretici + Matematik Üstadı" yan yana
+  // durunca düşük olan yükseği zayıflatıyor.
   const enYuksek = new Map()
-  const sira = { Cirak: 1, Usta: 2, Ustad: 3 }
   for (const b of badges) {
     const mevcut = enYuksek.get(b.branch)
-    if (!mevcut || sira[b.level] > sira[mevcut.level]) enYuksek.set(b.branch, b)
+    const yeniSira = (KADEME[b.level] ?? VARSAYILAN_KADEME).sira
+    const mevcutSira = mevcut ? (KADEME[mevcut.level] ?? VARSAYILAN_KADEME).sira : -1
+    if (yeniSira > mevcutSira) enYuksek.set(b.branch, b)
   }
-  const gosterilecek = [...enYuksek.values()].sort((a, b) => sira[b.level] - sira[a.level])
+
+  const gosterilecek = [...enYuksek.values()].sort(
+    (a, b) =>
+      (KADEME[b.level] ?? VARSAYILAN_KADEME).sira - (KADEME[a.level] ?? VARSAYILAN_KADEME).sira,
+  )
 
   // Rozeti olmayan ama ders anlatmış branşlar — "az kaldı" göstergesi.
   const rozetsiz = progress.filter((p) => !enYuksek.has(p.branch) && p.hours > 0)
@@ -82,14 +125,14 @@ export function SubjectBadges({ userId, kendiProfilim = false }) {
   }
 
   return (
-    <section className="rounded-xl border border-slate-200/80 bg-white p-4 shadow-md">
-      <div className="mb-3 flex items-center justify-between gap-3">
+    <section className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
+      <div className="mb-4 flex items-center justify-between gap-3">
         <h2 className="text-sm font-semibold text-slate-800">Branş rozetleri</h2>
         {rozetsiz.length > 0 && (
           <button
             type="button"
             onClick={() => setIlerlemeAcik((v) => !v)}
-            className="text-xs font-medium text-brand-600 hover:underline"
+            className="text-xs font-medium text-brand-700 transition hover:text-brand-800 hover:underline"
             aria-expanded={ilerlemeAcik}
           >
             {ilerlemeAcik ? 'İlerlemeyi gizle' : `İlerleme (${rozetsiz.length})`}
@@ -98,37 +141,23 @@ export function SubjectBadges({ userId, kendiProfilim = false }) {
       </div>
 
       {gosterilecek.length > 0 ? (
-        <ul className="flex flex-wrap gap-2">
-          {gosterilecek.map((b) => {
-            const s = BRANS_STILI[b.branch] ?? VARSAYILAN_STIL
-            const sv = SEVIYE_STILI[b.level] ?? SEVIYE_STILI.Cirak
-            return (
-              <li key={`${b.branch}-${b.level}`}>
-                <span
-                  className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs
-                              font-medium ring-inset ${s.bg} ${s.text} ${s.ring} ${sv.halka}`}
-                  title={`${b.title} — ${b.hours} saat ders anlatımı`}
-                >
-                  <span aria-hidden="true">{s.ikon}</span>
-                  {b.title}
-                  <span aria-hidden="true" className="opacity-50">
-                    {sv.isaret}
-                  </span>
-                </span>
-              </li>
-            )
-          })}
+        <ul className="flex flex-wrap gap-3">
+          {gosterilecek.map((b) => (
+            <li key={`${b.branch}-${b.level}`}>
+              <Madalya rozet={b} />
+            </li>
+          ))}
         </ul>
       ) : (
         <p className="text-xs text-slate-500">
           {kendiProfilim
-            ? 'İlk rozet 5 saat ders anlatımıyla geliyor.'
+            ? 'İlk rozet 8 saat ders anlatımıyla geliyor.'
             : 'Henüz branş rozeti kazanılmamış.'}
         </p>
       )}
 
       {ilerlemeAcik && rozetsiz.length > 0 && (
-        <ul className="mt-3 space-y-1.5 border-t border-slate-100 pt-3">
+        <ul className="mt-4 space-y-2 border-t border-slate-100 pt-4">
           {rozetsiz.map((p) => {
             const hedef = sonrakiEsik(p.hours)
             const oran = hedef ? Math.min(100, (p.hours / hedef) * 100) : 100
@@ -136,10 +165,13 @@ export function SubjectBadges({ userId, kendiProfilim = false }) {
               <li key={p.branch} className="flex items-center gap-2 text-xs text-slate-500">
                 <span className="w-20 shrink-0 truncate">{p.subject}</span>
                 <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-100">
-                  <div className="h-full rounded-full bg-brand-400" style={{ width: `${oran}%` }} />
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-slate-300 to-slate-400"
+                    style={{ width: `${oran}%` }}
+                  />
                 </div>
-                <span className="w-20 shrink-0 text-right tabular-nums">
-                  {p.hours} / {hedef ?? 50} saat
+                <span className="shrink-0 tabular-nums">
+                  {p.hours}/{hedef ?? ESIKLER.at(-1)} sa
                 </span>
               </li>
             )
@@ -147,5 +179,58 @@ export function SubjectBadges({ userId, kendiProfilim = false }) {
         </ul>
       )}
     </section>
+  )
+}
+
+/**
+ * Tek madalya.
+ *
+ * Metalik his katman katman kuruluyor; tek bir gradyan "metal" hissi vermiyor, düz
+ * renkli bir hap gibi duruyor. Üç katman:
+ *   • eğik ana gradyan (ışık sol üstten)
+ *   • üst yarıda beyaz parlaklık (metalin ışık alan yüzü)
+ *   • kendi renginde gölge (metal nötr gri gölge düşürmez)
+ *
+ * `overflow-hidden` + `relative` şart: parlaklık katmanı mutlak konumlu ve rozetin
+ * yuvarlak köşelerinden taşmamalı.
+ */
+function Madalya({ rozet }) {
+  const k = KADEME[rozet.level] ?? VARSAYILAN_KADEME
+  const ikon = BRANS_IKONU[rozet.branch] ?? '🎓'
+
+  return (
+    <span
+      className={`relative inline-flex items-center gap-2 overflow-hidden rounded-full
+                  py-1.5 pl-1.5 pr-3.5 text-sm font-semibold ${k.kabuk}`}
+      title={`${rozet.title} — ${rozet.hours} saat ders anlatımı (${k.etiket})`}
+    >
+      {/* Parlaklık: üst yarıyı kaplayan yumuşak beyaz geçiş. pointer-events yok,
+          tamamen dekoratif. */}
+      <span
+        aria-hidden="true"
+        className={`pointer-events-none absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b ${k.parlama} to-transparent`}
+      />
+
+      {/* Madalyon: koyu bir kuyu içinde branş ikonu. Metalin üstünde ikinci bir yüzey
+          olması, rozeti düz bir etiketten çıkarıp nesneye benzetiyor. */}
+      <span
+        aria-hidden="true"
+        className="relative grid h-6 w-6 shrink-0 place-items-center rounded-full
+                   bg-white/60 text-[13px] shadow-inner ring-1 ring-inset ring-white/80"
+      >
+        {ikon}
+      </span>
+
+      <span className="relative">{rozet.title}</span>
+
+      {/* Kademe işareti sonda: madalya emojisi platformdan platforma değişse bile
+          metalin RENGİ kademeyi zaten söylüyor, bu yüzden emoji tek başına taşıyıcı
+          değil — destekleyici. */}
+      <span aria-hidden="true" className="relative text-base leading-none">
+        {k.madalya}
+      </span>
+
+      <span className="sr-only">({k.etiket} kademe)</span>
+    </span>
   )
 }

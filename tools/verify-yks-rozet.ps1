@@ -234,9 +234,11 @@ WITH sure AS (
   GROUP BY 1, 2
 ),
 beklenen AS (
-  SELECT uid, brans, 'Cirak' AS seviye FROM sure WHERE dk >= 300
-  UNION ALL SELECT uid, brans, 'Usta'  FROM sure WHERE dk >= 1200
-  UNION ALL SELECT uid, brans, 'Ustad' FROM sure WHERE dk >= 3000
+  -- Eşikler 2026-08-24'te 5/20/50 saatten 8/15 saate indi ve kademe sayısı üçten ikiye
+  -- düştü (bkz. Domain/Community/UserSubjectBadge.cs, göç: SubjectBadgeTwoTiers).
+  -- Bu kopya BİLEREK bağımsız: motoru çağırmak "kendi kendine eşit mi" diye sormak olurdu.
+  SELECT uid, brans, 'Ogretici' AS seviye FROM sure WHERE dk >= 480
+  UNION ALL SELECT uid, brans, 'Ustad'    FROM sure WHERE dk >= 900
 ),
 olan AS (
   SELECT "UserId" AS uid, "Branch" AS brans, "Level" AS seviye FROM community."UserSubjectBadges"
@@ -269,9 +271,9 @@ WITH sure AS (
 )
 SELECT COUNT(*) FROM community."UserSubjectBadges" b
 LEFT JOIN sure ON sure.uid = b."UserId" AND sure.brans = b."Branch"
-WHERE COALESCE(sure.dk, 0) < 300;
+WHERE COALESCE(sure.dk, 0) < 480;
 '@
-    if ($esikAlti -eq 0) { OK '5 saat eşiğinin altında rozet almış kimse yok' }
+    if ($esikAlti -eq 0) { OK '8 saat eşiğinin altında rozet almış kimse yok' }
     else { Note "$esikAlti rozet, sahibinin şu anki süresinin altında — iptal edilmiş ders olabilir" }
 }
 
@@ -281,23 +283,21 @@ Section 'G. Rozet bütünlüğü'
 $cift = SqlInt 'SELECT COUNT(*) FROM (SELECT "UserId", "Branch", "Level" FROM community."UserSubjectBadges" GROUP BY 1,2,3 HAVING COUNT(*) > 1) x;'
 if ($cift -eq 0) { OK 'çifte rozet yok' } else { Fail "$cift rozet iki kez verilmiş" }
 
-# Kümülatiflik: Usta olan Çırak da olmalı, Üstad olan ikisini de. Atlanmış bir alt seviye,
-# motorun EarnedLevels sıralamasının bozulduğunu gösterir.
+# Kümülatiflik: Üstad olan Öğretici de olmalı. Atlanmış bir alt kademe, motorun
+# EarnedLevels sıralamasının bozulduğunu gösterir. Kademe üçten ikiye indiği için
+# kontrol de tek dala indi — eski hâli iki ayrı zincir sınıyordu (Usta→Çırak, Üstad→Usta).
 $atlanan = SqlInt @'
 SELECT COUNT(*) FROM community."UserSubjectBadges" u
-WHERE (u."Level" IN ('Usta','Ustad')
-       AND NOT EXISTS (SELECT 1 FROM community."UserSubjectBadges" c
-                       WHERE c."UserId" = u."UserId" AND c."Branch" = u."Branch" AND c."Level" = 'Cirak'))
-   OR (u."Level" = 'Ustad'
-       AND NOT EXISTS (SELECT 1 FROM community."UserSubjectBadges" c
-                       WHERE c."UserId" = u."UserId" AND c."Branch" = u."Branch" AND c."Level" = 'Usta'));
+WHERE u."Level" = 'Ustad'
+  AND NOT EXISTS (SELECT 1 FROM community."UserSubjectBadges" c
+                  WHERE c."UserId" = u."UserId" AND c."Branch" = u."Branch" AND c."Level" = 'Ogretici');
 '@
-if ($atlanan -eq 0) { OK 'alt seviye atlanmamış (Üstad olan Usta ve Çırak da)' } else { Fail "$atlanan rozette alt seviye eksik" }
+if ($atlanan -eq 0) { OK 'alt kademe atlanmamış (Üstad olan Öğretici de)' } else { Fail "$atlanan rozette alt kademe eksik" }
 
 $gecersizBrans = SqlInt 'SELECT COUNT(*) FROM community."UserSubjectBadges" WHERE "Branch" NOT IN (''Turkce'',''Tarih'',''Cografya'',''Matematik'',''Geometri'',''Fizik'',''Kimya'',''Biyoloji'');'
 if ($gecersizBrans -eq 0) { OK 'tüm rozetler izin verilen sekiz branşta' } else { Fail "$gecersizBrans rozet tanımsız branşta — okuma sorguları dönüştürme hatası verecek" }
 
-$gecersizSeviye = SqlInt 'SELECT COUNT(*) FROM community."UserSubjectBadges" WHERE "Level" NOT IN (''Cirak'',''Usta'',''Ustad'');'
+$gecersizSeviye = SqlInt 'SELECT COUNT(*) FROM community."UserSubjectBadges" WHERE "Level" NOT IN (''Ogretici'',''Ustad'');'
 if ($gecersizSeviye -eq 0) { OK 'tüm seviyeler geçerli' } else { Fail "$gecersizSeviye rozet tanımsız seviyede" }
 
 # TYT ve AYT'nin AYNI branşa toplandığının kanıtı: bir eğitmen hem TYT hem AYT matematik
