@@ -124,8 +124,29 @@ test.describe('Marka rengi (F1b)', () => {
     )
     expect(hepsi.length, 'sayfada aria-label="dersmate" taşıyan svg yok').toBeGreaterThan(0)
 
+    /*
+      ÜÇ ZEMİN, ÜÇ VURGU (2026-08-24'te üçe çıktı). Logo artık üç farklı yüzeyde
+      çiziliyor ve her biri kendi ölçümüyle bir ton seçiyor:
+
+        acik  → brand-500  beyaz/açık gri yüzeyler
+        marka → brand-100  giriş ekranının brand-600 gradyanlı paneli
+        gece  → brand-400  slate-900 üst bar
+
+      brand-400 NEDEN EKLENDİ: üst bar brand-100 kullanıyordu ve slate-900 üstünde
+      14.08:1 ile fazlasıyla okunuyordu — ama BEYAZDAN farkı yalnızca 1.27:1. Yani
+      "ders" beyaz, "mate" de neredeyse beyaz; marka ayrımı gözle seçilemiyordu ve logo
+      soluk tek bir kütle gibi duruyordu. brand-400 zeminle 6.57:1, beyazdan 2.72:1.
+      Ölçüm tablosunun tamamı Logo.jsx'te.
+
+      KAPSAM SINIRI: bu test /giris sayfasına bakıyor ve orada yalnızca `acik` ile
+      `marka` varyantları var — `gece` yalnızca oturum açıldıktan sonra görünen üst
+      barda çiziliyor, bu paket ise API'yi taklit ettiği için oraya giremiyor. brand-400
+      yine de izin listesinde: liste "hangi tonlar meşru" sorusunun cevabı, "bu sayfada
+      hangileri görünüyor" sorusunun değil.
+    */
     const acik = palet[500].toLowerCase() // #0088CC — açık zemin vurgusu
-    const koyu = palet[100].toLowerCase() // #CCE9F7 — koyu zemin vurgusu (ölçüldü, bkz. Logo.jsx)
+    const koyuMarka = palet[100].toLowerCase() // #CCE9F7 — brand-600 gradyanı üstünde
+    const koyuGece = palet[400].toLowerCase() // #33A7DF — slate-900 üstünde
 
     expect(
       hepsi.some((d) => d.includes(acik)),
@@ -133,7 +154,7 @@ test.describe('Marka rengi (F1b)', () => {
     ).toBe(true)
 
     for (const doluluklar of hepsi) {
-      const vurgu = doluluklar.find((d) => d === acik || d === koyu)
+      const vurgu = doluluklar.find((d) => d === acik || d === koyuMarka || d === koyuGece)
       expect(
         vurgu,
         `bir logonun vurgusu paletin dışında — dolgular: ${JSON.stringify(doluluklar)}`,

@@ -205,7 +205,7 @@ export function AuthShell({ title, subtitle, children }) {
                         bg-brand-300/10 blur-3xl" />
 
         <div className="relative">
-          <Logo className="h-9 w-auto" onDark />
+          <Logo zemin="marka" boyut="lg" />
           <p className="mt-6 max-w-md text-2xl font-bold leading-tight xl:mt-8 xl:text-3xl">
             Bildiğini anlat,
             <br />
@@ -249,7 +249,7 @@ export function AuthShell({ title, subtitle, children }) {
         <div className="w-full max-w-md">
           {/* Mobilde markanın tek göründüğü yer; lg'de sol panel zaten taşıyor. */}
           <div className="mb-6 text-center lg:hidden">
-            <Logo className="mx-auto h-10 w-auto" />
+            <Logo boyut="xl" />
           </div>
 
           <div className="mb-6 text-center lg:text-left">

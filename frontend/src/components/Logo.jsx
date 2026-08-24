@@ -1,119 +1,128 @@
 /**
- * Marka kilidi. Kaynak: resimler/gemini-svg.svg — buraya satır içi (inline) kopyalandı ki
- * ayrı bir ağ isteği gerektirmesin ve tema/boyut sınıflarıyla doğrudan yönetilebilsin.
+ * Marka kilidi: iki nokta (SVG) + kelime markası (HTML metin).
  *
- * Boyut YALNIZCA yükseklikten verilir (h-8 gibi); genişlik viewBox oranından türer.
+ * ─────────────────────────────────────────────────────────────────────────────
+ * NEDEN KELİME MARKASI ARTIK SVG DEĞİL (2026-08-24, ikinci tur).
+ *
+ * Logo üst barda "sönük / parlak / bulanık" görünüyordu ve sebebi tarayıcıda ölçüldü:
+ * SVG 228×80 birimlik kutuyu 36px yüksekliğe sığdırıyor, yani ölçek 0.45 ve 34 birimlik
+ * yazı ekranda 15.3px'e düşüyordu. SVG <text>, HTML metninin aldığı font hinting'ini ve
+ * alt piksel yerleşimini ALMIYOR: 15px civarında gövde çizgileri piksel ızgarasına
+ * oturmuyor ve harfler yıkanmış görünüyor. Aynı punto HTML metni olarak keskin çiziliyor.
+ *
+ * Bu yüzden kelime markası artık gerçek metin. Kazanımlar:
+ *   • net kenarlar (işletim sisteminin metin rasterizasyonu devrede)
+ *   • gerçek yazı tipi ağırlıkları ve tracking
+ *   • kırpılma riski yok — viewBox'a sığdırma derdi ortadan kalktı
+ *
+ * İki nokta SVG kaldı: hem geometri orada daha doğru, hem de e2e/marka.spec.js logonun
+ * `circle` dolgularını paletle karşılaştırıyor (sözleşme).
+ *
+ * BOYUT ARTIK `className` YÜKSEKLİĞİNDEN DEĞİL, `boyut` BELİRTECİNDEN geliyor: metin
+ * ile işaretin oranı sabit kalmalı ve CSS, bir kapsayıcının yüksekliğinden punto
+ * türetemiyor. Dört belirteç var, hepsi aynı orana sadık.
+ * ─────────────────────────────────────────────────────────────────────────────
+ *
+ * ÜÇ ZEMİN, ÜÇ VURGU TONU — ve üçü de ölçüldü (WCAG 2.1, tarayıcıda hesaplandı):
+ *
+ *                     slate-900 üstünde   brand-600 üstünde   BEYAZDAN farkı
+ *   brand-100            14.08:1              3.86:1              1.27:1
+ *   brand-300             8.50:1              2.33:1              2.10:1
+ *   brand-400             6.57:1              1.80:1              2.72:1
+ *   brand-500             4.59:1              1.26:1              3.89:1
+ *
+ * SON SÜTUN "SÖNÜK" ŞİKÂYETİNİN CEVABI. Üst bar eskiden brand-100 kullanıyordu:
+ * slate-900 üstünde 14:1 ile fazlasıyla okunur, AMA beyazdan farkı yalnızca 1.27:1.
+ * Yani "ders" beyaz, "mate" de neredeyse beyaz — marka ayrımı gözle seçilemiyor ve
+ * logo tek renkli, soluk bir kütle gibi duruyordu. Sorun kontrast eksikliği değil,
+ * KİMLİK eksikliğiydi.
+ *
+ * Üst bar artık brand-400: zeminle 6.57:1 (AA'nın çok üstünde) ve beyazdan 2.72:1 —
+ * "mate" gerçekten mavi okunuyor. Koyu tema aslı (resimler/gemini-svg.svg) da zaten
+ * bu tonu kullanıyordu.
+ *
+ * Giriş ekranının sol paneli AYRI bir koyu zemin (brand-600 gradyanı) ve orada brand-400
+ * yalnızca 1.80:1 veriyor — okunamaz. O yüzden orası brand-100'de kalıyor (3.86:1).
+ * Tek "koyu" varyant iki farklı koyu zemine hizmet edemez; bu yüzden zemin bir bayrak
+ * değil, üç değerli bir belirteç.
  */
 
-/* Üç marka rengi tek yerde. Kaynak SVG koyu zeminliydi; açık zemine çevirirken BG ile INK
-   yer değiştirdi — aksi halde beyaz yazı açık zeminde kaybolurdu.
-   BG = brand-50 (tailwind.config.js): giriş ekranı gradyanının başlangıç rengi.
+/* Palet senkronu: e2e/kaynak-sabitleri.spec.js bu iki sabitin tailwind.config.js'teki
+   brand-500 ve brand-50 ile birebir aynı olmasını şart koşuyor. Logo.jsx palete import
+   edemiyor (SVG dolguları satır içi hex olmak zorunda), bu yüzden senkron testle
+   zorlanıyor — palet değişir, logo eski tonda kalır ve kimse fark etmez. */
+const ACCENT = '#0088CC' // brand-500 — açık zeminlerde marka tonu
+const BG = '#E6F4FB' // brand-50 — LogoMark'ın zemini, favicon ile ortak
 
-   F1b'de ikisi de düzeltildi:
-   • ACCENT #38BDF8 → #0088CC (brand-500). Eskisi beyaz üzerinde 2.14:1 veriyordu — büyük
-     metin için bile yetersiz (AA eşiği 3.0). Yenisi 3.89:1 ile geçiyor VE marka rengiyle
-     aynı. 400 DEĞİL 500: #0088CC gövde rengi olarak AA'yı kaçırdığı için kimlik 500'de,
-     zemin görevi 600'de duruyor (bkz. docs/DEVAM-EDILECEK.md, F1b).
-   • BG #EEF2FF indigo-50'ydi: logo, izlediğini söylediği brand-50 ile farklı bir renk
-     ailesindeydi. Artık gerçekten brand-50.
-   Aynı üç değer favicon.svg'de de birebir geçiyor (LogoMark ile aynı geometri);
-   birini değiştirirsen diğerini de değiştir. */
-const BG = '#E6F4FB'
+const ACCENT_MARKA = '#CCE9F7' // brand-100 — giriş ekranının brand-600 gradyanı üstünde
+const ACCENT_GECE = '#33A7DF' // brand-400 — slate-900 üst bar üstünde
+const INK = '#0F172A' // slate-900
+const BEYAZ = '#FFFFFF'
 
-/*
-  KOYU ZEMİN VURGUSU — açık zemindekiyle AYNI OLAMAZ, ölçüldü.
-
-  Giriş ekranının sol paneli brand-600'den (#0077B3) başlayan bir gradyan ve logo tam o
-  köşede duruyor. ACCENT (#0088CC, brand-500) orada zeminin bir basamak komşusu:
-  ölçülen kontrast 1.26:1 — "mate" hecesi gözle seçilemiyordu.
-
-  Skalanın koyu zemindeki karşılıkları (zemin #0077B3, WCAG 2.1):
-    brand-500  1.26:1   brand-400  1.80:1   brand-300  2.33:1
-    brand-200  3.01:1   brand-100  3.86:1   brand-50   4.36:1
-
-  brand-100 seçildi: 3.0 eşiğini rahat geçiyor (200 tam sınırda ve gradyan boyunca zemin
-  değiştiği için güvenli değil), ama beyaza da kaçmıyor — "ders" hâlâ saf beyaz, "mate"
-  hâlâ mavi tonda, yani logo iki temada da AYNI logo.
-*/
-const ACCENT_DARK = '#CCE9F7'
-const INK = '#0F172A'
-const ACCENT = '#0088CC'
+const ZEMINLER = {
+  /** Beyaz / açık gri yüzeyler. */
+  acik: { nokta: ACCENT, ikinciNokta: INK, ders: 'text-slate-900', mate: 'text-brand-500' },
+  /** Giriş ekranının brand-600 gradyanlı sol paneli. */
+  marka: { nokta: ACCENT_MARKA, ikinciNokta: BEYAZ, ders: 'text-white', mate: 'text-brand-100' },
+  /** slate-900 üst bar ve koyu ray. */
+  gece: { nokta: ACCENT_GECE, ikinciNokta: BEYAZ, ders: 'text-white', mate: 'text-brand-400' },
+}
 
 /*
-  ─────────────────────────────────────────────────────────────────────────────
-  2026-08-24 YENİDEN ÇİZİM. Üç somut kusur vardı; üçü de ölçülerek düzeltildi.
+  Belirteçler. İşaret yüksekliği metnin gövde yüksekliğine yakın tutuluyor: noktalar
+  harflerden büyük olursa kilit "iki top ve yanında yazı" gibi okunuyor, küçük olursa
+  yazının noktalama işareti gibi görünüyor.
 
-  1. SOLUK GÖRÜNÜYORDU. İki daire de `opacity="0.95"` taşıyordu ve aralarındaki
-     "köprü", zemin rengiyle (BG) çizilmiş 3 birimlik bir yaydı. Yani işaret, üst üste
-     binen iki yarı saydam dairenin arasına zemin rengi sürülerek elde ediliyordu:
-     h-9 boyutunda (36px) bu, kenarları yıkanmış bir leke gibi okunuyordu. Daha kötüsü,
-     köprü koyu zeminde `stroke="none"` oluyordu — yani üst barda daireler ayrılmıyor,
-     tek bir bulanık kütle hâline geliyordu.
-
-     Şimdi: tam opak iki nokta, aralarında GERÇEK boşluk. Zemin rengiyle boyanmış bir
-     kesik yok, dolayısıyla işaret her zeminde aynı görünüyor.
-
-  2. KENDİ KUTUSUNDA ORTALI DEĞİLDİ. Tarayıcıda ölçüldü: mürekkep 24 → 221.3 arasını
-     kaplıyordu (merkez 122.6), viewBox ise 0 → 280 (merkez 140). Yani logonun görsel
-     merkezi kutusunun 17.4 birim solundaydı. Üst barda logo mutlak merkeze konduğu için
-     (bkz. Layout.jsx) bu fark doğrudan ekrana yansıyordu: h-11'de ~9.5px sola kayık.
-
-     Şimdi: kilit kutunun içinde ortalandı — iki yanda eşit boşluk var (ölçüm aşağıda).
-
-  3. İKİ AYRI VARYANT VARDI. `vurgulu` bayrağı puntoyu 26 → 34 çıkarıyordu ve iki
-     varyantın metin genişliği farklı olduğu için ikisi aynı viewBox'ta AYNI ANDA
-     ortalanamıyordu. Bayrak kaldırıldı: tek geometri var, boyut yalnızca yükseklik
-     sınıfından geliyor (h-8 / h-9 / h-11). Aynı logo her yerde aynı oranlarda.
-
-  ⚠️ RENKLER VE `circle` ÖĞELERİ SÖZLEŞMEDİR. e2e/marka.spec.js logonun daire
-  dolgularını paletle karşılaştırıyor (yalnız brand-500 ve brand-100 serbest) ve
-  e2e/kaynak-sabitleri.spec.js buradaki ACCENT/BG sabitlerinin palete eşit olmasını
-  şart koşuyor. Geometri ve tipografi serbest; renk ve `circle` kullanımı değil.
-  ─────────────────────────────────────────────────────────────────────────────
-
-  ÖLÇÜLER (viewBox 0 0 228 80):
-    işaret : r=9 daireler, merkezler x=25 ve x=47 → mürekkep 16 … 56
-    yazı   : x=68, taban çizgisi 52, punto 34 → tarayıcıda ölçüldü, genişlik 143.6 → 68 … 211.6
-    boşluk : solda 16, sağda 16.4 → mürekkebin merkezi 113.8, kutunun merkezi 114
-
-  KUTU NEDEN MÜREKKEBE TAM KESİLMEDİ (228, oysa 212 yeterdi): sağdaki ~16 birim,
-  metin genişliğinin platforma göre değişmesine karşı PAY. Yazı tipi yığını sistem
-  fontuna düşüyor ve aynı punto her işletim sisteminde aynı genişlikte çizilmiyor;
-  kutuyu mürekkebe yapıştırmak, bir platformda son harfin kırpılması demekti.
-  Pay iki yana eşit dağıtıldı — güvenlik payı korunurken ortalama bozulmuyor.
+  İşaretin genişliği verilmiyor (w-auto): viewBox oranı 40:18 olduğu için tarayıcı
+  yükseklikten türetiyor. Genişliği elle vermek, oranı iki yerde tutmak demekti.
 */
-export function Logo({ className = 'h-8 w-auto', title = 'dersmate', onDark = false }) {
-  const mürekkep = onDark ? '#FFFFFF' : INK
-  const vurgu = onDark ? ACCENT_DARK : ACCENT
+const BOYUTLAR = {
+  sm: { yazi: 'text-[15px]', isaret: 'h-[7px]', bosluk: 'gap-1.5' },
+  md: { yazi: 'text-[17px]', isaret: 'h-2', bosluk: 'gap-2' },
+  lg: { yazi: 'text-xl', isaret: 'h-[9px]', bosluk: 'gap-2' },
+  xl: { yazi: 'text-2xl', isaret: 'h-[11px]', bosluk: 'gap-2.5' },
+}
+
+/**
+ * @param boyut  sm | md | lg | xl — metin ve işaret birlikte ölçekleniyor.
+ * @param zemin  acik | marka | gece — bkz. yukarıdaki kontrast tablosu.
+ */
+export function Logo({ boyut = 'md', zemin = 'acik', className = '', title = 'dersmate' }) {
+  const z = ZEMINLER[zemin] ?? ZEMINLER.acik
+  const b = BOYUTLAR[boyut] ?? BOYUTLAR.md
 
   return (
-    <svg viewBox="0 0 228 80" role="img" aria-label={title} className={className}>
+    <span className={`inline-flex items-center ${b.bosluk} ${className}`}>
       {/*
         İki düğüm: akran eşleşmesi. Aralarındaki 4 birimlik boşluk BOYA DEĞİL, gerçek
-        boşluk — bu yüzden açık ve koyu zeminde birebir aynı görünüyor. Eski çizimde
-        buradaki ayrım zemin renkli bir yayla yapılıyordu ve koyu temada kayboluyordu.
+        boşluk. Eski çizimde daireler üst üste biniyor ve aradaki ayrım zemin rengiyle
+        çizilmiş bir yayla yapılıyordu; o yay koyu temada `stroke="none"` olduğu için
+        daireler tek bulanık kütleye dönüşüyordu. Ayrıca ikisi de opacity 0.95 taşıyordu.
+
+        Erişilebilir ad BURADA: kelime markası `aria-hidden`, yani ekran okuyucu
+        "dersmate" ifadesini bir kez duyuyor.
       */}
-      <circle cx="25" cy="40" r="9" fill={vurgu} />
-      <circle cx="47" cy="40" r="9" fill={mürekkep} />
+      <svg
+        viewBox="0 0 40 18"
+        role="img"
+        aria-label={title}
+        className={`${b.isaret} w-auto shrink-0`}
+      >
+        <circle cx="9" cy="9" r="9" fill={z.nokta} />
+        <circle cx="31" cy="9" r="9" fill={z.ikinciNokta} />
+      </svg>
 
       {/*
-        Tipografi: tek ağırlık (700), sıkı ama nefes alan harf aralığı. 800 denendi ve
-        küçük boyutta harfler birbirine yapışıyordu — üst barda logo 36px yüksekliğinde
-        çiziliyor, yani gerçek punto ~15px. O ölçekte ağırlık değil KONTRAST okunurluk
-        veriyor: "ders" mürekkep, "mate" marka tonu.
+        Kelime markası. `tracking-tight` sıkı ama yapışık değil; `leading-none` kilidi
+        dikeyde noktalarla aynı eksene oturtuyor. Yazı tipi ayrıca TANIMLANMADI: gövde
+        yazı tipiyle aynı yığın kullanılıyor, çünkü logo arayüzün içinde yaşıyor ve
+        farklı bir yazı tipi burada yamalı görünürdü.
       */}
-      <text
-        x="68"
-        y="52"
-        fontFamily="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"
-        fontSize="34"
-        fontWeight="700"
-        letterSpacing="-1"
-      >
-        <tspan fill={mürekkep}>ders</tspan>
-        <tspan fill={vurgu}>mate</tspan>
-      </text>
-    </svg>
+      <span aria-hidden="true" className={`font-bold leading-none tracking-tight ${b.yazi}`}>
+        <span className={z.ders}>ders</span>
+        <span className={z.mate}>mate</span>
+      </span>
+    </span>
   )
 }
 
@@ -121,10 +130,10 @@ export function Logo({ className = 'h-8 w-auto', title = 'dersmate', onDark = fa
  * Yazısız kare rozet — dar alanlar için (favicon ile aynı geometri).
  *
  * ⚠️ ÇALIŞMA ZAMANI HATASI DÜZELTİLDİ (2026-08-24): ilk daire `fill={vurgu}` diyordu ama
- * `vurgu` yalnızca `Logo` fonksiyonunun İÇİNDE tanımlı bir yerel değişken — burada
+ * `vurgu` yalnızca `Logo` fonksiyonunun İÇİNDE tanımlı bir yerel değişkendi — burada
  * tanımsızdı ve bileşen render edilse `ReferenceError` atardı. Hata bugüne kadar
  * görünmedi çünkü `LogoMark` hiçbir yerden çağrılmıyor; yani derleme de test de bunu
- * yakalayamazdı. Doğrusu açık zeminin vurgu rengi: ACCENT.
+ * yakalayamazdı.
  *
  * GEOMETRİSİ BİLEREK ESKİ HÂLİNDE: favicon.svg ile birebir aynı olmak zorunda
  * (e2e/kaynak-sabitleri.spec.js ikisinin renklerini karşılaştırıyor) ve favicon,

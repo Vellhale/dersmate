@@ -83,7 +83,7 @@ export default function Hakkimizda() {
     <div className="mx-auto max-w-5xl pb-10">
       {/* ── AÇILIŞ ──────────────────────────────────────────────────────────── */}
       <header className="pb-10">
-        <Logo className="h-9 w-auto" />
+        <Logo boyut="lg" />
         <h1 className="mt-6 max-w-3xl text-3xl font-bold leading-tight tracking-tight text-slate-900 sm:text-4xl">
           Öğrencilerin birbirine ders anlattığı yer.
         </h1>

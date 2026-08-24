@@ -35,7 +35,9 @@ import {
   sabitle aynı). Vurgu tonu brand-300: koyu zeminde beyazla değil zeminle ölçülür ve
   #0F172A üzerinde 8.19:1 verir (AA 4.5). brand-500 koyu zeminde seçilemiyordu —
   Logo.jsx'in koyu tema tablosu bu ölçümleri zaten kayda geçirmişti; ray aynı karara
-  yaslanıyor. Logo onDark varyantıyla çiziliyor (beyaz + brand-100), o da ölçülü.
+  yaslanıyor. Logo `zemin="gece"` varyantıyla çiziliyor: beyaz "ders" + brand-400
+  "mate". brand-100 denendi ve BEYAZDAN farkı yalnızca 1.27:1 çıktı — iki hece aynı
+  renk gibi okunuyordu (ölçüm tablosu Logo.jsx'te).
 
   ÇIKIŞ TEK YERDE: üst barda metinsiz ikon (44px, aria-label'lı). Eski kabukta çıkış
   hem barda metin hem çekmecede satırdı ve tablette 47x16'lık ıskalanan bir kopya
@@ -157,9 +159,10 @@ function LayoutShell() {
               className="pointer-events-auto flex h-11 items-center"
               aria-label="Ana sayfa"
             >
-              {/* Tek geometri, boyut yalnızca yükseklikten: dar ekranda h-8, sm üstünde
-                  h-9. (Eski `vurgulu` varyantı kaldırıldı — bkz. Logo.jsx.) */}
-              <Logo onDark className="h-8 w-auto sm:h-9" />
+              {/* Boyut `boyut` belirtecinden geliyor, className yüksekliğinden değil:
+                  kelime markası artık HTML metni ve punto ile işaretin oranı bileşenin
+                  içinde sabit tutuluyor (bkz. Logo.jsx). */}
+              <Logo zemin="gece" boyut="md" />
             </NavLink>
           </div>
 
