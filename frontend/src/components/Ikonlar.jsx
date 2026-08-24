@@ -138,3 +138,61 @@ export function XIkonu(props) {
     </Cizgi>
   )
 }
+
+/*
+  ── HAKKIMIZDA SAYFASININ İKONLARI ────────────────────────────────────────────
+  Aynı 24'lük ızgara, aynı çizgi ağırlığı. Bu sayfada ikonlar gezinme değil ANLAM
+  taşıyor: her kutucuğun ne anlattığını metni okumadan önce söylüyorlar. Bu yüzden
+  hepsi tek bir kavramı gösteriyor — süs değil, başlığın görsel karşılığı.
+*/
+
+/** Misyon: hedef tahtası. "Bugün ne yapıyoruz" — nişan alınmış, belirli bir şey. */
+export function HedefIkonu(props) {
+  return (
+    <Cizgi {...props}>
+      <circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="5" /><circle cx="12" cy="12" r="1.5" />
+    </Cizgi>
+  )
+}
+
+/** Vizyon: ufuk çizgisinin üstünde yükselen güneş. "Neye doğru gidiyoruz" — henüz uzak. */
+export function UfukIkonu(props) {
+  return (
+    <Cizgi {...props}>
+      <path d="M3 18h18" /><path d="M6.5 18a5.5 5.5 0 0 1 11 0" />
+      <path d="M12 4v2.5" /><path d="M4.9 7.4l1.8 1.8" /><path d="M19.1 7.4l-1.8 1.8" />
+    </Cizgi>
+  )
+}
+
+/** Güvence: ücretsizlik. Üzeri çizili etiket — "fiyat yok". */
+export function EtiketsizIkonu(props) {
+  return (
+    <Cizgi {...props}>
+      <path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0l-7.2-7.2A2 2 0 0 1 2.8 12V4.8A2 2 0 0 1 4.8 2.8H12a2 2 0 0 1 1.4.6l7.2 7.2a2 2 0 0 1 0 2.8Z" />
+      <path d="M7.5 7.5h.01" /><path d="M3 21 21 3" />
+    </Cizgi>
+  )
+}
+
+/** Güvence: para dolaşmıyor. Üzeri çizili cüzdan. */
+export function CuzdansizIkonu(props) {
+  return (
+    <Cizgi {...props}>
+      {/* Banknot + üzeri çizgi. Cüzdan silueti denendi ve 20px'te bulanıklaştı: kapak,
+          dikiş ve toka çizgileri o ölçekte tek bir gri lekeye dönüşüyordu. Dikdörtgen +
+          daire aynı anlamı üç çizgide veriyor ve küçük boyutta ayakta kalıyor. */}
+      <rect x="2.5" y="6" width="19" height="12" rx="2" />
+      <circle cx="12" cy="12" r="2.5" /><path d="M3 21 21 3" />
+    </Cizgi>
+  )
+}
+
+/** Güvence: puan anlatana yazılır. Yükselen çizgi + yıldız. */
+export function ArtanIkonu(props) {
+  return (
+    <Cizgi {...props}>
+      <path d="M3 17l5-5 3.5 3.5L20 7" /><path d="M15 7h5v5" />
+    </Cizgi>
+  )
+}
