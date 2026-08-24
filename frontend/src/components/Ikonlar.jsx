@@ -215,3 +215,19 @@ export function KanitIkonu(props) {
     </Cizgi>
   )
 }
+
+/**
+ * Karşılıklı takas: ters yönde iki ok.
+ *
+ * Tek ok yetmiyor — takasın anlamı KARŞILIKLILIK ve bunu ancak iki yön anlatıyor.
+ * Döngüsel bir ok (yenile ikonu) da denendi: o "tekrar dene" diye okunuyor,
+ * "iki taraf da veriyor" diye değil.
+ */
+export function TakasIkonu(props) {
+  return (
+    <Cizgi {...props}>
+      <path d="M4 7h16" /><path d="M16 3l4 4-4 4" />
+      <path d="M20 17H4" /><path d="M8 13l-4 4 4 4" />
+    </Cizgi>
+  )
+}

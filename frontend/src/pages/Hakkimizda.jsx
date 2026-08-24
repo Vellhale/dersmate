@@ -7,6 +7,7 @@ import {
   KanitIkonu,
   KisilerIkonu,
   OnayIkonu,
+  TakasIkonu,
   UfukIkonu,
 } from '../components/Ikonlar'
 
@@ -72,30 +73,31 @@ const DEGERLER = [
   olmak ile kullanıcılar arasında para dolaşmaması aynı iddia değil) ama okuyan için
   ayrımı yok — üç maddelik bir şeritte iki madde aynı soruyu yanıtlıyordu.
 
-  ⚠️ EKLENEN MADDENİN METNİ İSTENENDEN FARKLI ve gerekçesi şu:
+  EKLENEN: "Karşılıklı takas".
 
-  İstenen metin "ders aldıkça kredi harcarsın" diyordu. Sistem bunu YAPMIYOR.
-  CLAUDE.md'nin kuralı açık: "Öğrenci ders almak için hiçbir şey ödemez… Tek bacaklı
-  işlem — escrow/bloke kredi mekanizması kaldırıldı, geri getirme." Kod da öyle:
-  CreditLedgerService yalnızca anlatana puan BASIYOR, öğrenciden hiçbir şey düşmüyor
-  (bkz. Features/Scheduling/ApproveSession.cs).
+  ⚠️ ÖNCE BAŞKA BİR METİN İSTENMİŞTİ ve yazılmadı — kaydı burada duruyor çünkü aynı
+  hataya bir daha düşülmesin. İstenen metin "kredi sistemi: ders aldıkça kredi
+  harcarsın" diyordu. SİSTEM BUNU YAPMIYOR: CreditLedgerService yalnızca anlatana puan
+  BASIYOR, öğrenciden hiçbir şey düşmüyor (tek bacaklı işlem — CLAUDE.md, "escrow/bloke
+  kredi mekanizması kaldırıldı, geri getirme"). O cümle ekranda dursaydı kullanıcı var
+  olmayan bir mekanizmaya göre karar verirdi: "kredim biterse ders alamam" diye ders
+  almaktan çekinmek gibi. Bir güvence şeridinin yapabileceği en kötü şey, güvence diye
+  yanlış bilgi vermek. Proje sahibi yanlışlıkla yazdığını doğruladı, madde değişti.
 
-  Yani o cümle ekranda dururken kullanıcı, var olmayan bir mekanizmaya göre karar
-  verirdi: "kredim biterse ders alamam" diye ders almaktan çekinmek gibi. Bir güvence
-  şeridinin yapabileceği en kötü şey, güvence diye yanlış bilgi vermek.
-
-  Bu yüzden madde ADIYLA duruyor (kredi sistemi / adil takas) ama açıklaması gerçek
-  mekanizmayı anlatıyor. Ekonomi bir gün çift bacaklıya çevrilirse değişecek tek yer
-  bu metin.
+  YERİNE GELEN ŞEY, İSTENEN FİKRİN GERÇEK KARŞILIĞI. "Adil takas" bu üründe var — ama
+  kredi üzerinden değil, KONU-KONUYA: eşleştirme motoru, senin aradığın konuyu anlatan
+  kişiler arasından senin anlatabildiğin konuyu arayanları bulup listenin başına alıyor
+  (GetMatchSuggestions.cs → IsCrossMatch, OrderByDescending). Keşfet ekranında da
+  "Karşılıklı takas" rozetiyle görünüyor, yani bu sayfa ürünle çelişmiyor, onu anlatıyor.
   ─────────────────────────────────────────────────────────────────────────────
 */
 const GUVENCELER = [
   {
-    Ikon: ArtanIkonu,
-    baslik: 'Kredi sistemiyle adil takas',
+    Ikon: TakasIkonu,
+    baslik: 'Karşılıklı takas',
     metin:
-      'Anlattığın her ders puana dönüşür ve seviyeni yükseltir. Aldığın ders için ' +
-      'kimseye bir şey ödemezsin — takas para üzerinden değil, emek üzerinden.',
+      'Senin öğrenmek istediğin konuyu anlatan ve senin anlatabildiğin konuyu ' +
+      'öğrenmek isteyen kişiler Keşfet’te listenin başında çıkar.',
   },
   {
     Ikon: CuzdansizIkonu,
