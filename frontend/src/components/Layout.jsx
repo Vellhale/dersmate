@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useAuth } from '../state/AuthContext'
 import { WalletProvider, useWallet } from '../state/WalletContext'
@@ -122,6 +122,38 @@ function LayoutShell() {
     session?.isAdmin ? [...NAV, { to: '/admin', label: 'Yönetim', Ikon: KalkanIkonu }] : NAV
   ).map((item) => (item.to === '/sohbet' ? { ...item, badge: unreadTotal } : item))
 
+  /*
+    ÇEKMECE AÇIKKEN: Esc kapatır, arkadaki sayfa kaymaz (2026-08-24).
+
+    Çekmece `<header>`in içinde duruyor ve barın 64px'lik yüksekliğinden TAŞARAK
+    altındaki içeriğin üstüne biniyor — yani görsel olarak bir katman, ama akışta
+    değil. Bu yüzden altındaki sayfa hâlâ kaydırılabiliyordu: kullanıcı menü açıkken
+    parmağını sürükleyince menü yerinde duruyor, arkadaki liste kayıyordu; menüyü
+    kapattığında bambaşka bir yerdeydi.
+
+    Kilit ile perde (aşağıda) BİRLİKTE anlamlı: perde dokunuşu yakalar, kilit de
+    perdeye düşen hareketin gövdeye sızmasını keser.
+
+    Önceki `overflow` değeri geri yazılıyor, sabit '' değil — aynı anda başka bir kip
+    (örn. filtre çekmecesi) kilit koymuş olabilir ve onu sessizce açmamalıyız.
+  */
+  useEffect(() => {
+    if (!menuOpen) return
+
+    const oncekiOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+
+    const esc = (e) => {
+      if (e.key === 'Escape') setMenuOpen(false)
+    }
+    document.addEventListener('keydown', esc)
+
+    return () => {
+      document.body.style.overflow = oncekiOverflow
+      document.removeEventListener('keydown', esc)
+    }
+  }, [menuOpen])
+
   const cikisYap = () => {
     logout()
     navigate('/giris')
@@ -151,9 +183,26 @@ function LayoutShell() {
           eksende geriliyordu; dikey konumu tarayıcının mutlak konumlu flex çocuğu nereye
           koyduğuna kalmıştı. `inset-0 + items-center` bunu belirsizlikten çıkarıyor:
           logo, hamburger ve rozetle aynı dikey merkeze oturuyor.
+
+          ÇOK DAR EKRANDA MERKEZ TERK EDİLİYOR (2026-08-24, max-[359px]).
+
+          Mutlak merkez barın geometrisine bakar, komşularına değil — genişlik yettiği
+          sürece doğru davranış bu. 320px'te yetmiyor: tarayıcıda ölçüldü, kelime
+          markasının sağ kenarı 208'de bitiyor, seviye rozeti 218'de başlıyordu. Aradaki
+          10px, "dersmate" ile mavi rozeti tek bir küme gibi okutuyordu — bitişik
+          değillerdi ama bitişik görünüyorlardı.
+
+          `left-14 right-24`, sarmalayıcıyı iki kümenin arasında kalan boş banda
+          daraltır (56px hamburger tarafı, 96px rozet + çıkış tarafı) ve logo O BANDIN
+          merkezine oturur: 320px'te iki yana da ~30px. Logo barın matematiksel
+          merkezinden birkaç piksel kayar; sıkışıklığın yanında görünmeyen bir bedel.
+
+          Yalnızca 359px ve altında: 360px'ten itibaren boşluk zaten ~30px'e çıkıyor ve
+          mutlak merkez kuralı olduğu gibi geçerli kalıyor. Eşik ölçümle seçildi, yuvarlak
+          bir sayı olduğu için değil.
         */}
         <div className="relative flex h-full items-center justify-between px-3 sm:px-6">
-          <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center max-[359px]:left-14 max-[359px]:right-24">
             <NavLink
               to="/"
               className="pointer-events-auto flex h-11 items-center"
@@ -270,6 +319,32 @@ function LayoutShell() {
             ))}
             <AltKume onTikla={() => setMenuOpen(false)} />
           </nav>
+        )}
+
+        {/*
+          PERDE — çekmecenin dışına dokununca kapansın diye (2026-08-24).
+
+          Çekmeceyi kapatmanın tek yolu hamburgere geri dönmekti; menü ekranın yarısını
+          kaplarken kullanıcının ilk refleksi ise açıkta kalan yere dokunmak oluyor ve
+          orada hiçbir şey olmuyordu. Karartma ayrıca "arkadaki sayfa şu an devre dışı"
+          diyor — menü kapalıymış gibi görünen tıklanabilir bir alan bırakmıyor.
+
+          top-16: perde barın ALTINDAN başlar. Barı da karartsaydı hamburger ile çıkış
+          düğmesi perdenin altında kalır, menüyü hamburgerle kapatmak imkânsızlaşırdı.
+
+          z-30: `<header>` z-40'ta, yani çekmece perdenin ÜSTÜNDE kalır; perde yalnızca
+          onun dışındaki her şeyi örter.
+
+          aria-hidden: perde saf dekor, ekran okuyucuya söyleyecek bir şeyi yok —
+          kapatma eylemi zaten hamburgerin `aria-expanded`'ı ve menü öğeleriyle
+          erişilebilir durumda.
+        */}
+        {menuOpen && (
+          <div
+            className="fixed inset-x-0 bottom-0 top-16 z-30 bg-slate-900/40 lg:hidden"
+            onClick={() => setMenuOpen(false)}
+            aria-hidden="true"
+          />
         )}
       </header>
 
