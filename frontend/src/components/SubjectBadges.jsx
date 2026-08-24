@@ -19,63 +19,43 @@ import { useAsync } from '../state/useAsync'
   etmiyordu; 50 saat ise pratikte kimsenin ulaşamadığı bir sayıydı, yani ödül değil
   dekordu. 8 ve 15 saat, kazanılabilir ve kazanıldığında bir şey söyleyen iki eşik.
 
-  MADALYA GÖRÜNÜMÜ. Eski rozetler branşa göre renklendirilmiş düz haplardı (Matematik
-  mavi, Fizik mor…) ve seviyeyi yalnızca halka kalınlığı ile nokta sayısı anlatıyordu —
-  yani en zor kazanılan şey en zor fark edilen şeydi. Artık renk BRANŞI değil KADEMEYİ
-  anlatıyor: gümüş ve altın, herkesin ilk bakışta sıraladığı iki metal.
+  METALİK TASARIMDAN VAZGEÇİLDİ (2026-08-24). Bir önceki sürüm gradyanlı, beyaz
+  parlama şeritli, renkli gölgeli "metal" haplar taşıyordu; içinde branş emojisi
+  (sayı tuşu, atom simgesi gibi), sonunda madalya emojisi (birincilik ve
+  ikincilik madalyası) vardı. Sahibin geri bildirimiyle hepsi
+  kaldırıldı: parlama efektleri bilgi değil gürültüydü ve emojiler platformdan
+  platforma farklı çizildiği için rozetler her cihazda başka görünüyordu. Şimdi
+  rozet sade bir beyaz hap: bu dosyada çizilen küçük bir madalya SVG'si + başlık
+  metni, başka hiçbir süsleme yok. SVG her platformda aynı çizilir; kademe bilgisini
+  tek başına madalyanın rengi (gümüş / altın) taşır.
 
-  Metalik his üç katmandan geliyor, hepsi CSS:
-    1. Eğik gradyan (135°) — ışığın tek yönden geldiği izlenimi
-    2. Üstte beyaz bir parlaklık şeridi (inset ring + üst yarıda beyaz/30 katman)
-    3. Kendi renginde renkli gölge — metal, kâğıt gibi nötr gölge düşürmez
-
-  Branş bilgisi kaybolmuyor: ikon rozetin içinde duruyor ve başlıkta zaten dersin adı
-  yazıyor ("Matematik Üstadı"). Kaybolan tek şey branşın RENGİ ve o renk, kademenin
-  önüne geçtiği için bilerek bırakıldı.
+  Branş bilgisi kaybolmuyor: başlıkta zaten dersin adı yazıyor ("Matematik Üstadı").
   ─────────────────────────────────────────────────────────────────────────────
 */
 
-/* Branş ikonları. Renk taşımıyorlar artık — madalyanın kendi metali baskın. */
-const BRANS_IKONU = {
-  Turkce: '📖',
-  Tarih: '🏛️',
-  Cografya: '🌍',
-  Matematik: '🔢',
-  Geometri: '📐',
-  Fizik: '⚛️',
-  Kimya: '🧪',
-  Biyoloji: '🧬',
-}
-
 /*
-  KADEME STİLLERİ.
+  KADEMELER.
 
   Sıra numarası ayrıca tutuluyor (`sira`): aynı branşta iki rozet varsa yükseği
   seçmek için sayısal bir karşılaştırma gerekiyor ve enum adına göre alfabetik
   sıralamak tesadüfen doğru sonuç verip yarın sessizce bozulurdu.
 
-  Kontrast: her iki madalyada da yazı kendi zemininin en koyu tonunda
-  (amber-950 / slate-900) — ölçüldü, ikisi de AA eşiğinin üstünde. Altın rozette
-  beyaz yazı denendi ve sarı zeminde 1.9:1 ile okunamıyordu.
+  `disk` / `kenar`, MadalyaIkonu'ndaki SVG'nin dolgu ve kenar renkleri. Hex değil
+  Tailwind sınıfı — kaynak-sabitleri süpürgesi hex'i yakalar, sınıf ise paletle
+  birlikte yaşar.
 */
 const KADEME = {
   Ogretici: {
     sira: 1,
     etiket: 'Gümüş',
-    madalya: '🥈',
-    kabuk:
-      'bg-gradient-to-br from-slate-200 via-slate-100 to-slate-400 text-slate-900 ' +
-      'ring-1 ring-inset ring-white/70 shadow-md shadow-slate-400/40',
-    parlama: 'from-white/70',
+    disk: 'fill-slate-300',
+    kenar: 'stroke-slate-400',
   },
   Ustad: {
     sira: 2,
     etiket: 'Altın',
-    madalya: '🥇',
-    kabuk:
-      'bg-gradient-to-br from-yellow-300 via-amber-200 to-yellow-500 text-amber-950 ' +
-      'ring-1 ring-inset ring-white/70 shadow-md shadow-amber-500/40',
-    parlama: 'from-white/80',
+    disk: 'fill-amber-400',
+    kenar: 'stroke-amber-500',
   },
 }
 
@@ -166,7 +146,7 @@ export function SubjectBadges({ userId, kendiProfilim = false }) {
                 <span className="w-20 shrink-0 truncate">{p.subject}</span>
                 <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-100">
                   <div
-                    className="h-full rounded-full bg-gradient-to-r from-slate-300 to-slate-400"
+                    className="h-full rounded-full bg-slate-300"
                     style={{ width: `${oran}%` }}
                   />
                 </div>
@@ -183,53 +163,40 @@ export function SubjectBadges({ userId, kendiProfilim = false }) {
 }
 
 /**
- * Tek madalya.
+ * Madalya ikonu: üstte iki kısa kurdele şeridi, altta disk — klasik madalya silueti.
  *
- * Metalik his katman katman kuruluyor; tek bir gradyan "metal" hissi vermiyor, düz
- * renkli bir hap gibi duruyor. Üç katman:
- *   • eğik ana gradyan (ışık sol üstten)
- *   • üst yarıda beyaz parlaklık (metalin ışık alan yüzü)
- *   • kendi renginde gölge (metal nötr gri gölge düşürmez)
- *
- * `overflow-hidden` + `relative` şart: parlaklık katmanı mutlak konumlu ve rozetin
- * yuvarlak köşelerinden taşmamalı.
+ * Emoji yerine SVG, çünkü emoji her platformda başka çiziliyordu ve rozetler cihazdan
+ * cihaza farklı görünüyordu; bu ikon her yerde aynı piksellerle gelir. Kademeyi tek
+ * başına diskin rengi anlatır; kurdele bilerek nötr slate — dikkat metalde kalsın.
+ * Şeritler diskten önce çizilir ki uçları diskin arkasına saklansın.
+ */
+function MadalyaIkonu({ kademe }) {
+  return (
+    <svg viewBox="0 0 24 24" className="h-5 w-5 shrink-0" aria-hidden="true">
+      <path d="M7 2h4l1.8 7.5-4 1z" className="fill-slate-400" />
+      <path d="M13 2h4l-1.8 8.5-4-1z" className="fill-slate-400" />
+      <circle cx="12" cy="15" r="6" strokeWidth="1.5" className={`${kademe.disk} ${kademe.kenar}`} />
+    </svg>
+  )
+}
+
+/**
+ * Tek rozet: beyaz hap içinde madalya ikonu + sunucudan gelen başlık. Görsel dil
+ * bilerek bu kadar: sahibin isteği "temiz, sade bir madalya ikonu ve yanında metin,
+ * ekstra hiçbir logo veya süsleme" idi. Saat bilgisi ve kademe adı tooltip'te,
+ * kademe adı ekran okuyucu için ayrıca sr-only etikette.
  */
 function Madalya({ rozet }) {
   const k = KADEME[rozet.level] ?? VARSAYILAN_KADEME
-  const ikon = BRANS_IKONU[rozet.branch] ?? '🎓'
 
   return (
     <span
-      className={`relative inline-flex items-center gap-2 overflow-hidden rounded-full
-                  py-1.5 pl-1.5 pr-3.5 text-sm font-semibold ${k.kabuk}`}
+      className="inline-flex items-center gap-2 rounded-full border border-slate-200
+                  bg-white py-1.5 pl-2.5 pr-3.5 text-sm font-medium text-slate-800 shadow-sm"
       title={`${rozet.title} — ${rozet.hours} saat ders anlatımı (${k.etiket})`}
     >
-      {/* Parlaklık: üst yarıyı kaplayan yumuşak beyaz geçiş. pointer-events yok,
-          tamamen dekoratif. */}
-      <span
-        aria-hidden="true"
-        className={`pointer-events-none absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b ${k.parlama} to-transparent`}
-      />
-
-      {/* Madalyon: koyu bir kuyu içinde branş ikonu. Metalin üstünde ikinci bir yüzey
-          olması, rozeti düz bir etiketten çıkarıp nesneye benzetiyor. */}
-      <span
-        aria-hidden="true"
-        className="relative grid h-6 w-6 shrink-0 place-items-center rounded-full
-                   bg-white/60 text-[13px] shadow-inner ring-1 ring-inset ring-white/80"
-      >
-        {ikon}
-      </span>
-
-      <span className="relative">{rozet.title}</span>
-
-      {/* Kademe işareti sonda: madalya emojisi platformdan platforma değişse bile
-          metalin RENGİ kademeyi zaten söylüyor, bu yüzden emoji tek başına taşıyıcı
-          değil — destekleyici. */}
-      <span aria-hidden="true" className="relative text-base leading-none">
-        {k.madalya}
-      </span>
-
+      <MadalyaIkonu kademe={k} />
+      <span>{rozet.title}</span>
       <span className="sr-only">({k.etiket} kademe)</span>
     </span>
   )
