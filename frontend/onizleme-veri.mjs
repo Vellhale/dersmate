@@ -7,7 +7,7 @@
        tek-dosya HTML'in içine gömer (tarayıcıda çalışır).
 
   Bu yüzden burada Node'a özgü HİÇBİR ŞEY olamaz: import yok, fs yok, process yok.
-  Yalnızca düz JavaScript ve `crypto.randomUUID` (ikisinde de var).
+  Yalnızca düz JavaScript.
 
   ⚠️ VERİ SAHTEDİR. Doğrulama yok, kayıt yok, üretimle ilgisi yok.
 */
@@ -16,8 +16,30 @@
 
 const DEMO_ID = '11111111-1111-1111-1111-111111111111'
 
-const konu = (ad, ders, gonullu = false) => ({
-  topicId: crypto.randomUUID(), topicName: ad, subjectName: ders, level: 3, isVolunteer: gonullu,
+/*
+  `crypto.randomUUID` YALNIZCA GÜVENLİ BAĞLAMDA tanımlı: https, localhost ve file://.
+  Önizleme dosyası tam olarak bunun dışına da taşınıyor — telefondan bakmak için düz
+  http ile bir LAN adresinden (http://192.168.x.x:8080) servis edildiğinde ya da
+  yalıtılmış bir iframe'e gömüldüğünde `crypto.randomUUID is not a function` ile sayfa
+  hiç açılmıyordu. Kodun geri kalanı bu yedeği zaten yapıyor (bkz. Admin.jsx),
+  burası atlanmıştı. Kimlikler yalnızca React key'i olarak kullanılıyor; benzersizlik
+  yeterli, kriptografik kalite gerekmiyor.
+*/
+const kimlik = () =>
+  globalThis.crypto?.randomUUID?.() ??
+  'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0
+    return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16)
+  })
+
+/*
+  Alan adları API'nin döndürdüğü JSON ile BİREBİR aynı olmalı: PortfolioEntryDto
+  `SelfAssessedLevel` diyor, arayüz de `entry.selfAssessedLevel` okuyor. Burada `level`
+  yazdığı sürece Portföy kartında "Seviye /5" rakamsız görünüyordu.
+*/
+const konu = (ad, ders, gonullu = false, seviye = 3) => ({
+  topicId: kimlik(), topicName: ad, subjectName: ders,
+  selfAssessedLevel: seviye, isVolunteer: gonullu,
 })
 
 const PROFIL = {
@@ -38,12 +60,19 @@ const PROFIL = {
   nextRankAt: 12000,
   isSelf: true,
   teacherCandidate: null,
+  // Seviyeler bilerek farklı: hepsi 3 olduğunda rozetin bir şey ölçtüğü anlaşılmıyor.
   canTeach: [
-    konu('Türev Alma Kuralları', 'Matematik'), konu('İntegral Uygulamaları', 'Matematik'),
-    konu('Limit ve Süreklilik', 'Matematik'), konu('Çemberde Açı', 'Geometri'),
-    konu('Dik Üçgen ve Pisagor Bağıntısı', 'Geometri'), konu('Elektrik ve Manyetizma', 'Fizik', true),
+    konu('Türev Alma Kuralları', 'Matematik', false, 5),
+    konu('İntegral Uygulamaları', 'Matematik', false, 4),
+    konu('Limit ve Süreklilik', 'Matematik', false, 5),
+    konu('Çemberde Açı', 'Geometri', false, 4),
+    konu('Dik Üçgen ve Pisagor Bağıntısı', 'Geometri', false, 3),
+    konu('Elektrik ve Manyetizma', 'Fizik', true, 3),
   ],
-  wantsToLearn: [konu('Organik Kimya', 'Kimya'), konu('Hücre Bölünmeleri', 'Biyoloji')],
+  wantsToLearn: [
+    konu('Organik Kimya', 'Kimya', false, 2),
+    konu('Hücre Bölünmeleri', 'Biyoloji', false, 1),
+  ],
 }
 
 const ROZETLER = {
@@ -101,7 +130,7 @@ const DERSLER = ['Türkçe', 'Tarih', 'Coğrafya', 'Matematik', 'Geometri', 'Fiz
 const KONULAR = DERSLER.flatMap((ders) =>
   ['TYT', 'AYT'].flatMap((seviye) =>
     [1, 2, 3].map((i) => ({
-      topicId: crypto.randomUUID(), topic: `${ders} örnek konu ${i}`,
+      topicId: kimlik(), topic: `${ders} örnek konu ${i}`,
       subject: ders, category: seviye, rootCategory: 'YKS',
     }))))
 
@@ -127,12 +156,25 @@ function apiYanit(method, yol) {
   if (yol === '/api/wallet') return { balance: PROFIL.totalEarnedCredits, lockedBalance: 0, lots: [], transactions: { items: [], page: 1, totalPages: 1, hasNextPage: false } }
   if (yol === '/api/conversations') return []
 
-  // Portföy uçları DÜZ DİZİ döner (sayfalı zarf değil) — bileşenler doğrudan .filter/.map
-  // çağırıyor. Zarf dönmek "C.filter is not a function" ile sayfayı düşürüyordu.
-  if (yol.startsWith('/api/portfolio/entries')) return PROFIL.canTeach.map((k, i) => ({
-    entryId: `p${i}`, topicId: k.topicId, topicName: k.topicName, subjectName: k.subjectName,
-    categoryName: i % 2 ? 'AYT' : 'TYT', direction: 'Offer', level: k.level, isVolunteer: k.isVolunteer,
-  }))
+  /*
+    Portföy uçları DÜZ DİZİ döner (sayfalı zarf değil) — bileşenler doğrudan .filter/.map
+    çağırıyor. Zarf dönmek "C.filter is not a function" ile sayfayı düşürüyordu.
+
+    Sayfa diziyi direction'a göre İKİYE ayırıyor: Offer → "Verebileceğim dersler",
+    Seek → "Almak istediğim dersler". Yalnızca canTeach döndürüldüğü sürece sağdaki
+    sütun her zaman boş görünüyordu; wantsToLearn da Seek olarak ekleniyor.
+  */
+  if (yol.startsWith('/api/portfolio/entries')) {
+    const girdi = (k, i, yon) => ({
+      entryId: `${yon.toLowerCase()}${i}`, topicId: k.topicId, topicName: k.topicName,
+      subjectName: k.subjectName, categoryName: i % 2 ? 'AYT' : 'TYT', direction: yon,
+      selfAssessedLevel: k.selfAssessedLevel, note: null, isVolunteer: k.isVolunteer,
+    })
+    return [
+      ...PROFIL.canTeach.map((k, i) => girdi(k, i, 'Offer')),
+      ...PROFIL.wantsToLearn.map((k, i) => girdi(k, i, 'Seek')),
+    ]
+  }
   if (yol.startsWith('/api/portfolio/suggestions')) return []
 
   // Çerez rızası: sunucu "hiç sorulmamış" derse şerit görünür — önizlemede istenen bu.
