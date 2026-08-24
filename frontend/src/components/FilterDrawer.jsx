@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { Button } from './ui'
 
 const SORTS = [
@@ -141,9 +142,18 @@ export function FilterPanel({
       {/* Gönüllülük onay kutusu kaldırıldı: ilanlar arasında böyle bir ayrım kalmadı,
           filtrelenecek bir nitelik de yok. */}
 
+      {/*
+        Sonuç sayısı YOKKEN satır boş kalır, tire konmaz.
+
+        `resultCount` yalnızca arama kipinde geliyor (bkz. Discover.jsx); onun dışında
+        null. Eskiden bu durumda çıplak bir "—" yazılıyordu ve mobil çekmecede —
+        "Filtreleri temizle" düğmesinin yanında tek başına duran bir tire olarak —
+        yüklenememiş bir değer, yani kırık bir şey gibi okunuyordu. Boş `span`
+        justify-between'ı bozmadan aynı hizayı koruyor: düğme yine sağda kalıyor.
+      */}
       <div className="flex items-center justify-between gap-3 border-t border-slate-200/80 pt-4">
         <span className="text-sm text-slate-500">
-          {resultCount === null ? '—' : `${resultCount} sonuç`}
+          {resultCount === null ? '' : `${resultCount} sonuç`}
         </span>
         <Button variant="secondary" onClick={onReset}>
           Filtreleri temizle
@@ -208,15 +218,78 @@ function RangeField({ label, hint, min, max, step, value, onChange, display }) {
   )
 }
 
-/** Mobilde filtreleri alttan açan katman. */
+/**
+ * Mobilde filtreleri alttan açan katman.
+ *
+ * ─── KATMAN ARTIK GERÇEKTEN KİPSEL (2026-08-24) ──────────────────────────────
+ * Görünüşü baştan beri bir kip (modal) idi ama davranışı değildi ve telefonda üç ayrı
+ * şekilde ısırıyordu:
+ *
+ *  1. PERDEYE DOKUNMAK KAPATMIYORDU. Alttan açılan bir çekmeceyi kapatmanın en
+ *     beklenen yolu üstündeki karartıya dokunmaktır; burada tek çıkış sağ üstteki
+ *     ✕ idi, yani başparmağın en uzak köşesi.
+ *  2. ARKA PLAN KAYIYORDU. Perde `fixed inset-0` ile ekranı kaplıyor ama kendi
+ *     kaydırılabilir içeriği olmadığı için parmak hareketi ALTTAKİ sayfaya geçiyordu:
+ *     çekmece kapanınca kullanıcı listenin bambaşka bir yerinde buluyordu kendini.
+ *     `overscroll-contain` panelin kendi kaydırma zincirini keser, gövdedeki
+ *     `overflow:hidden` de perdeye düşen dokunuşu durdurur — ikisi birlikte gerekli.
+ *  3. EKRAN OKUYUCU KİP OLDUĞUNU BİLMİYORDU. role/aria-modal yoktu; katman açıkken
+ *     arkadaki sayfa hâlâ gezilebilir görünüyordu.
+ *
+ * Esc de bağlandı: klavyeli bir tablet ya da masaüstü tarayıcı dar pencerede bu
+ * çekmeceyi görüyor ve orada Esc, kapatmanın standart yolu.
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
 export function FilterDrawer({ open, onClose, children }) {
+  /*
+    Esc dinleyicisi ve gövde kilidi TEK etkide: ikisinin de ömrü aynı (katman açık
+    olduğu süre) ve ikisi de aynı temizliği istiyor. Ayrı efektlere bölmek, birini
+    temizlemeyi unutmayı kolaylaştırırdı.
+
+    Kilit, önceki `overflow` değerini geri yazar — sabit bir '' yazmak, başka bir
+    bileşenin (ileride bir kip daha) koyduğu kilidi sessizce açardı.
+  */
+  useEffect(() => {
+    if (!open) return
+
+    const oncekiOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+
+    const esc = (e) => {
+      if (e.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', esc)
+
+    return () => {
+      document.body.style.overflow = oncekiOverflow
+      document.removeEventListener('keydown', esc)
+    }
+  }, [open, onClose])
+
   if (!open) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end bg-slate-900/40 lg:hidden">
+    /*
+      Perde tıklaması: onClick PERDEDE, panelde stopPropagation YOK — panelin kendi
+      onClick'i olmadığı için olay perdeye kadar çıkar ve panel içindeki her dokunuş
+      çekmeceyi kapatırdı. `e.target === e.currentTarget` kontrolü, olayın gerçekten
+      perdenin kendisinden geldiğini söyler; stopPropagation'a göre daha dar bir söz
+      veriyor: panel içindeki bileşenlerin olay yayılımını bozmuyor.
+    */
+    <div
+      className="fixed inset-0 z-50 flex items-end bg-slate-900/40 lg:hidden"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose()
+      }}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="filtre-cekmecesi-baslik"
+    >
       <div className="flex max-h-[85dvh] w-full flex-col rounded-t-2xl bg-white">
         <div className="flex shrink-0 items-center justify-between border-b border-slate-200/80 px-5 py-3">
-          <h3 className="font-semibold text-slate-800">Filtreler</h3>
+          <h3 id="filtre-cekmecesi-baslik" className="font-semibold text-slate-800">
+            Filtreler
+          </h3>
           <button
             onClick={onClose}
             className="grid h-11 w-11 place-items-center rounded-lg text-slate-400 hover:bg-slate-100"
@@ -226,7 +299,7 @@ export function FilterDrawer({ open, onClose, children }) {
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-5 py-4">{children}</div>
+        <div className="flex-1 overflow-y-auto overscroll-contain px-5 py-4">{children}</div>
 
         <div className="shrink-0 border-t border-slate-200/80 px-5 py-3">
           <Button className="w-full" onClick={onClose}>
