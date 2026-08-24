@@ -228,6 +228,25 @@ export function KanitIkonu(props) {
   )
 }
 
+/*
+  ── REZERVASYON MODALININ İKONU ──────────────────────────────────────────────
+  Aynı 24'lük ızgara, aynı çizgi ağırlığı. Modal içindeki grup başlıklarında ikon
+  gezinme değil ANLAM taşıyor: kutunun konusunu metinden önce söylüyor — Hakkımızda
+  sayfasındaki ikon diliyle aynı gerekçe.
+*/
+
+/** Takvim: rezervasyon modalindeki "tarih, saat ve süre" grubunun başlığı.
+    Geometri Lucide'ın `calendar` çiziminden; kütüphane yine eklenmedi
+    (dosya başındaki gerekçe geçerli). */
+export function TakvimIkonu(props) {
+  return (
+    <Cizgi {...props}>
+      <rect x="3" y="4" width="18" height="18" rx="2" />
+      <path d="M16 2v4" /><path d="M8 2v4" /><path d="M3 10h18" />
+    </Cizgi>
+  )
+}
+
 /**
  * Karşılıklı takas: ters yönde iki ok.
  *
@@ -240,6 +259,38 @@ export function TakasIkonu(props) {
     <Cizgi {...props}>
       <path d="M4 7h16" /><path d="M16 3l4 4-4 4" />
       <path d="M20 17H4" /><path d="M8 13l-4 4 4 4" />
+    </Cizgi>
+  )
+}
+
+/*
+  ── PROFİL SAYAÇLARININ İKONLARI ─────────────────────────────────────────────
+  UserProfileView'daki sayaç şeridi için (kep = ders, yıldız = puan,
+  grafik = seviye, takvim = katılım). Kep (KepIkonu) ve takvim (TakvimIkonu)
+  zaten yukarıda var — ikinci bir takvim ÇİZİLMEDİ, aynı kavramın iki çizimi
+  ikon dilini böler. Buradaki iki yeni ikon 16px'te (h-4) çizileceklerini
+  bilerek sade tutuldu — o ölçekte fazladan her çizgi bulanıklaşıp lekeye
+  dönüşüyor (bkz. CuzdansizIkonu'daki cüzdan denemesi).
+*/
+
+/** Puan/değerlendirme: beş köşeli yıldız. Dolgusuz — sayacın yanında süs değil
+    işaret; dolu yıldız amber puan yıldızlarıyla (Yildizlar) karışırdı. */
+export function YildizIkonu(props) {
+  return (
+    <Cizgi {...props}>
+      <path d="m12 3 2.6 5.4 5.9.8-4.3 4.1 1 5.9-5.2-2.8-5.2 2.8 1-5.9-4.3-4.1 5.9-.8z" />
+    </Cizgi>
+  )
+}
+
+/** Seviye: soldan sağa yükselen üç çubuk. ArtanIkonu (çizgi + ok) zaten var ama
+    o Hakkımızda'daki "puan anlatana yazılır" güvencesine bağlı; burada anlam
+    "basamak basamak yükselen seviye" ve çubuklar bunu okla değil merdivenle
+    söylüyor. */
+export function GrafikIkonu(props) {
+  return (
+    <Cizgi {...props}>
+      <path d="M5 20v-4" /><path d="M12 20v-9" /><path d="M19 20V6" />
     </Cizgi>
   )
 }

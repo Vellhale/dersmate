@@ -5,6 +5,7 @@ import { useWallet } from '../state/WalletContext'
 import { AnalyticsEvents, trackEvent } from '../lib/analytics'
 import { ReviewModal } from '../components/ReviewModal'
 import { PersonLink } from '../components/PersonLink'
+import { ArtanIkonu, KepIkonu, TakvimIkonu } from '../components/Ikonlar'
 import {
   REPORT_REASON_LABELS,
   SESSION_STATUS_LABELS,
@@ -363,8 +364,10 @@ export default function Sessions() {
           onClose={() => setBookOpen(false)}
           onBooked={(code, mintAmount) =>
             refresh(
-              // Öğrenci hiçbir şey ödemiyor; gösterilen tek sayı EĞİTMENİN kazanacağı
-              // puan ve o da sunucudan geliyor (istemcide formül kopyası tutulmuyor).
+              // Öğrenci hiçbir şey ödemiyor; gösterilen sayı EĞİTMENİN kazanacağı puan
+              // ve SUNUCUDAN geliyor. (Modalin özet şeridi aynı sayının yalnızca bir
+              // ÖNİZLEMESİNİ gösterir — bkz. BookModal'daki gösterim sabitleri;
+              // bağlayıcı olan her zaman buradaki mintAmount'tur.)
               `Ders rezerve edildi (eğitmen ${mintAmount} puan kazanacak). ` +
                 `Doğrulama kodun: ${code} — ders ekran görüntüsünde görünmeli.`,
             )
@@ -1041,6 +1044,26 @@ function BookModal({ matches, onClose, onBooked }) {
   // göstermek olur.
   const DURATION_OPTIONS = [30, 60]
 
+  /*
+    Puan önizlemesinin GÖSTERİM sabitleri — sunucudaki SessionRules.MintPerBlock (50)
+    ve MintBlockMinutes (30) ile birebir.
+
+    KURAL DEĞİL: seviye.js'teki EN_YUKSEK_SEVIYE ile aynı statüde. Hiçbir karar bu
+    sayılara bakılarak verilmiyor; rezervasyon sonrası bildirimde ve ders kartında
+    görünen sayı her zaman sunucunun döndürdüğü mintAmount. Buradaki tek iş, kullanıcı
+    "Rezerve et"e basmadan ÖNCE özet şeridinde kaç puan basılacağını gösterebilmek —
+    rezervasyon öncesinde bu sayının sorulabileceği bir uç yok. Sunucuda kural
+    değişirse burası da güncellenmeli: DURATION_OPTIONS ile aynı bakım sözleşmesi.
+  */
+  const BLOK_DAKIKA = 30
+  const BLOK_PUANI = 50
+
+  // Dokunma kuralı (bkz. ui.jsx Button): lg ALTINDA 44px hedef; lg üstünde fare var,
+  // buton girdilerle aynı yüksekliğe iner.
+  const SURE_BUTON_SINIFI =
+    'min-h-11 flex-1 rounded-lg border px-3 py-2 text-sm font-medium transition ' +
+    'focus:outline-none focus:ring-2 focus:ring-brand-200 lg:min-h-9'
+
   const [matchId, setMatchId] = useState('')
   const [topicId, setTopicId] = useState('')
   const [startLocal, setStartLocal] = useState('')
@@ -1082,6 +1105,19 @@ function BookModal({ matches, onClose, onBooked }) {
 
   const selected = options.find((o) => o.match.matchId === matchId) ?? null
   const bookable = options.filter((o) => o.topicId)
+
+  /*
+    Özet şeridinin canlı türevleri.
+
+    baslangicGecerli: datetime-local ya boş ya geçerli değer verir; Invalid Date'e karşı
+    yine de muhafız var, çünkü Intl.format geçersiz tarihte RangeError fırlatır ve tek
+    bozuk değer tüm modali düşürürdü. formatDateTime'a startLocal'ın YEREL hâli gidiyor
+    (UTC'ye çevrilmeden): fonksiyon yalnızca biçimlendirir ve kullanıcı kendi saat
+    diliminde seçtiğini kendi saat diliminde görmeli. UTC dönüşümü yalnızca sunucuya
+    giden yolda (submit içindeki toISOString).
+  */
+  const baslangicGecerli = Boolean(startLocal) && !Number.isNaN(new Date(startLocal).getTime())
+  const puanOnizleme = (Number(duration) / BLOK_DAKIKA) * BLOK_PUANI
 
   async function submit(event) {
     event.preventDefault()
@@ -1132,12 +1168,32 @@ function BookModal({ matches, onClose, onBooked }) {
       ) : (
         <>
           <form onSubmit={submit} id="book-form" className="space-y-4">
-            <Field
-              label="Eşleşme"
-              hint="Dersi alan taraf sensin; listelenen konu karşı tarafın sana anlatacağı konudur."
-            >
+            {/*
+              1. GRUP — eşleşme ve konu. Modal üç katlı bir hiyerarşi anlatıyor: önce
+              KİMDEN/NE (bu grup), sonra NE ZAMAN (alttaki grup), en altta da kararın
+              tamamını tek bakışta doğrulatan özet şeridi. Grup başlığındaki ikon çipi
+              (bg-brand-50) süs değil yön işareti: kutunun konusunu metinden önce söylüyor.
+            */}
+            <section className="rounded-xl border border-slate-100 p-4">
+              <div className="mb-3 flex items-center gap-2.5">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-600">
+                  <KepIkonu className="h-5 w-5" />
+                </span>
+                <div>
+                  <p className="text-sm font-semibold text-slate-800">Eşleşme ve konu</p>
+                  <p className="text-xs text-slate-500">
+                    Dersi alan taraf sensin; listelenen konu karşı tarafın sana anlatacağı konudur.
+                  </p>
+                </div>
+              </div>
+              {/*
+                Eski "Konu: …" doğrulama kutusu SİLİNMEDİ, taşındı: aynı işi artık özet
+                şeridinin "Konu" satırı yapıyor. Bilgiyi iki yerde tekrar etmek, şeridin
+                "tek bakışta doğrula" işini sulandırırdı.
+              */}
               <select
                 className="input"
+                aria-label="Eşleşme"
                 value={matchId}
                 onChange={(e) => {
                   setMatchId(e.target.value)
@@ -1152,42 +1208,135 @@ function BookModal({ matches, onClose, onBooked }) {
                   </option>
                 ))}
               </select>
-            </Field>
+            </section>
+
+            {/* 2. GRUP — zaman: tarih-saat ve süre yan yana (mobilde alt alta). */}
+            <section className="rounded-xl border border-slate-100 p-4">
+              <div className="mb-3 flex items-center gap-2.5">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-600">
+                  <TakvimIkonu className="h-5 w-5" />
+                </span>
+                <div>
+                  <p className="text-sm font-semibold text-slate-800">Tarih, saat ve süre</p>
+                  <p className="text-xs text-slate-500">Kendi saat diliminde seç; sistem UTC'ye çevirir.</p>
+                </div>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="label" htmlFor="rezervasyon-baslangic">
+                    Başlangıç
+                  </label>
+                  <input
+                    id="rezervasyon-baslangic"
+                    type="datetime-local"
+                    className="input"
+                    value={startLocal}
+                    onChange={(e) => setStartLocal(e.target.value)}
+                    required
+                  />
+                </div>
+                <div>
+                  <span className="label" id="rezervasyon-sure-etiketi">
+                    Süre
+                  </span>
+                  {/*
+                    Süre bir liste değil İKİ BUTON: seçenek sayısı ikiyken açılır listeyi
+                    açıp kapatmak gereksiz bir adımdı ve iki seçenek yan yana durunca
+                    karşılaştırma bedava. State sözleşmesi değişmedi — aynı `duration`
+                    state'i, sunucuya yine Number(duration) gidiyor; buton sayıyı sayı
+                    olarak atıyor, eski select'in dizgeye çevirmesi zaten Number ile
+                    karşılanıyordu.
+                  */}
+                  <div className="flex gap-2" role="group" aria-labelledby="rezervasyon-sure-etiketi">
+                    {DURATION_OPTIONS.map((dk) => {
+                      const aktif = Number(duration) === dk
+                      return (
+                        <button
+                          key={dk}
+                          type="button"
+                          onClick={() => setDuration(dk)}
+                          aria-pressed={aktif}
+                          className={`${SURE_BUTON_SINIFI} ${
+                            aktif
+                              ? 'border-brand-500 bg-brand-50 text-brand-800'
+                              : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+                          }`}
+                        >
+                          {dk} dakika
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              </div>
+            </section>
 
             {/*
-              Kutu artık TEK biçimli. Eskiden gönüllülük durumuna göre yeşile boyanıyor
-              ve "eğitmen puan kazanmıyor" yazıyordu; öyle bir ders türü kalmadı, her
-              ders puan basıyor. Kutunun tek işi seçimi doğrulatmak: kullanıcı listeden
-              çıktıktan sonra hangi konuyu seçtiğini görebilsin.
+              ÖZET ŞERİDİ — kararın tamamı tek bakışta: konu, anlatan, zaman, süre ve
+              basılacak puan. Girdiler değiştikçe canlı güncellenir (hepsi zaten state).
+
+              Eski tasarımın "öğrenciye sayı gösterme" kuralı BİLEREK değişti: sayı
+              etiketsiz durduğunda ücret gibi okunuyordu ve bu yüzden gizleniyordu.
+              Şerit sayıyı açıkça "eğitmenin kazanacağı puan" diye etiketleyip hemen
+              altında dersin sana ücretsiz olduğunu söylüyor — böylece onay ekranında
+              beliren puan da sürpriz olmaktan çıkıyor. Şeffaflık güven verir; sayının
+              kaynağı yukarıdaki gösterim sabitleri, bağlayıcı değer sunucunun
+              mintAmount'u.
+
+              aria-live: değişen değerleri ekran okuyucu da duysun.
             */}
-            {selected && (
-              <div className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">
-                Konu: <strong className="text-slate-800">{selected.topicName}</strong>
+            <section
+              className="rounded-xl border border-brand-100 bg-brand-50 px-4 py-3 text-brand-800"
+              aria-live="polite"
+            >
+              <p className="text-xs font-semibold uppercase tracking-wide text-brand-700">Özet</p>
+              <dl className="mt-2 space-y-1.5 text-sm">
+                <div className="flex items-baseline justify-between gap-3">
+                  <dt className="shrink-0 text-brand-700">Konu</dt>
+                  <dd className="text-right font-medium">
+                    {selected ? (
+                      selected.topicName
+                    ) : (
+                      <span className="font-normal text-brand-700/70">Eşleşme seçilmedi</span>
+                    )}
+                  </dd>
+                </div>
+                <div className="flex items-baseline justify-between gap-3">
+                  <dt className="shrink-0 text-brand-700">Anlatan</dt>
+                  <dd className="text-right font-medium">
+                    {selected ? (
+                      selected.match.otherDisplayName
+                    ) : (
+                      <span className="font-normal text-brand-700/70">—</span>
+                    )}
+                  </dd>
+                </div>
+                <div className="flex items-baseline justify-between gap-3">
+                  <dt className="shrink-0 text-brand-700">Tarih ve saat</dt>
+                  <dd className="text-right font-medium">
+                    {baslangicGecerli ? (
+                      formatDateTime(startLocal)
+                    ) : (
+                      <span className="font-normal text-brand-700/70">Henüz seçilmedi</span>
+                    )}
+                  </dd>
+                </div>
+                <div className="flex items-baseline justify-between gap-3">
+                  <dt className="shrink-0 text-brand-700">Süre</dt>
+                  <dd className="text-right font-medium">{Number(duration)} dakika</dd>
+                </div>
+              </dl>
+              <div className="mt-3 flex items-center justify-between gap-3 border-t border-brand-100 pt-3">
+                <span className="flex items-center gap-2 text-sm font-medium">
+                  <ArtanIkonu className="h-4 w-4" />
+                  Eğitmenin kazanacağı puan
+                </span>
+                <span className="text-base font-semibold tabular-nums">+{puanOnizleme} puan</span>
               </div>
-            )}
-
-            <Field label="Başlangıç" hint="Kendi saat diliminde seç; sistem UTC'ye çevirir.">
-              <input
-                type="datetime-local"
-                className="input"
-                value={startLocal}
-                onChange={(e) => setStartLocal(e.target.value)}
-                required
-              />
-            </Field>
-
-            {/* ÖĞRENCİYE ÜCRET GÖSTERİLMİYOR — çünkü ücret yok. Süre listesi yalnızca
-                süre seçtiriyor; eğitmenin kazanacağı puan bu kararın konusu değil ve
-                öğrenciye bir bedel varmış izlenimi vermemeli. */}
-            <Field label="Süre" hint="Ders almak ücretsizdir.">
-              <select className="input" value={duration} onChange={(e) => setDuration(e.target.value)}>
-                {DURATION_OPTIONS.map((dk) => (
-                  <option key={dk} value={dk}>
-                    {dk} dakika
-                  </option>
-                ))}
-              </select>
-            </Field>
+              <p className="mt-1.5 text-xs text-brand-700">
+                Sana ücretsiz — puanı sen ödemezsin, ders onaylandığında sistem basar.
+              </p>
+            </section>
 
             <ErrorBox error={error} />
           </form>
