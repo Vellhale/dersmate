@@ -79,17 +79,29 @@ public sealed class BookSessionHandler : IRequestHandler<BookSessionCommand, Boo
         /*
           ÜNİVERSİTE AĞI EŞLEŞMESİNDEN DERS REZERVE EDİLEMEZ — AÇIK MUHAFIZ.
 
-          Konusuz eşleşmede iki konu alanı da null; aşağıdaki kapsam kontrolü bunu
-          zaten engelliyordu ama TESADÜFEN: C#'ta `Guid != Guid?` karşılaştırması
-          null tarafta false döndüğü için koşul sağlanıyor ve "Konu bu eşleşmenin
-          kapsamında değil" hatası veriliyordu. Doğru sonuç, yanlış gerekçe — ve
-          kullanıcıya anlamsız bir mesaj.
+          Konusuz eşleşmede aşağıdaki kapsam kontrolü bunu zaten engelliyordu ama
+          TESADÜFEN: C#'ta `Guid != Guid?` karşılaştırması null tarafta false döndüğü
+          için koşul sağlanıyor ve "Konu bu eşleşmenin kapsamında değil" hatası
+          veriliyordu. Doğru sonuç, yanlış gerekçe — ve kullanıcıya anlamsız bir mesaj.
 
           Ayrı bir muhafız hem doğru mesajı veriyor hem de niyeti kayda geçiriyor:
           üniversite ağı eşleşmesi sohbet içindir, ders akışına girmez. Kapsam kontrolü
           bir gün değişirse bu kural onunla birlikte sessizce kaybolmaz.
+
+          KOŞUL YALNIZCA RequestedTopicId'YE BAKAR — OfferedTopicId'ye DEĞİL.
+
+          İlk yazımda `RequestedTopicId is null && OfferedTopicId is null` idi ve bu,
+          türün tanımından DAHA DAR bir koşuldu: Match.cs türü tek alanla tanımlıyor
+          (RequestedTopicId null ⇒ üniversite ağı). CreateMatch, konusuz dalda
+          OfferedTopicId'yi hiç doğrulamıyor; yani uca elle
+          `{requestedTopicId: null, offeredTopicId: <konu>}` göndermek türü üniversite
+          ağı olan ama muhafıza TAKILMAYAN bir eşleşme üretiyordu — ve o eşleşme
+          üzerinden gerçek bir ders rezerve edilip puan bastırılabiliyordu.
+
+          Muhafız artık türü, tanımın yaşadığı yerden okuyor. İki alanı birden sormak,
+          aynı kuralı iki yerde tanımlamaktı.
         */
-        if (match.RequestedTopicId is null && match.OfferedTopicId is null)
+        if (match.RequestedTopicId is null)
         {
             throw new AppException(ErrorCodes.InvalidBooking,
                 "Bu eşleşme üniversite ağı üzerinden kuruldu; ders rezervasyonu içermiyor.",

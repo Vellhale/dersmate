@@ -50,6 +50,102 @@ public sealed class SearchUniversityPeersHandler
 {
     private const int MaxPageSize = 50;
 
+    /*
+      ─── TÜRKÇE ARAMA: İKİ AYRI TUZAK, İKİ AYRI ÇARE ─────────────────────────────
+
+      İlk sürüm `x.University.ToLower().Contains(term)` yazıyordu ve Türkçe üniversite
+      adlarının NEREDEYSE HİÇBİRİNİ bulamıyordu. Sebebi iki katmanda:
+
+      1. VERİTABANI C KOLASYONUNDA (docker-compose.yml: --locale=C). PostgreSQL'in
+         `lower()`'ı argümanının kolasyonunu kullanır ve C kolasyonu ASCII DIŞINI
+         KATLAMAZ. Ölçüldü: lower('Boğaziçi Üniversitesi') → 'boğaziçi Üniversitesi'
+         — baştaki B düştü, Ü olduğu gibi kaldı. C# tarafı ise ToLowerInvariant() ile
+         Ü'yü ü yapıyordu. İki taraf farklı katladığı için "üniversitesi" araması
+         tablodaki YEDİ üniversitenin hiçbirini bulmuyordu; hata da sessizdi —
+         kullanıcı "kimse yok" diye okuyordu.
+
+         Çare: kolon ICU kolasyonuna çevriliyor (`und-x-icu`), böylece lower() Unicode'u
+         katlıyor. `tr-x-icu` DEĞİL bilerek: Türkçe kolasyonda lower('I') = 'ı' ama
+         .NET'in ToLowerInvariant()'ı 'i' verir — iki taraf yeniden ayrışırdı. Kök
+         kolasyon ile ToLowerInvariant aynı sonucu üretiyor.
+
+      2. NOKTALI İ İKİ TARAFTA İKİ FARKLI ŞEYE DÖNÜYOR. ICU, 'İ' (U+0130) için
+         'i' + U+0307 (birleşen üstteki nokta) üretiyor — lower('İTÜ') 4 karakterlik
+         'i̇tü' oluyor. .NET ise U+0130'a hiç dokunmuyor. Çare aşağıdaki blokta:
+         birleşen nokta atılıyor ve i/ı/İ üçlüsü tek harfte buluşturuluyor.
+
+      Gerçek veriye karşı ölçüldü: üniversitesi→18, odtü→4, itü→3, boğaziçi→4 kayıt.
+      Düzeltmeden önce hepsi 0 idi.
+
+      ILIKE denendi ve ÇÖZMÜYOR: o da kolasyona bağlı, C kolasyonunda
+      'Boğaziçi Üniversitesi' ILIKE '%üniversitesi%' → false.
+      ─────────────────────────────────────────────────────────────────────────────
+    */
+
+    private const string IcuKolasyon = "und-x-icu";
+
+    /// <summary>Birleşen üstteki nokta (U+0307) — ICU, noktalı İ'yi 'i' + bu karaktere ayırıyor.</summary>
+    private const string BirlesenNokta = "̇";
+
+    /// <summary>Büyük noktalı İ. .NET'in ToLowerInvariant()'ı buna DOKUNMUYOR (aşağıdaki nota bak).</summary>
+    private const string BuyukNoktaliI = "İ";
+
+    /// <summary>Küçük noktasız ı.</summary>
+    private const string NoktasizI = "ı";
+
+    /*
+      ─── İ/I AİLESİ TEK HARFE İNDİRİLİYOR ────────────────────────────────────────
+
+      Bu satırlar ölçümle yazıldı, ezberle değil. `dotnet fsi` ile bakıldı:
+
+        "İTÜ".ToLowerInvariant()  → "İtü"   [U+0130 U+0074 U+00FC]
+
+      Yani .NET, U+0130'u OLDUĞU GİBİ BIRAKIYOR — değişmez kültürde bu harfin tek
+      karaktere sığan bir küçük harf karşılığı yok. PostgreSQL'in ICU'su ise aynı harfi
+      'i' + U+0307 diye İKİ karaktere açıyor. İki taraf iki farklı sonuç üretiyordu ve
+      içinde İ geçen HER arama boş dönüyordu ("Üniversitesi" tuttu, "ÜNİVERSİTESİ"
+      tutmadı — fark yalnızca büyük İ).
+
+      Ayrıca Türkçe'nin klasik ikilisi var: 'I' değişmez kültürde 'i'ye, Türkçe'de
+      'ı'ya iner. "TIP" yazan kullanıcı "Tıp" kaydını bulamıyordu.
+
+      Çare, i/ı/İ üçlüsünü ARAMA AMACIYLA tek harfte ('i') buluşturmak. Bu bilinçli bir
+      ödün: arama biraz FAZLA eşleşir (ör. "sınıf" ile "sinif" aynı sayılır). Bir arama
+      kutusunda fazla eşleşmek, hiç eşleşmemekten iyidir — ve kullanıcı zaten gözüyle
+      seçiyor. Sıralama ya da tekillik kararlarında bu katlama KULLANILMAMALI.
+
+      `tr-x-icu` kolasyonu neden değil: orada lower('I') = 'ı' olur ama .NET 'i' verir —
+      iki taraf yeniden ayrışırdı. Kök kolasyon + açık harf eşlemesi, iki tarafı da
+      aynı yere getiriyor.
+      ─────────────────────────────────────────────────────────────────────────────
+    */
+
+    /// <summary>
+    /// Kullanıcının yazdığı terimi kolonla AYNI kurallarla katlar.
+    /// Sıra önemli: önce küçült, sonra ICU'nun ürettiği birleşen noktayı at, en son
+    /// geriye kalan İ/ı harflerini 'i'ye indir.
+    /// </summary>
+    private static string AramaIcinKatla(string terim) =>
+        terim.Trim()
+            .ToLowerInvariant()
+            .Replace(BirlesenNokta, string.Empty)
+            .Replace(BuyukNoktaliI, "i")
+            .Replace(NoktasizI, "i");
+
+    /*
+      KOLON KATLAMASI YARDIMCI METODA ÇIKARILAMAZ — SATIR İÇİNDE KALMAK ZORUNDA.
+
+      İlk denemede `KolonKatla(x.University)` diye bir static metot yazıldı ve uç 500
+      döndü. Sebep: EF Core, ifade ağacında gördüğü ÖZEL bir metodun gövdesine bakmaz;
+      onu SQL'e çeviremeyeceği bir çağrı sayar. (Çevrilemeyen bir `Where`, EF Core 3+
+      ile istemci tarafına düşmez — çalışma anında patlar.) Bu yüzden Collate/ToLower/
+      Replace zinciri aşağıda, sorgunun içinde AÇIKÇA yazılı.
+
+      Aynı zinciri değiştiren, İKİ yeri birden değiştirmeli (üniversite ve bölüm) ve
+      terim tarafındaki AramaIcinKatla ile aynı kuralları uygulamalı — iki taraf
+      ayrışırsa arama yine sessizce boş döner.
+    */
+
     private readonly IAppDbContext _db;
 
     public SearchUniversityPeersHandler(IAppDbContext db) => _db = db;
@@ -79,17 +175,27 @@ public sealed class SearchUniversityPeersHandler
 
         if (!string.IsNullOrWhiteSpace(request.University))
         {
-            // ILike DEĞİL ToLower().Contains(): EF.Functions.ILike Npgsql'e (Infrastructure)
-            // bağımlılık demek ve Application katmanının oraya bakması yasak. Aynı karar
-            // SearchOffers'ta da alındı; ikisi aynı yolu kullansın diye burada tekrarlandı.
-            var u = request.University.Trim().ToLowerInvariant();
-            query = query.Where(x => x.University!.ToLower().Contains(u));
+            var u = AramaIcinKatla(request.University);
+            query = query.Where(x =>
+                EF.Functions.Collate(x.University!, IcuKolasyon)
+                    .ToLower()
+                    .Replace(BirlesenNokta, "")
+                    .Replace(BuyukNoktaliI, "i")
+                    .Replace(NoktasizI, "i")
+                    .Contains(u));
         }
 
         if (!string.IsNullOrWhiteSpace(request.Department))
         {
-            var d = request.Department.Trim().ToLowerInvariant();
-            query = query.Where(x => x.Department != null && x.Department.ToLower().Contains(d));
+            var d = AramaIcinKatla(request.Department);
+            query = query.Where(x =>
+                x.Department != null &&
+                EF.Functions.Collate(x.Department, IcuKolasyon)
+                    .ToLower()
+                    .Replace(BirlesenNokta, "")
+                    .Replace(BuyukNoktaliI, "i")
+                    .Replace(NoktasizI, "i")
+                    .Contains(d));
         }
 
         // Sayım sıralamadan ÖNCE: boş sonuçta sıralama ve sayfalama boşuna çalışmasın.
