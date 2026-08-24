@@ -159,10 +159,17 @@ WHERE ls."TutorUserId" = '$ayseId' AND ls."Status" = 'Completed' AND s."Branch" 
 # Altı öğrenci yeterli: dersler 3 gün arayla dizildiği için aynı çiftin iki dersi asla
 # aynı 24 saatlik pencereye düşmüyor. HWID kullanıcı başına AYRI olmak zorunda — ban
 # kaydı cihaza yazılıyor, aynı HWID'i paylaşan hesaplar birbirini etkiler.
+#
+# ADLAR GERÇEK GÖRÜNMELİ. Bu hesaplar yalnızca ders üretmiyor; ders geçmişi üzerine
+# yazılan değerlendirmelerde (bkz. seed-degerlendirme.ps1) YORUMCU ADI olarak Ayşe'nin
+# profilinde herkese görünüyorlar. "Rozet Ogrencisi 3" yazan bir yorum, ekranı
+# değerlendirirken tasarımı değil veriyi konuşturuyor.
+$ADLAR = @('Deniz Aksoy', 'Kerem Bulut', 'Ada Yildirim', 'Melis Ozkan', 'Baris Tunc', 'Ipek Sarikaya')
+
 $ogrenciler = @()
 for ($i = 1; $i -le 6; $i++) {
     $hwid = ('r{0:d2}' -f $i) * 21 + 'r'
-    $ogrenciler += Register "rozet$i@demo.dev" "Rozet Ogrencisi $i" $hwid
+    $ogrenciler += Register "rozet$i@demo.dev" $ADLAR[$i - 1] $hwid
 }
 Write-Host "ogrenci havuzu: $($ogrenciler.Count) hesap"
 
