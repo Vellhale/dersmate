@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../lib/api'
 import { useAsync } from '../state/useAsync'
 import { useWallet } from '../state/WalletContext'
@@ -15,14 +15,41 @@ import {
 } from '../lib/format'
 import { Badge, Button, Card, EmptyState, ErrorBox, Field, Loading, Modal, Notice, Pagination, SectionTitle } from '../components/ui'
 
-const STATUS_TONES = {
-  Booked: 'brand',
-  AwaitingApproval: 'warning',
-  Completed: 'success',
-  Disputed: 'danger',
-  Cancelled: 'neutral',
-  Expired: 'neutral',
+/*
+  DURUM → TON TABLOSU. TEK KAYNAK.
+
+  Neden tablo, neden koşullu sınıf değil: durum başına üç ayrı görsel karar var (sol şerit
+  rengi, rozet tonu, vurgu metni rengi) ve bunlar kartın üç ayrı yerinde kullanılıyor.
+  JSX'in içine serpiştirilmiş üçlü koşullar olsaydı yeni bir durum eklendiğinde üç yerin
+  hepsini bulmak gerekirdi; biri unutulduğunda hata sessiz olurdu — kart yanlış renkte
+  çizilir, hiçbir şey patlamaz.
+
+  RENK TEK SİNYAL DEĞİL: şeridin yanında her zaman METİNLİ bir rozet duruyor
+  (SESSION_STATUS_LABELS). Renk körü bir kullanıcı için şerit süs, rozet bilgidir.
+
+  Ton seçimleri:
+    brand   → süreç işliyor, tarih ileride (Rezerve)
+    amber   → TOPUN SENDE olabileceği bekleme hâli (Onay bekliyor)
+    emerald → iyi biten iş (Tamamlandı)
+    rose    → sorunlu ya da yarıda kesilmiş iş (İtirazlı, İptal edildi)
+    slate   → kapanmış, kimseden aksiyon beklemeyen kayıt (Süresi doldu)
+
+  İptal rose ailesinde ama BİR TON AÇIK (rose-300): iptal olumsuz bir sonuç, fakat
+  itirazın aksine artık çözülmesi gereken bir mesele değil. Aynı kırmızı tonu vermek,
+  kapanmış bir dersi hâlâ ilgi bekleyen bir uyarı gibi gösterirdi.
+*/
+const DURUM_STILI = {
+  Booked: { serit: 'border-l-brand-500', rozet: 'brand', vurgu: 'text-brand-600' },
+  AwaitingApproval: { serit: 'border-l-amber-400', rozet: 'warning', vurgu: 'text-amber-700' },
+  Completed: { serit: 'border-l-emerald-500', rozet: 'success', vurgu: 'text-emerald-700' },
+  Disputed: { serit: 'border-l-rose-500', rozet: 'danger', vurgu: 'text-rose-700' },
+  Cancelled: { serit: 'border-l-rose-300', rozet: 'danger', vurgu: 'text-rose-700' },
+  Expired: { serit: 'border-l-slate-300', rozet: 'neutral', vurgu: 'text-slate-600' },
 }
+
+// Sunucu tanımadığımız bir durum döndürürse kart RENKSİZ değil NÖTR çizilir: eksik bir
+// eşleşme yüzünden `undefined` sınıf adı basıp kartın kenarlığını tamamen kaybetmeyelim.
+const VARSAYILAN_DURUM_STILI = { serit: 'border-l-slate-300', rozet: 'neutral', vurgu: 'text-slate-600' }
 
 /*
   Sayfa başına 5 ders. Eskiden 20'ydi ve "daha fazla yükle" ile ekleniyordu; 60 dersi olan
@@ -86,12 +113,18 @@ export default function Sessions() {
     setPastView(null)
     setPastError(null)
     sessions.reload()
-    // Onay puan basar; basım unvanı değiştirebilir. Başlıktaki unvan rozeti de tazelenmeli.
+    // Onay puan basar; profildeki puan sayacı ve başlıktaki seviye rozeti aynı cüzdan
+    // ucundan besleniyor, o yüzden tazeleniyor.
     refreshWallet()
   }
 
   async function sayfayaGit(hedef) {
     if (hedef < 1 || hedef > pastTotalPages || hedef === pastPage) return
+    // Sayfalama düğmeleri `disabled={pastLoading}` alıyor ama bu tek başına yetmez:
+    // disabled ancak bir sonraki render'da DOM'a yansır, arka arkaya iki tıklama araya
+    // render girmeden gelebilir. İkinci istek birincinin yanıtını ezerdi (yavaş olan
+    // sonra döner) ve kullanıcı tıklamadığı sayfada bulurdu kendini.
+    if (pastLoading) return
     setPastLoading(true)
     setPastError(null)
     try {
@@ -212,7 +245,7 @@ export default function Sessions() {
             refresh(
               // Öğrenci hiçbir şey ödemiyor; gösterilen tek sayı EĞİTMENİN kazanacağı
               // puan ve o da sunucudan geliyor (istemcide formül kopyası tutulmuyor).
-              `Ders rezerve edildi (${mintAmount === 0 ? 'gönüllü ders' : `eğitmen ${mintAmount} puan kazanacak`}). ` +
+              `Ders rezerve edildi (eğitmen ${mintAmount} puan kazanacak). ` +
                 `Doğrulama kodun: ${code} — ders ekran görüntüsünde görünmeli.`,
             )
           }
@@ -234,11 +267,9 @@ export default function Sessions() {
           session={dialog.session}
           onClose={() => setDialog(null)}
           onApproved={(credits, session) => {
-            refresh(
-              credits > 0
-                ? `Ders onaylandı. Eğitmene ${credits} puan yazıldı.`
-                : 'Gönüllü ders onaylandı — puan yazılmadı.',
-            )
+            // Tek metin: her ders puan basıyor, "puan yazılmadı" diyen bir dal yok.
+            // Yazılan sayı SUNUCUDAN gelen değerdir (istemci yeniden hesaplamaz).
+            refresh(`Ders onaylandı. Eğitmene ${credits} puan yazıldı.`)
             // Değerlendirme, onayın hemen ardından açılır: kural gereği yorum ancak
             // tamamlanmış bir dersin çıktısı olabilir ve bu an tam olarak o an.
             setDialog({ type: 'review', session })
@@ -300,6 +331,11 @@ function PointHistory() {
   const [error, setError] = useState(null)
 
   async function loadPage(next) {
+    // "Daha eski hareketler" ekleyerek çalışıyor: çift tıklama AYNI sayfayı iki kez
+    // eklerdi ve defterde her satır çift görünürdü. Butonun `loading` ile kilitlenmesi
+    // bir sonraki render'a kadar geçerli olmadığı için muhafız burada, fonksiyonun
+    // başında duruyor.
+    if (loading) return
     setLoading(true)
     setError(null)
     try {
@@ -415,92 +451,132 @@ function SessionCard({ session, onAction, past = false }) {
 
   const showCode = !past && (session.status === 'Booked' || session.status === 'AwaitingApproval')
 
-  return (
-    <Card>
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge tone={session.iAmTutor ? 'success' : 'brand'}>
-              {session.iAmTutor ? 'Anlatıyorum' : 'Alıyorum'}
-            </Badge>
-            <span className="font-semibold text-slate-800">{session.topicName}</span>
-            <Badge tone={STATUS_TONES[session.status]}>
-              {SESSION_STATUS_LABELS[session.status] ?? session.status}
-            </Badge>
-          </div>
+  const stil = DURUM_STILI[session.status] ?? VARSAYILAN_DURUM_STILI
 
-          <p className="mt-1 text-sm text-slate-600">
-            {session.subjectName} ·{' '}
-            <PersonLink userId={session.otherUserId} className="text-brand-700">
+  return (
+    /*
+      Sol şerit (border-l-4) Card'ın kendi border-slate-200/80 kenarlığını yalnızca SOL
+      kenarda eziyor; kalan üç kenar kart dilinin bir parçası olarak duruyor. Şerit,
+      listeyi taramakta olan gözün durumu OKUMADAN ayırt etmesini sağlıyor — okuma
+      rozetle yapılıyor.
+    */
+    <Card className={`border-l-4 ${stil.serit}`}>
+      {/*
+        Üst satır: SOLDA kimlik (konu + karşı taraf), SAĞDA durum.
+        Eski düzende konu adı iki rozetin arasına sıkışmış bir <span>'di ve kart
+        "beyaz bir etiket yığını" gibi okunuyordu. Konu artık başlık: kullanıcı listede
+        önce hangi dersi aradığını arar, durumunu sonra kontrol eder.
+      */}
+      <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
+        {/*
+          `grow basis-48` (flex-1 DEĞİL): flex-1 temel genişliği 0 yapar ve dar ekranda
+          rozetler konu adını birkaç karaktere kadar ezerdi. 12rem'lik bir taban, yer
+          kalmadığında rozetleri ALT SATIRA itiyor — başlık okunur kalıyor.
+        */}
+        <div className="min-w-0 grow basis-48">
+          <h3 className="truncate text-base font-semibold text-slate-900">{session.topicName}</h3>
+          <p className="mt-0.5 truncate text-sm text-slate-600">
+            <PersonLink userId={session.otherUserId} className="font-medium text-brand-700">
               {session.otherDisplayName}
             </PersonLink>{' '}
-            ile
+            ile · {session.subjectName}
           </p>
-
-          <p className="mt-1 text-sm text-slate-500">
-            {formatDateTime(session.scheduledStartUtc)} · {session.durationMinutes} dk ·{' '}
-            <strong className="text-slate-700">{session.isVolunteer ? 'gönüllü' : `${session.mintAmount} puan`}</strong>
-            {startsIn && !past && <span className="text-brand-600"> · {startsIn} sonra</span>}
-          </p>
-
-          {showCode && (
-            <div className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
-              Doğrulama kodu:{' '}
-              <span className="font-mono text-sm font-semibold tracking-wider text-slate-800">
-                {session.verificationCode}
-              </span>
-              {session.iAmTutor
-                ? ' — ders ekran görüntüsünde bu kod, sistem saati ve katılımcı listesi görünmeli.'
-                : ' — kanıt görselinde bu kodun göründüğünü doğrula.'}
-            </div>
-          )}
-
-          {session.iAmTutor && session.status === 'Booked' && endsIn && (
-            <p className="mt-2 text-xs text-amber-700">
-              ⏳ Time-Lock: “Dersi Tamamladım” <strong>{endsIn}</strong> sonra (planlanan bitişte) açılır.
-            </p>
-          )}
-
-          {session.canApprove && autoApproveIn && (
-            <p className="mt-2 text-xs text-amber-700">
-              ⏳ Onaylamazsan <strong>{autoApproveIn}</strong> sonra otomatik onaylanacak ve{' '}
-              eğitmene {session.mintAmount} puan yazılacak. İtiraz hakkın da o an kapanır.
-            </p>
-          )}
         </div>
 
-        <div className="flex shrink-0 flex-wrap gap-2">
-          {session.iAmTutor && session.status === 'Booked' && (
-            <Button
-              disabled={!completeReady}
-              onClick={() => onAction({ type: 'complete', session })}
-              title={completeReady ? undefined : 'Ders bitiş saatinden önce tamamlanamaz.'}
-            >
-              Dersi tamamladım
-            </Button>
-          )}
-
-          {session.canApprove && (
-            <Button variant="success" onClick={() => onAction({ type: 'approve', session })}>
-              Kanıtı incele ve onayla
-            </Button>
-          )}
-
-          {/* Şikayet HER derste açık: eski itiraz yalnızca onay bekleyen derste
-              mümkündü, oysa kötü davranış geçmiş bir derste de yaşanmış olabilir.
-              Savunma düğmesi YOK — şikayet tek yönlüdür (bkz. Domain/Moderation/Report.cs). */}
-          {!session.canApprove && (
-            <Button variant="secondary" onClick={() => onAction({ type: 'report', session })}>
-              Şikayet et
-            </Button>
-          )}
-
-          {session.canCancel && (
-            <Button variant="secondary" onClick={() => onAction({ type: 'cancel', session })}>
-              İptal
-            </Button>
-          )}
+        <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+          {/*
+            Rol rozeti bilinçli olarak NÖTR. Renk bu kartta tek bir şeyi anlatıyor:
+            dersin durumunu. Rol de renkliyse (eski hâlde yeşil/mavi) iki ayrı anlam
+            aynı sinyali paylaşır ve "yeşil = tamamlandı" öğrenilemez hâle gelirdi.
+          */}
+          <Badge tone="neutral">{session.iAmTutor ? 'Anlatıyorum' : 'Alıyorum'}</Badge>
+          <Badge tone={stil.rozet}>
+            {SESSION_STATUS_LABELS[session.status] ?? session.status}
+          </Badge>
         </div>
+      </div>
+
+      {/*
+        Meta şeridi: tarih/süre/puan. text-xs + slate-500 ile bilinçli olarak SOLUK —
+        bunlar doğrulama bilgisi, karar bilgisi değil. Üstündeki ince çizgi kimliği
+        metadan ayırıyor.
+      */}
+      <p className="mt-3 flex flex-wrap items-center gap-x-1.5 gap-y-1 border-t border-slate-100 pt-3 text-xs text-slate-500">
+        <span>{formatDateTime(session.scheduledStartUtc)}</span>
+        <span aria-hidden="true">·</span>
+        <span>{session.durationMinutes} dk</span>
+        <span aria-hidden="true">·</span>
+        {/* Her ders puan basar; gösterilen sayı sunucudan gelen mintAmount'tur. */}
+        <span>{session.mintAmount} puan</span>
+        {startsIn && !past && (
+          <>
+            <span aria-hidden="true">·</span>
+            <span className={`font-medium ${stil.vurgu}`}>{startsIn} sonra</span>
+          </>
+        )}
+      </p>
+
+      {showCode && (
+        <div className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
+          Doğrulama kodu:{' '}
+          <span className="font-mono text-sm font-semibold tracking-wider text-slate-800">
+            {session.verificationCode}
+          </span>
+          {session.iAmTutor
+            ? ' — ders ekran görüntüsünde bu kod, sistem saati ve katılımcı listesi görünmeli.'
+            : ' — kanıt görselinde bu kodun göründüğünü doğrula.'}
+        </div>
+      )}
+
+      {session.iAmTutor && session.status === 'Booked' && endsIn && (
+        <p className="mt-2 text-xs text-amber-700">
+          ⏳ Time-Lock: “Dersi Tamamladım” <strong>{endsIn}</strong> sonra (planlanan bitişte) açılır.
+        </p>
+      )}
+
+      {session.canApprove && autoApproveIn && (
+        <p className="mt-2 text-xs text-amber-700">
+          ⏳ Onaylamazsan <strong>{autoApproveIn}</strong> sonra otomatik onaylanacak ve{' '}
+          eğitmene {session.mintAmount} puan yazılacak. İtiraz hakkın da o an kapanır.
+        </p>
+      )}
+
+      {/*
+        Aksiyonlar kartın ALTINDA ve sağa yaslı. Eski düzende sağ sütundaydılar ve
+        dar ekranda metnin ortasına düşüp okuma akışını kesiyorlardı. Alt sıra ayrıca
+        her kartta aynı yerde duruyor — art arda üç kartta göz aynı noktayı arar.
+      */}
+      <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
+        {session.iAmTutor && session.status === 'Booked' && (
+          <Button
+            disabled={!completeReady}
+            onClick={() => onAction({ type: 'complete', session })}
+            title={completeReady ? undefined : 'Ders bitiş saatinden önce tamamlanamaz.'}
+          >
+            Dersi tamamladım
+          </Button>
+        )}
+
+        {session.canApprove && (
+          <Button variant="success" onClick={() => onAction({ type: 'approve', session })}>
+            Kanıtı incele ve onayla
+          </Button>
+        )}
+
+        {/* Şikayet HER derste açık: eski itiraz yalnızca onay bekleyen derste
+            mümkündü, oysa kötü davranış geçmiş bir derste de yaşanmış olabilir.
+            Savunma düğmesi YOK — şikayet tek yönlüdür (bkz. Domain/Moderation/Report.cs). */}
+        {!session.canApprove && (
+          <Button variant="secondary" onClick={() => onAction({ type: 'report', session })}>
+            Şikayet et
+          </Button>
+        )}
+
+        {session.canCancel && (
+          <Button variant="secondary" onClick={() => onAction({ type: 'cancel', session })}>
+            İptal
+          </Button>
+        )}
       </div>
     </Card>
   )
@@ -517,7 +593,18 @@ function ApproveModal({ session, onClose, onApproved, onReport }) {
   const [imageUrl, setImageUrl] = useState(null)
   const [imageError, setImageError] = useState(null)
   const [error, setError] = useState(null)
-  const [busy, setBusy] = useState(false)
+
+  /*
+    Onay, dosyanın en pahalı geri alınamaz işlemi: puan basıyor. Kilit BookModal'daki
+    gerekçenin aynısıyla ref üzerinde (state bir sonraki render'a kadar eski değeri
+    gösterir). İki kez gönderilen onay, sunucu idempotent değilse çift basım demektir.
+
+    Bu bayrak MODALIN KENDİ state'i, sayfa seviyesinde global bir bayrak DEĞİL: modal
+    session id ile key'lendiği için her ders kendi kilidini taşır. Global tek bayrak,
+    bir dersi onaylarken başka bir dersin butonunu da kilitlerdi.
+  */
+  const [onaylaniyor, setOnaylaniyor] = useState(false)
+  const onayKilidi = useRef(false)
 
   const latestProof = proofs.data?.[proofs.data.length - 1] ?? null
 
@@ -546,14 +633,16 @@ function ApproveModal({ session, onClose, onApproved, onReport }) {
   }, [latestProof, session.sessionId])
 
   async function approve() {
-    setBusy(true)
+    if (onayKilidi.current) return
+    onayKilidi.current = true
+    setOnaylaniyor(true)
     setError(null)
     try {
       const result = await api.approveSession(session.sessionId)
 
       // credit_transferred — transfer GERÇEKLEŞTİKTEN sonra; onay tıklaması yetmez,
-      // sunucu kilit/escrow adımlarında reddedebilir. Gönüllü derste 0 gönderilir:
-      // olayı hiç atmamak, "kaç ders tamamlandı" ölçümünü eksik bırakırdı.
+      // sunucu kilit/escrow adımlarında reddedebilir. Sunucu 0 döndürse bile olay
+      // gönderilir: olayı atlamak "kaç ders tamamlandı" ölçümünü eksik bırakırdı.
       trackEvent(AnalyticsEvents.CreditTransferred, {
         credits: result.creditsMinted,
         trigger: 'student_approval',
@@ -564,7 +653,8 @@ function ApproveModal({ session, onClose, onApproved, onReport }) {
     } catch (err) {
       setError(err)
     } finally {
-      setBusy(false)
+      onayKilidi.current = false
+      setOnaylaniyor(false)
     }
   }
 
@@ -620,13 +710,16 @@ function ApproveModal({ session, onClose, onApproved, onReport }) {
         <ErrorBox error={error} />
 
         <div className="flex flex-wrap justify-end gap-2">
-          <Button variant="secondary" onClick={onClose}>
+          {/* Onay uçarken diğer iki düğme de kapalı: kullanıcı basım devam ederken
+              şikayet ekranına geçerse aynı ders hem onaylanmış hem şikayet edilmiş
+              olur ve hangi sonucun geçerli olduğu tıklama sırasına kalırdı. */}
+          <Button variant="secondary" disabled={onaylaniyor} onClick={onClose}>
             Sonra karar ver
           </Button>
-          <Button variant="danger" onClick={onReport}>
+          <Button variant="danger" disabled={onaylaniyor} onClick={onReport}>
             Şikayet et
           </Button>
-          <Button variant="success" loading={busy} onClick={approve}>
+          <Button variant="success" loading={onaylaniyor} disabled={onaylaniyor} onClick={approve}>
             Onayla ve puanı yaz
           </Button>
         </div>
@@ -646,7 +739,25 @@ function BookModal({ matches, onClose, onBooked }) {
   const [startLocal, setStartLocal] = useState('')
   const [duration, setDuration] = useState(60)
   const [error, setError] = useState(null)
-  const [busy, setBusy] = useState(false)
+
+  /*
+    ÇİFT REZERVASYON KORUMASI — bayrağın İKİ kopyası var ve bu bilinçli.
+
+    `gonderiliyor` (state) ARAYÜZ içindir: butonu disabled yapar ve spinner'ı gösterir.
+    `gonderimKilidi` (ref) MANTIK içindir: senkron muhafız.
+
+    Neden state tek başına YETMEZ: setState asenkrondur ve handler'ın gördüğü değer, o
+    handler'ın ait olduğu RENDER'ın anlık görüntüsüdür. Kullanıcı butona 50 ms arayla iki
+    kez bastığında ikinci tıklama, ilk tıklamanın tetiklediği yeniden render DOM'a
+    yansımadan handler'a girer; orada `gonderiliyor` hâlâ false'tur, `disabled` da henüz
+    DOM'a işlenmemiştir. Sonuç: api.bookSession iki kez çağrılır ve aynı ders iki kez
+    rezerve edilir.
+
+    Ref'in değeri ise atandığı anda okunabilir — render beklemez. Muhafız bu yüzden ref
+    üzerinden çalışıyor; state yalnızca gördüğümüz şeyi anlatıyor.
+  */
+  const [gonderiliyor, setGonderiliyor] = useState(false)
+  const gonderimKilidi = useRef(false)
 
   /*
     Rezervasyonu YAPAN taraf her zaman ÖĞRENCİdir. Dolayısıyla seçilebilecek konu, karşı
@@ -667,7 +778,11 @@ function BookModal({ matches, onClose, onBooked }) {
 
   async function submit(event) {
     event.preventDefault()
-    setBusy(true)
+
+    // Muhafız fonksiyonun EN BAŞINDA: gerekçe yukarıdaki kilit tanımında.
+    if (gonderimKilidi.current) return
+    gonderimKilidi.current = true
+    setGonderiliyor(true)
     setError(null)
     try {
       // datetime-local yerel saat verir; backend UTC bekler (toISOString hep "...Z" üretir).
@@ -687,7 +802,11 @@ function BookModal({ matches, onClose, onBooked }) {
     } catch (err) {
       setError(err)
     } finally {
-      setBusy(false)
+      // Kilit YALNIZCA burada açılır: istek başarıyla bitse de hata alsa da. Erken
+      // açılsaydı (örneğin try'ın sonunda) hata dalında buton kilitli kalır, kullanıcı
+      // düzeltip tekrar deneyemezdi.
+      gonderimKilidi.current = false
+      setGonderiliyor(false)
     }
   }
 
@@ -728,20 +847,15 @@ function BookModal({ matches, onClose, onBooked }) {
               </select>
             </Field>
 
+            {/*
+              Kutu artık TEK biçimli. Eskiden gönüllülük durumuna göre yeşile boyanıyor
+              ve "eğitmen puan kazanmıyor" yazıyordu; öyle bir ders türü kalmadı, her
+              ders puan basıyor. Kutunun tek işi seçimi doğrulatmak: kullanıcı listeden
+              çıktıktan sonra hangi konuyu seçtiğini görebilsin.
+            */}
             {selected && (
-              <div
-                className={`rounded-lg px-3 py-2 text-sm ${
-                  selected.match.tutorOffersVolunteer
-                    ? 'bg-emerald-50 text-emerald-900'
-                    : 'bg-slate-50 text-slate-600'
-                }`}
-              >
-                Konu: <strong>{selected.topicName}</strong>
-                {selected.match.tutorOffersVolunteer && (
-                  <span className="mt-0.5 block text-xs">
-                    🤝 Gönüllü ders — eğitmen bu dersten <strong>puan kazanmıyor</strong>.
-                  </span>
-                )}
+              <div className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">
+                Konu: <strong className="text-slate-800">{selected.topicName}</strong>
               </div>
             )}
 
@@ -775,7 +889,15 @@ function BookModal({ matches, onClose, onBooked }) {
             <Button variant="secondary" onClick={onClose}>
               Vazgeç
             </Button>
-            <Button type="submit" form="book-form" loading={busy} disabled={!selected || !startLocal}>
+            {/* loading zaten disabled yapıyor; `gonderiliyor` yine de disabled ifadesine
+                AYRICA yazıldı — koşul okunurken "gönderim sırasında basılamaz" kuralının
+                Button'un iç ayrıntısına bağlı kalmaması için. */}
+            <Button
+              type="submit"
+              form="book-form"
+              loading={gonderiliyor}
+              disabled={gonderiliyor || !selected || !startLocal}
+            >
               Rezerve et
             </Button>
           </div>
@@ -789,11 +911,23 @@ function CompleteModal({ session, onClose, onDone }) {
   const [code, setCode] = useState('')
   const [file, setFile] = useState(null)
   const [error, setError] = useState(null)
-  const [busy, setBusy] = useState(false)
+
+  /*
+    Kanıt yüklemesi bir DOSYA taşıyor: yavaş bağlantıda istek saniyelerce sürer ve
+    "bir şey olmuyor" sanan kullanıcının tekrar basma ihtimali en yüksek yer burasıdır.
+    Çift gönderim aynı derse iki kanıt yüklerdi; ikincisi, ilkiyle bire bir aynı görsel
+    olduğu için karşı tarafa "başka derste de kullanılmış" (isDuplicateHash) uyarısı
+    olarak dönebilirdi — yani kullanıcı kendi kanıtını kendi eliyle şüpheli hâle getirirdi.
+  */
+  const [gonderiliyor, setGonderiliyor] = useState(false)
+  const gonderimKilidi = useRef(false)
 
   async function submit(event) {
     event.preventDefault()
-    setBusy(true)
+
+    if (gonderimKilidi.current) return
+    gonderimKilidi.current = true
+    setGonderiliyor(true)
     setError(null)
     try {
       await api.completeSession(session.sessionId, code.trim(), file)
@@ -807,7 +941,8 @@ function CompleteModal({ session, onClose, onDone }) {
     } catch (err) {
       setError(err)
     } finally {
-      setBusy(false)
+      gonderimKilidi.current = false
+      setGonderiliyor(false)
     }
   }
 
@@ -848,7 +983,12 @@ function CompleteModal({ session, onClose, onDone }) {
         <Button variant="secondary" onClick={onClose}>
           Vazgeç
         </Button>
-        <Button type="submit" form="complete-form" loading={busy} disabled={!file || !code.trim()}>
+        <Button
+          type="submit"
+          form="complete-form"
+          loading={gonderiliyor}
+          disabled={gonderiliyor || !file || !code.trim()}
+        >
           Gönder
         </Button>
       </div>
@@ -860,11 +1000,18 @@ function ReportModal({ session, onClose, onDone }) {
   const [reason, setReason] = useState('SessionNotHeld')
   const [description, setDescription] = useState('')
   const [error, setError] = useState(null)
-  const [busy, setBusy] = useState(false)
+
+  // Çift gönderim burada yönetime AYNI şikayetten iki kayıt düşürürdü; moderatör aynı
+  // olayı iki kez inceler, kullanıcı da "ısrarla şikayet eden" gibi görünürdü.
+  const [gonderiliyor, setGonderiliyor] = useState(false)
+  const gonderimKilidi = useRef(false)
 
   async function submit(event) {
     event.preventDefault()
-    setBusy(true)
+
+    if (gonderimKilidi.current) return
+    gonderimKilidi.current = true
+    setGonderiliyor(true)
     setError(null)
     try {
       await api.reportSession(session.sessionId, reason, description.trim())
@@ -877,7 +1024,8 @@ function ReportModal({ session, onClose, onDone }) {
     } catch (err) {
       setError(err)
     } finally {
-      setBusy(false)
+      gonderimKilidi.current = false
+      setGonderiliyor(false)
     }
   }
 
@@ -925,8 +1073,8 @@ function ReportModal({ session, onClose, onDone }) {
           type="submit"
           form="report-form"
           variant="danger"
-          loading={busy}
-          disabled={description.trim().length < 15}
+          loading={gonderiliyor}
+          disabled={gonderiliyor || description.trim().length < 15}
         >
           Şikayeti gönder
         </Button>
@@ -938,10 +1086,16 @@ function ReportModal({ session, onClose, onDone }) {
 function CancelModal({ session, onClose, onDone }) {
   const [reason, setReason] = useState('')
   const [error, setError] = useState(null)
-  const [busy, setBusy] = useState(false)
+
+  // İptal, ilk çağrıdan sonra dersi Cancelled'a taşır; ikinci çağrı sunucudan hata
+  // döner ve kullanıcı, iptal ASLINDA başarılı olmuşken kırmızı bir hata kutusu görür.
+  const [iptalEdiliyor, setIptalEdiliyor] = useState(false)
+  const iptalKilidi = useRef(false)
 
   async function submit() {
-    setBusy(true)
+    if (iptalKilidi.current) return
+    iptalKilidi.current = true
+    setIptalEdiliyor(true)
     setError(null)
     try {
       await api.cancelSession(session.sessionId, reason.trim() || null)
@@ -949,7 +1103,8 @@ function CancelModal({ session, onClose, onDone }) {
     } catch (err) {
       setError(err)
     } finally {
-      setBusy(false)
+      iptalKilidi.current = false
+      setIptalEdiliyor(false)
     }
   }
 
@@ -973,10 +1128,15 @@ function CancelModal({ session, onClose, onDone }) {
         <ErrorBox error={error} />
 
         <div className="flex justify-end gap-2">
-          <Button variant="secondary" onClick={onClose}>
+          <Button variant="secondary" disabled={iptalEdiliyor} onClick={onClose}>
             Vazgeç
           </Button>
-          <Button variant="danger" loading={busy} onClick={submit}>
+          <Button
+            variant="danger"
+            loading={iptalEdiliyor}
+            disabled={iptalEdiliyor}
+            onClick={submit}
+          >
             Dersi iptal et
           </Button>
         </div>
