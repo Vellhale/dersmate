@@ -22,14 +22,11 @@ import { seviyeEtiketi, seviyeHesapla, seviyeIlerlemeMetni } from '../lib/seviye
  * tek bakışta okunur.
  */
 
-const TAG_LABELS = {
-  KnowsSubject: 'Konuya çok hakim',
-  PatientAndClear: 'Sabırlı ve açıklayıcı',
-  StartedOnTime: 'Zamanında başladı',
-  GreatExamples: 'Çözümlü sorular çok iyiydi',
-  SharedResources: 'Anlaşılır kaynaklar paylaştı',
-  WouldBookAgain: 'Tekrar ders alırım',
-}
+/*
+  TAG_LABELS KALDIRILDI. Etiketler artık hiçbir yerde gösterilmiyor (bkz. aşağıdaki
+  ReviewsSection notu); sözlüğü burada tutmak, okuyana hâlâ çizildiklerini düşündürürdü.
+  Sunucu etiketleri toplamaya ve döndürmeye devam ediyor — yalnızca gösterim kalktı.
+*/
 
 export function UserProfileView({ userId }) {
   const profile = useAsync(() => api.userProfile(userId), [userId])
@@ -94,7 +91,8 @@ function ProfileHeader({ profile }) {
           userId={profile.userId}
           name={profile.displayName}
           size="md"
-          className="shrink-0 ring-2 ring-white shadow-sm"
+          buyutulebilir
+          className="shrink-0 shadow-sm ring-2 ring-white"
         />
 
         <div className="min-w-0 flex-1">
@@ -102,9 +100,12 @@ function ProfileHeader({ profile }) {
             <h1 className="truncate text-lg font-bold text-slate-900 sm:text-xl">
               {profile.displayName}
             </h1>
-            {/* Üst bardaki rozetin aynısı (bkz. Layout.jsx): aynı bilgi her yerde
-                aynı biçimde görünsün diye tek bileşenden geliyor. */}
-            <SeviyeRozeti kaynak={profile} className="shrink-0" />
+            {/*
+              Üst bardaki rozetle AYNI bileşen ama küçük/açık varyantı: burada rozet
+              başlık değil, başlığa iliştirilen bir nitelik. Dolgun varyant 20px’lik
+              ismin yanında onu eziyordu (bkz. SeviyeRozeti.jsx).
+            */}
+            <SeviyeRozeti kaynak={profile} boyut="sm" ton="acik" className="shrink-0" />
           </div>
 
           {(profile.university || profile.department) && (
@@ -190,24 +191,33 @@ function TopicPanel({ title, tone, topics, emptyText }) {
 }
 
 /*
-  DEĞERLENDİRMELER — KOMPAKT.
+  DEĞERLENDİRMELER — özet şeridi + yorum listesi.
 
-  Önceki hâlde bu blok profilin geri kalanını eziyordu: 4xl puan, beş satırlık yıldız
-  dağılımı, etiket çubukları ve her yorum için ayrı bir gölgeli kart. Tek bir yorumu olan
-  bir profilde bile ekranın yarısını kaplıyordu.
+  Bu blok bir zamanlar profilin geri kalanını eziyordu: 4xl puan, beş satırlık yıldız
+  dağılımı, etiket çubukları ve her yorum için ayrı bir gölgeli kart. Tek yorumu olan bir
+  profilde bile ekranın yarısını kaplıyordu. Küçültüldü ve öyle kalıyor.
 
-  Üç karar küçültmeyi yapıyor:
-    1. ÖZET TEK SATIRA İNDİ. Ortalama, adet ve iki alt puan yan yana; yıldız dağılımı ve
-       etiket çubukları katlanır hâle geldi (varsayılan KAPALI). Bunlar "derine bak"
-       verisi — profile ilk bakışta gereken şey değil.
-    2. YORUMLAR KART DEĞİL, LİSTE. Kart başına gölge + kenarlık + p-5 yerine ince ayraçlı
-       satırlar; metin text-sm, üstbilgi text-xs.
-    3. LİSTE KAYDIRILABİLİR. max-h ile sınırlanıyor, içinde kayıyor — 50 yorumu olan bir
-       eğitmenin profili, 3 yorumu olanınkiyle aynı yüksekliği kaplıyor.
+  ─────────────────────────────────────────────────────────────────────────────
+  ETİKETLER KALDIRILDI (2026-08-24, ürün kararı).
 
-  Sayfalama korundu: kaydırma sayfa İÇİNDE, sayfalar arası geçiş yine düğmelerle.
-  İkisini birleştirip sonsuz kaydırma yapmak, sunucudaki sayfalı ucu yeniden yazmayı
-  gerektirirdi ve bu iş bir düzen işi, veri işi değil.
+  Hem yorum satırlarındaki rozetler ("Konuya çok hakim", "Tekrar ders alırım") hem de
+  özetteki etiket histogramı gitti. Gerekçe: aynı bilgiyi üç kez söylüyorlardı —
+  yıldız zaten memnuniyeti, yorum metni zaten nedenini anlatıyor. Aradaki etiket şeridi
+  yalnızca satırı kalabalıklaştırıp gözü asıl okunacak şeyden (kullanıcının kendi
+  cümlesinden) uzaklaştırıyordu.
+
+  VERİ DURUYOR: sunucu etiketleri toplamaya ve döndürmeye devam ediyor
+  (`review.tags`, `data.popularTags`), yalnızca GÖSTERİM kalktı. Karar geri alınırsa
+  tek yapılacak şey burada yeniden çizmek; hiçbir kayıt kaybolmadı.
+  ─────────────────────────────────────────────────────────────────────────────
+
+  PUAN ÖZETİ ÇUBUKLA. Eskiden üç sayı yan yana duruyordu ("4.8 ★  Anlatım 4.8
+  Zamanlama 4.3") ve aralarındaki farkı görmek için okumak gerekiyordu. Çubuk, farkı
+  OKUMADAN gösteriyor: zamanlamanın anlatımdan geride kaldığı tek bakışta belli oluyor.
+  Sayı da duruyor — çubuk kesin değeri veremez, sayı veremediğini gösteremez.
+
+  Yıldız dağılımı hâlâ katlanır ve varsayılan KAPALI: "derine bak" verisi, profile ilk
+  bakışta gereken şey değil.
 */
 function ReviewsSection({ reviews, page, onPage }) {
   const [detayAcik, setDetayAcik] = useState(false)
@@ -225,80 +235,62 @@ function ReviewsSection({ reviews, page, onPage }) {
     )
   }
 
-  const maxTag = Math.max(...data.popularTags.map((t) => t.count), 1)
-  const detayVar = data.popularTags.length > 0 || data.reviewCount > 0
-
   return (
-    <Card className="!p-4">
-      {/* ÖZET ŞERİDİ — tek satır. */}
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-        <p className="text-lg font-semibold text-slate-900">
-          {Number(data.averageScore).toFixed(1)}
-          <span className="ml-0.5 text-base text-amber-400">★</span>
-        </p>
-        <span className="text-xs text-slate-500">{data.reviewCount} değerlendirme</span>
+    <Card className="!p-0 overflow-hidden">
+      {/*
+        ÖZET — hafif renkli bir başlık şeridi. Beyaz kartın içinde beyaz bir özet,
+        yorum listesinden ayrılmıyordu; slate-50 zemin ikisi arasına görünmez bir
+        çizgi çekiyor ve "bu bölüm bir başlık" diyor.
+      */}
+      <div className="grid gap-4 border-b border-slate-200/80 bg-slate-50 p-4 sm:grid-cols-[auto,1fr] sm:gap-6 sm:p-5">
+        <div className="flex items-center gap-3 sm:flex-col sm:items-start sm:gap-1">
+          <p className="text-3xl font-bold leading-none text-slate-900">
+            {Number(data.averageScore).toFixed(1)}
+          </p>
+          <div>
+            <Yildizlar deger={data.averageScore} />
+            <p className="mt-1 text-xs text-slate-500">{data.reviewCount} değerlendirme</p>
+          </div>
+        </div>
 
-        <span className="hidden h-4 w-px bg-slate-200 sm:block" />
+        <div className="space-y-2 sm:border-l sm:border-slate-200 sm:pl-6">
+          <MetrikCubugu label="Anlatım" value={data.averageTeachingScore} />
+          <MetrikCubugu label="Zamanlama" value={data.averagePunctualityScore} />
 
-        <ScoreChip label="Anlatım" value={data.averageTeachingScore} />
-        <ScoreChip label="Zamanlama" value={data.averagePunctualityScore} />
-
-        {detayVar && (
           <button
             type="button"
             onClick={() => setDetayAcik((v) => !v)}
-            className="ml-auto text-xs font-medium text-brand-600 hover:underline"
+            className="text-xs font-medium text-brand-700 transition hover:text-brand-800 hover:underline"
             aria-expanded={detayAcik}
           >
-            {detayAcik ? 'Dağılımı gizle' : 'Dağılımı gör'}
+            {detayAcik ? 'Dağılımı gizle' : 'Yıldız dağılımını gör'}
           </button>
-        )}
-      </div>
 
-      {/* DETAY — katlanır. Yıldız dağılımı ve etiketler. */}
-      {detayAcik && (
-        <div className="mt-3 grid gap-4 border-t border-slate-100 pt-3 sm:grid-cols-2">
-          <div className="space-y-1">
-            {[5, 4, 3, 2, 1].map((star) => {
-              const count = data.scoreDistribution[star - 1] ?? 0
-              const pct = data.reviewCount ? (count / data.reviewCount) * 100 : 0
-              return (
-                <div key={star} className="flex items-center gap-2 text-xs text-slate-500">
-                  <span className="w-5 shrink-0">{star}★</span>
-                  <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-100">
-                    <div className="h-full rounded-full bg-amber-400" style={{ width: `${pct}%` }} />
+          {detayAcik && (
+            <div className="space-y-1 pt-1">
+              {[5, 4, 3, 2, 1].map((star) => {
+                const count = data.scoreDistribution[star - 1] ?? 0
+                const pct = data.reviewCount ? (count / data.reviewCount) * 100 : 0
+                return (
+                  <div key={star} className="flex items-center gap-2 text-xs text-slate-500">
+                    <span className="w-5 shrink-0 tabular-nums">{star}★</span>
+                    <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-200">
+                      <div className="h-full rounded-full bg-amber-400" style={{ width: `${pct}%` }} />
+                    </div>
+                    <span className="w-4 shrink-0 text-right tabular-nums">{count}</span>
                   </div>
-                  <span className="w-5 shrink-0 text-right tabular-nums">{count}</span>
-                </div>
-              )
-            })}
-          </div>
-
-          {data.popularTags.length > 0 && (
-            <div className="space-y-1">
-              {data.popularTags.map((tag) => (
-                <div key={tag.tag} className="flex items-center gap-2 text-xs text-slate-500">
-                  <span className="w-32 shrink-0 truncate">{TAG_LABELS[tag.tag] ?? tag.tag}</span>
-                  <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-100">
-                    <div
-                      className="h-full rounded-full bg-brand-500"
-                      style={{ width: `${(tag.count / maxTag) * 100}%` }}
-                    />
-                  </div>
-                  <span className="w-5 shrink-0 text-right tabular-nums">{tag.count}</span>
-                </div>
-              ))}
+                )
+              })}
             </div>
           )}
         </div>
-      )}
+      </div>
 
       {/*
         YORUM LİSTESİ — kaydırılabilir.
         max-h-96 (384px) ≈ 4-5 yorum. Kaydırma kutusuna odaklanılabilir olması (tabIndex)
         klavye kullanıcısı için şart: fare tekerleği olmayan biri de listeyi gezebilmeli.
-      */}
-      {/*
+
         Alttaki maske, kaydırma sınırında yarım kalan satırı KASITLI gösteriyor. Maskesiz
         hâlde kesilen satır bir çizim hatası gibi duruyordu; solarak biten bir liste ise
         "devamı var" demenin standart yolu. mask-image yalnızca görsel — kaydırma,
@@ -310,45 +302,38 @@ function ReviewsSection({ reviews, page, onPage }) {
           maskImage: 'linear-gradient(to bottom, black calc(100% - 28px), transparent)',
           WebkitMaskImage: 'linear-gradient(to bottom, black calc(100% - 28px), transparent)',
         }}
-        className="mt-3 max-h-96 divide-y divide-slate-100 overflow-y-auto border-t
-                   border-slate-100 pb-6 pt-1 focus:outline-none focus:ring-2 focus:ring-brand-100"
+        className="max-h-96 divide-y divide-slate-100 overflow-y-auto px-4 pb-6 pt-1 focus:outline-none
+                   focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-200 sm:px-5"
         aria-label="Değerlendirme yorumları"
       >
         {data.reviews.items.map((review) => (
-          <li key={review.reviewId} className="py-2.5">
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
-              <span className="font-medium text-slate-800">{review.reviewerDisplayName}</span>
-              <span className="text-amber-400">{'★'.repeat(review.score)}</span>
-              <span className="text-slate-400">·</span>
-              <span className="text-slate-500">{review.topicName}</span>
-              {/* Dersin gönüllü olup olmadığı artık gösterilmiyor: her ders aynı ders. */}
-              <span className="ml-auto text-slate-400">{formatDateTime(review.createdAtUtc)}</span>
+          <li key={review.reviewId} className="py-3">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <span className="text-sm font-semibold text-slate-800">
+                {review.reviewerDisplayName}
+              </span>
+              <Yildizlar deger={review.score} kucuk />
+              <span className="ml-auto text-xs text-slate-400">
+                {formatDateTime(review.createdAtUtc)}
+              </span>
             </div>
 
+            {/* Konu adı yorumun ALTINDA ve soluk: yorumu okuyan kişi önce ne yazdığına
+                bakıyor, hangi derste yazıldığına sonra. Üst satırda dururken adın ve
+                yıldızın arasına giriyor, üçü de aynı ağırlıkta görünüyordu. */}
             {review.comment && (
-              <p className="mt-1 whitespace-pre-wrap text-sm leading-snug text-slate-700">
+              <p className="mt-1.5 whitespace-pre-wrap text-sm leading-relaxed text-slate-700">
                 {review.comment}
               </p>
             )}
 
-            {review.tags.length > 0 && (
-              <div className="mt-1.5 flex flex-wrap gap-1">
-                {review.tags.map((tag) => (
-                  <span
-                    key={tag}
-                    className="rounded bg-brand-50 px-1.5 py-0.5 text-[11px] text-brand-700"
-                  >
-                    {TAG_LABELS[tag] ?? tag}
-                  </span>
-                ))}
-              </div>
-            )}
+            <p className="mt-1.5 text-xs text-slate-400">{review.topicName}</p>
           </li>
         ))}
       </ul>
 
       {data.reviews.totalPages > 1 && (
-        <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-3">
+        <div className="flex items-center justify-between border-t border-slate-200/80 px-4 py-3 sm:px-5">
           <Button variant="secondary" disabled={page <= 1} onClick={() => onPage(page - 1)}>
             ← Önceki
           </Button>
@@ -368,22 +353,60 @@ function ReviewsSection({ reviews, page, onPage }) {
   )
 }
 
-/** Özet şeridindeki küçük alt puan. Eski ScoreLine'ın tek satırlık hâli. */
-function ScoreChip({ label, value }) {
-  if (value == null) return null
+/**
+ * Beş yıldızlık satır. Kesirli değerde son yıldız KISMİ dolar (4.8 → dördüncü yıldızın
+ * tamamı, beşincinin %80'i).
+ *
+ * NEDEN YUVARLANMIYOR: 4.5 ile 4.9 arasındaki fark, beş yıldızın tamamını yakan bir
+ * yuvarlamada kayboluyor ve iki farklı eğitmen aynı görünüyor. Kısmi dolgu, sayıya
+ * bakmadan da sıralama yapılabilmesini sağlıyor.
+ *
+ * Teknik: aynı beş yıldız iki kez basılıyor — altta gri, üstte sarı — ve üstteki
+ * `width: %` ile kırpılıyor. Yıldız başına ayrı hesap yapmaktan basit ve yarım yıldız
+ * SVG'si gerektirmiyor.
+ */
+function Yildizlar({ deger, kucuk = false }) {
+  const oran = Math.max(0, Math.min(100, (Number(deger) / 5) * 100))
+  const boyut = kucuk ? 'text-xs' : 'text-base'
+
   return (
-    <span className="text-xs text-slate-500">
-      {label} <span className="font-medium text-slate-700">{Number(value).toFixed(1)}</span>
+    <span
+      className={`relative inline-block select-none leading-none ${boyut}`}
+      role="img"
+      aria-label={`5 üzerinden ${Number(deger).toFixed(1)}`}
+    >
+      <span className="text-slate-300" aria-hidden="true">
+        ★★★★★
+      </span>
+      <span
+        className="absolute inset-y-0 left-0 overflow-hidden whitespace-nowrap text-amber-400"
+        style={{ width: `${oran}%` }}
+        aria-hidden="true"
+      >
+        ★★★★★
+      </span>
     </span>
   )
 }
 
-function ScoreLine({ label, value }) {
+/**
+ * Alt metrik çubuğu (Anlatım / Zamanlama).
+ *
+ * Etiket sabit genişlikte (w-20): iki çubuk alt alta gelince başlangıç noktaları
+ * hizalanmazsa karşılaştırma zorlaşıyor — çubukların işi tam olarak karşılaştırılmak.
+ */
+function MetrikCubugu({ label, value }) {
+  if (value == null) return null
+  const oran = Math.max(0, Math.min(100, (Number(value) / 5) * 100))
+
   return (
-    <div className="flex items-center justify-between gap-3">
-      <span className="text-sm text-slate-600">{label}</span>
-      <span className="font-medium text-slate-800">
-        {Number(value).toFixed(1)} <span className="text-amber-400">★</span>
+    <div className="flex items-center gap-3">
+      <span className="w-20 shrink-0 text-xs text-slate-600">{label}</span>
+      <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-200">
+        <div className="h-full rounded-full bg-brand-500 transition-[width] duration-500" style={{ width: `${oran}%` }} />
+      </div>
+      <span className="w-7 shrink-0 text-right text-xs font-semibold tabular-nums text-slate-700">
+        {Number(value).toFixed(1)}
       </span>
     </div>
   )
