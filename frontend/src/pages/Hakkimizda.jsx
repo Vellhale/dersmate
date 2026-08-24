@@ -42,7 +42,7 @@ const DEGERLER = [
 const GUVENCELER = [
   ['Ders almak ücretsiz', 'Ders alan öğrenci hiçbir şey ödemez. Hiçbir koşulda.'],
   ['Para transferi yok', 'Kimse kimseye ödeme yapmaz. Platformda para dolaşmaz.'],
-  ['Puan anlatana yazılır', 'Anlatan öğrenci puan kazanır; puan harcanmaz, birikir.'],
+  ['Puan anlatana yazılır', 'Anlatan öğrenci puan kazanır; puan harcanmaz, seviyeni yükseltir.'],
 ]
 
 export default function Hakkimizda() {

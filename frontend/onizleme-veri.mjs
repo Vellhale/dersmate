@@ -55,9 +55,11 @@ const PROFIL = {
   taughtSessionCount: 96,
   taughtMinutes: 6180,
   totalEarnedCredits: 8400,
-  rankTitle: 'Uzman',
-  rankEmoji: '🎯',
-  nextRankAt: 12000,
+  // Seviye SUNUCUDAN gelir (level / nextLevelAt); önizleme onu taklit ediyor.
+  // 8.400 puan → 9. seviye (eşik 5.500), sonraki basamak 10.000.
+  level: 9,
+  levelMinCredits: 5500,
+  nextLevelAt: 10000,
   isSelf: true,
   teacherCandidate: null,
   // Seviyeler bilerek farklı: hepsi 3 olduğunda rozetin bir şey ölçtüğü anlaşılmıyor.
@@ -153,7 +155,20 @@ function apiYanit(method, yol) {
   if (yol.endsWith('/profile')) return PROFIL
   if (yol === '/api/catalog/categories') return KATEGORILER
   if (yol === '/api/catalog/topics') return KONULAR
-  if (yol === '/api/wallet') return { balance: PROFIL.totalEarnedCredits, lockedBalance: 0, lots: [], transactions: { items: [], page: 1, totalPages: 1, hasNextPage: false } }
+  /*
+    Cüzdan yanıtı WalletDto ile BİREBİR aynı alanları taşımalı: üst bardaki seviye
+    rozeti doğrudan bu nesneden okuyor (level / nextLevelAt / totalEarnedCredits).
+    Eski taklit `balance`/`lockedBalance` döndürüyordu — hiçbiri sözleşmede yok ve
+    rozet önizlemede her zaman 1. Seviye görünüyordu.
+  */
+  if (yol === '/api/wallet') return {
+    totalEarnedCredits: PROFIL.totalEarnedCredits,
+    currentBalance: PROFIL.totalEarnedCredits,
+    level: PROFIL.level,
+    levelMinCredits: PROFIL.levelMinCredits,
+    nextLevelAt: PROFIL.nextLevelAt,
+    activeLots: [],
+  }
   if (yol === '/api/conversations') return []
 
   /*

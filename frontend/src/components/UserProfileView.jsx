@@ -6,7 +6,7 @@ import { Avatar } from './Avatar'
 import { Badge, Button, Card, EmptyState, ErrorBox, Loading } from './ui'
 import { SubjectBadges } from './SubjectBadges'
 import { SeviyeRozeti } from './SeviyeRozeti'
-import { seviyeEtiketi, seviyeHesapla } from '../lib/seviye'
+import { seviyeEtiketi, seviyeHesapla, seviyeIlerlemeMetni } from '../lib/seviye'
 
 /**
  * Samimi profil görünümü — CV değil, sosyal profil.
@@ -135,9 +135,9 @@ function StatsRow({ profile }) {
     söylediği tek şey "bu kullanıcı hiçbir şey yapmamış" oluyordu. Seviye aynı yeri
     kullanır ama en baştan anlamlı bir şey söyler.
 
-    "Sonraki unvana X puan" hesabı KALDIRILDI: seviye artık puandan türemiyor
-    (bkz. lib/seviye.js), o cümle olmayan bir eşiğe işaret ederdi. Puan bu yüzden
-    seviyenin gerekçesi olarak değil, ayrı bir sayaç olarak alt satırda duruyor.
+    İLERLEME SATIRI SUNUCUDAN: "sonraki seviyeye X puan" hesabı `nextLevelAt` üzerinden
+    yapılıyor (bkz. lib/seviye.js). Eşikler istemciye kopyalanmıyor — kopyalansaydı
+    sunucudaki tablo değiştiğinde profil eski hedefi göstermeye devam ederdi.
   */
   const items = [
     {
@@ -149,7 +149,7 @@ function StatsRow({ profile }) {
     {
       label: 'Seviye',
       value: seviyeEtiketi(seviyeHesapla(profile)),
-      hint: `${profile.totalEarnedCredits ?? 0} puan kazanıldı`,
+      hint: seviyeIlerlemeMetni(profile),
     },
     { label: 'Üyelik', value: new Date(profile.joinedAtUtc).getFullYear(), hint: 'Katılım yılı' },
   ]

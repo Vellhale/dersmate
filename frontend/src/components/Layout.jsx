@@ -105,9 +105,8 @@ function LayoutShell() {
     })
   }
 
-  // Seviye rozeti her sayfada görünür. Cüzdan hâlâ okunuyor çünkü seviye bir gün
-  // sunucudan gelecek ve aynı yerden beslenecek (bkz. lib/seviye.js); bugün rozet
-  // bu veriyi kullanmıyor ama bağlantı kopmasın diye duruyor.
+  // Seviye rozeti her sayfada görünür ve verisini cüzdan ucundan alır: `level`,
+  // `nextLevelAt` ve `totalEarnedCredits` aynı yanıtta geliyor, ayrı bir istek yok.
   const { wallet } = useWallet()
 
   /*
@@ -189,8 +188,8 @@ function LayoutShell() {
           <div className="flex items-center gap-2 sm:gap-4">
             {/* UNVAN yerine SEVİYE. "Çırak / Öğretici / Uzman" merdiveninin kaç basamak
                 olduğu kullanıcıya hiç görünmüyordu; numaralı seviye bunu tek bakışta
-                söylüyor. Hesabın tamamı lib/seviye.js'te — backend XP algoritması
-                gelene kadar herkes 1. Seviye (gerekçe orada yazılı).
+                söylüyor. Seviye SUNUCUDAN geliyor (cüzdan ucundaki `level` alanı,
+                krediden türer — Domain/Community/UserLevel.cs); arayüz eşik taşımıyor.
                 data-tour="rank" çıpası KORUNDU: ürün turunun ilk adımı bu seçiciye
                 bağlı (lib/tour.js) ve rozet yer değiştirdi, kaybolmadı. */}
             <NavLink

@@ -21,10 +21,11 @@
  * kalmıştı.) Rozetin içeriği unvandan seviyeye dönerken `data-tour="rank"` adı BİLEREK
  * korundu: çıpa adını değiştirmek aynı sessiz kırılmayı bir kez daha üretirdi.
  *
- * UNVAN MERDİVENİ ANLATILMIYOR ARTIK. Önceki metin "biriken puan unvanını yükseltir
- * (Çırak → Öğretici → Uzman → …)" diyordu; unvan sistemi kalktı ve seviye şu an
- * puandan türemiyor (bkz. lib/seviye.js). Tur, arkasında kural olmayan bir ilerleme
- * sözü vermemeli — doğru olan tek şey söyleniyor: ders anlatmak puan kazandırır.
+ * UNVAN ADLARI ANLATILMIYOR ARTIK. Önceki metin merdiveni adlarıyla sayıyordu
+ * (Çırak → Öğretici → Uzman → …); o adlar kalktı, yerlerini 10 basamaklı numaralı
+ * seviye aldı. İlerleme SÖZÜ duruyor çünkü kuralı da duruyor: seviye biriken puandan
+ * türüyor (Domain/Community/UserLevel.cs). Anlatılan tek şey mekanizma — eşik sayıları
+ * tura yazılmadı, çünkü eşik değişince turu güncellemeyi kimse hatırlamaz.
  */
 export const TOUR_STEPS = [
   {
@@ -34,8 +35,8 @@ export const TOUR_STEPS = [
     body:
       'Burada para da, ödediğin bir kredi de yok. Ders ALMAK tamamen ücretsiz; ' +
       'ders ANLATTIĞINDA puan kazanırsın. Puan harcanan bir bakiye değil, emeğinin ' +
-      'karşılığı. Buradaki rozet ise seviyeni gösterir: 10 basamaklı ölçekte şu an nerede ' +
-      'olduğun.',
+      'karşılığı — biriktikçe buradaki seviyeni yükseltir. Ölçek 10 basamaklı; rozetin ' +
+      'üstüne gelirsen bir sonrakine ne kadar kaldığını görürsün.',
   },
   {
     id: 'discover',
@@ -52,7 +53,8 @@ export const TOUR_STEPS = [
     title: 'Ders Portföyü — ne anlatabilirsin',
     body:
       'Anlatabildiğin konuları buraya ekle; Keşfet’te başkalarına böyle görünürsün. ' +
-      'Puan kazanmanın tek yolu ders anlatmak — portföyün boşken kimse senden ders isteyemez.',
+      'Puan kazanmanın —ve seviye atlamanın— tek yolu ders anlatmak; portföyün boşken ' +
+      'kimse senden ders isteyemez.',
   },
   {
     id: 'sessions',

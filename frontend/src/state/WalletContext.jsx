@@ -9,14 +9,14 @@ const WalletContext = createContext(null)
  * çekiyordu; Layout hiç unmount olmadığı için başlıktaki rozet oturum boyunca donuyordu.
  * Puanı değiştiren her işlem refreshWallet() çağırır.
  *
- * AD ESKİDİ, İŞLEV DEĞİŞTİ: cüzdan ekranı kaldırıldı; bu bağlamın bugün taşıdığı tek şey
- * kazanılan puan (totalEarnedCredits). Uç hâlâ /api/wallet olduğu için ad korundu —
- * yeniden adlandırma, karşılığı olan bir uç değişikliğiyle birlikte yapılmalı, tek
- * başına kozmetik bir gürültü olur.
+ * AD ESKİDİ, İŞLEV DEĞİŞTİ: cüzdan ekranı kaldırıldı; bu bağlamın bugün taşıdığı şey
+ * kazanılan puan ve ondan türeyen seviye (totalEarnedCredits / level / nextLevelAt).
+ * Uç hâlâ /api/wallet olduğu için ad korundu — yeniden adlandırma, karşılığı olan bir
+ * uç değişikliğiyle birlikte yapılmalı, tek başına kozmetik bir gürültü olur.
  *
- * rankTitle / rankEmoji ARTIK OKUNMUYOR: unvan sistemi seviyeye dönüştü (lib/seviye.js).
- * Sunucu alanları göndermeye devam ediyor, arayüz kullanmıyor. Alanların sunucudan da
- * kalkması, XP algoritmasıyla birlikte yapılacak bir backend işi.
+ * SEVİYE AYRI BİR İSTEK GEREKTİRMİYOR: sunucu onu bu yanıtın içinde gönderiyor, çünkü
+ * hesabın girdisi zaten burada olan puan. Ayrı bir uç açmak, üst bardaki rozeti her
+ * sayfa geçişinde ikinci bir isteğe bağlardı.
  */
 export function WalletProvider({ children }) {
   const { data, error, loading, reload } = useAsync(() => api.wallet(), [])
