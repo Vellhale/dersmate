@@ -1,27 +1,9 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { api } from '../lib/api'
-import { SearchableSelect } from '../components/SearchableSelect'
+import { KonuSecici } from '../components/KonuSecici'
 import { useAsync } from '../state/useAsync'
 import { Badge, Button, Card, EmptyState, ErrorBox, Field, Loading, Modal, SectionTitle } from '../components/ui'
-import { Link } from 'react-router-dom'
 import { AnalyticsEvents, trackEvent } from '../lib/analytics'
-
-/** Fiyat seçeneği kartı — radio yerine tıklanabilir kart: seçenekler açıklama istiyor. */
-function PriceOption({ active, onClick, title, description }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      className={`w-full rounded-lg border p-3 text-left transition ${
-        active ? 'border-brand-400 bg-brand-50' : 'border-slate-200/80 hover:bg-slate-50'
-      }`}
-    >
-      <span className="block text-sm font-medium text-slate-800">{title}</span>
-      <span className="mt-0.5 block text-xs text-slate-500">{description}</span>
-    </button>
-  )
-}
 
 /**
  * Dinamik portföy (Modül 1.1): iki yönlü profil.
@@ -32,6 +14,13 @@ function PriceOption({ active, onClick, title, description }) {
 export default function Portfolio() {
   const entries = useAsync(() => api.myPortfolio(), [])
   const [modalDirection, setModalDirection] = useState(null)
+
+  /*
+    KATALOG BURADA, MODALDA DEĞİL. Konu seçici her açıldığında yeniden istek atsaydı
+    kullanıcı iki konu eklerken aynı 767 satırı iki kez indirirdi. Sayfa açılışında bir
+    kez alınıyor ve iki yöne (Offer/Seek) de aynı liste veriliyor.
+  */
+  const konular = useAsync(() => api.topics(), [])
 
   const offers = entries.data?.filter((e) => e.direction === 'Offer') ?? []
   const seeks = entries.data?.filter((e) => e.direction === 'Seek') ?? []
@@ -73,6 +62,8 @@ export default function Portfolio() {
 
       <AddEntryModal
         direction={modalDirection}
+        konular={konular.data}
+        konularYukleniyor={konular.loading}
         onClose={() => setModalDirection(null)}
         onSaved={() => {
           setModalDirection(null)
@@ -114,11 +105,10 @@ function PortfolioColumn({ title, tone, entries, emptyText, onAdd, onRemoved }) 
         <div className="space-y-2">
           {entries.map((entry) => (
             <Card key={entry.entryId} className="flex items-start justify-between gap-3 p-4">
-              <div>
+              <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-medium text-slate-800">{entry.topicName}</span>
                   <Badge tone={tone}>Seviye {entry.selfAssessedLevel}/5</Badge>
-                  {entry.isVolunteer && <Badge tone="success">🤝 Gönüllü</Badge>}
                 </div>
                 <p className="mt-0.5 text-xs text-slate-500">
                   {entry.categoryName} · {entry.subjectName}
@@ -142,55 +132,43 @@ function PortfolioColumn({ title, tone, entries, emptyText, onAdd, onRemoved }) 
   )
 }
 
-function AddEntryModal({ direction, onClose, onSaved }) {
-  const topics = useAsync(() => (direction ? api.topics() : Promise.resolve([])), [direction])
-  const [topicId, setTopicId] = useState('')
+/*
+  İKİ AŞAMALI EKLEME: önce konu seçilir (KonuSecici), sonra detay formu doldurulur.
+
+  Tek ekranda tutulabilirdi ama olmadı: hiyerarşik seçici dört basamak ve kendi
+  kırıntı yolunu taşıyor; altına seviye kaydırıcısı ve not alanı da konsaydı kullanıcı,
+  daha ders bile seçmemişken "Bu konudaki seviyen" sorusunu görüyor olurdu. Form,
+  cevaplanacak sorusu oluşmadan görünmemeli.
+*/
+function AddEntryModal({ direction, konular, konularYukleniyor, onClose, onSaved }) {
+  const [secilenKonu, setSecilenKonu] = useState(null)
   const [level, setLevel] = useState(3)
   const [note, setNote] = useState('')
-  const [isVolunteer, setIsVolunteer] = useState(false)
   const [error, setError] = useState(null)
   const [busy, setBusy] = useState(false)
 
-  // Gönüllü seçeneği yalnızca öğretmen adaylarına gösterilir; sunucu da aynı kuralı
-  // bağımsız olarak uygular (403). Arayüz burada yalnızca gereksiz denemeyi önlüyor.
-  const me = useAsync(() => (direction === 'Offer' ? api.myProfile() : Promise.resolve(null)), [direction])
-  const canOfferVolunteer = Boolean(me.data?.teacherCandidate)
+  const isOffer = direction === 'Offer'
+  const acik = Boolean(direction)
 
-  // Konuları ders bazında grupla: uzun düz liste yerine okunabilir <optgroup>.
-  const grouped = useMemo(() => {
-    const map = new Map()
-    for (const topic of topics.data ?? []) {
-      const key = `${topic.rootCategory} · ${topic.subject}`
-      if (!map.has(key)) map.set(key, [])
-      map.get(key).push(topic)
-    }
-    return [...map.entries()]
-  }, [topics.data])
-
-  /*
-    SearchableSelect düz bir liste ister; grup başlığı satırın kendi alanında taşınır.
-    Sıra korunuyor: aynı dersin konuları ardışık kalmalı, yoksa grup başlıkları tekrar eder.
-  */
-  const konuSecenekleri = useMemo(
-    () =>
-      grouped.flatMap(([grup, items]) =>
-        items.map((t) => ({ value: t.topicId, label: t.topic, group: grup })),
-      ),
-    [grouped],
-  )
-
+  function kapat() {
+    setSecilenKonu(null)
+    setLevel(3)
+    setNote('')
+    setError(null)
+    onClose()
+  }
 
   async function onSubmit(event) {
     event.preventDefault()
+    if (busy || !secilenKonu) return
     setBusy(true)
     setError(null)
     try {
       await api.addPortfolioEntry({
-        topicId,
+        topicId: secilenKonu.topicId,
         direction,
         selfAssessedLevel: Number(level),
         note: note.trim() || null,
-        isVolunteer: direction === 'Offer' && isVolunteer,
       })
 
       /*
@@ -200,16 +178,12 @@ function AddEntryModal({ direction, onClose, onSaved }) {
         ilan sayısını şişirmemeli. topicId GÖNDERİLMEZ — bkz. trackEvent kişisel veri notu.
       */
       if (direction === 'Offer') {
-        trackEvent(AnalyticsEvents.LessonCreated, {
-          self_assessed_level: Number(level),
-          volunteer: isVolunteer,
-        })
+        trackEvent(AnalyticsEvents.LessonCreated, { self_assessed_level: Number(level) })
       }
 
-      setTopicId('')
+      setSecilenKonu(null)
       setNote('')
       setLevel(3)
-      setIsVolunteer(false)
       onSaved()
     } catch (err) {
       setError(err)
@@ -218,33 +192,46 @@ function AddEntryModal({ direction, onClose, onSaved }) {
     }
   }
 
-  const isOffer = direction === 'Offer'
+  // 1. AŞAMA — konu seçimi
+  if (acik && !secilenKonu) {
+    return (
+      <KonuSecici
+        open
+        konular={konular}
+        yukleniyor={konularYukleniyor}
+        baslik={isOffer ? 'Verebileceğim konu ekle' : 'Almak istediğim konu ekle'}
+        onClose={kapat}
+        onSelect={setSecilenKonu}
+      />
+    )
+  }
 
+  // 2. AŞAMA — detaylar
   return (
     <Modal
-      open={Boolean(direction)}
-      onClose={onClose}
+      open={acik}
+      onClose={kapat}
       title={isOffer ? 'Verebileceğim konu ekle' : 'Almak istediğim konu ekle'}
     >
       <form onSubmit={onSubmit} className="space-y-4" id="portfolio-form">
-        <Field label="Konu">
-          {topics.loading ? (
-            <Loading label="Katalog yükleniyor…" />
-          ) : (
-            /*
-              Düz <select> DEĞİL: katalog 767 konu. Kullanıcı ya yazarak süzer ("türev")
-              ya da listeyi gezer; ikisi de açık. Gerekçenin tamamı SearchableSelect'te.
-            */
-            <SearchableSelect
-              id="portfoy-konu"
-              options={konuSecenekleri}
-              value={topicId}
-              onChange={setTopicId}
-              placeholder="Konu ara ya da listeden seç…"
-              emptyLabel="Bu aramayla eşleşen konu yok"
-            />
-          )}
-        </Field>
+        {/* Seçilen konu ÖZET OLARAK duruyor ve yanında "Değiştir" var: kullanıcı hangi
+            konuyu seçtiğini formu doldururken de görebilmeli, yanlış seçtiyse baştan
+            başlamak zorunda kalmamalı. */}
+        <div className="flex items-start justify-between gap-3 rounded-lg border border-brand-200 bg-brand-50 p-3">
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold text-brand-900">{secilenKonu?.topic}</p>
+            <p className="mt-0.5 text-xs text-brand-800">
+              {secilenKonu?.rootCategory} · {secilenKonu?.category} · {secilenKonu?.subject}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setSecilenKonu(null)}
+            className="shrink-0 rounded px-2 py-1 text-xs font-medium text-brand-700 underline transition hover:bg-white/60 hover:no-underline"
+          >
+            Değiştir
+          </button>
+        </div>
 
         <Field
           label={isOffer ? 'Bu konudaki seviyen' : 'Mevcut seviyen'}
@@ -266,45 +253,30 @@ function AddEntryModal({ direction, onClose, onSaved }) {
         </Field>
 
         {/*
-          Seçim yalnızca "anlatabilirim" tarafında anlamlı ve artık ÖĞRENCİYE DEĞİL,
-          EĞİTMENE dair: ders her hâlükârda ücretsiz. Karar, anlatanın bu ders için puan
-          isteyip istemediğidir.
+          İPUCU YÖNE GÖRE DEĞİŞİYOR. Tek bir örnek metin ("Sadece temel seviye
+          anlatabilirim") iki listede birden kullanılıyordu ve ALMAK isteyen tarafta
+          anlamsızdı: ders alacak kişi ne anlatacağını değil, neye ihtiyacı olduğunu
+          yazar. Not alanının işi karşı tarafa bir beklenti iletmek; beklenti de yöne
+          göre değişiyor.
         */}
-        {isOffer && (
-          <Field label="Puan kazanımı">
-            {canOfferVolunteer ? (
-              <div className="space-y-2">
-                <PriceOption
-                  active={!isVolunteer}
-                  onClick={() => setIsVolunteer(false)}
-                  title="Puan kazan"
-                  description="30 dk = 50 puan, 60 dk = 100 puan. Ders onaylandığında puan sana yazılır."
-                />
-                <PriceOption
-                  active={isVolunteer}
-                  onClick={() => setIsVolunteer(true)}
-                  title="🤝 Gönüllü ders"
-                  description="Puan kazanmazsın; anlattığın ders ve süre sayaçların yine artar."
-                />
-              </div>
-            ) : (
-              <div className="rounded-lg border border-slate-200/80 bg-slate-50 p-3 text-sm text-slate-600">
-                Bu ders onaylandığında sana puan yazılır (30 dk = 50, 60 dk = 100).{' '}
-                <Link to="/profil" className="font-medium text-brand-600 underline">
-                  Öğretmen adaylığı
-                </Link>{' '}
-                bilgilerini doldurursan gönüllü ders de açabilirsin.
-              </div>
-            )}
-          </Field>
-        )}
-
-        <Field label="Not (opsiyonel)" hint="Örn: 'Sadece temel seviye anlatabilirim.'">
+        <Field
+          label="Not (opsiyonel)"
+          hint={
+            isOffer
+              ? 'Örn: Temelden başlayıp soru çözümüyle ilerliyorum.'
+              : 'Örn: Bu konunun formüllerinde zorlanıyorum, bol soru çözümü istiyorum.'
+          }
+        >
           <input
             className="input"
             value={note}
             onChange={(e) => setNote(e.target.value)}
             maxLength={500}
+            placeholder={
+              isOffer
+                ? 'Temelden başlayıp soru çözümüyle ilerliyorum.'
+                : 'Bu konunun formüllerinde zorlanıyorum, bol soru çözümü istiyorum.'
+            }
           />
         </Field>
 
@@ -312,10 +284,10 @@ function AddEntryModal({ direction, onClose, onSaved }) {
       </form>
 
       <div className="mt-4 flex justify-end gap-2">
-        <Button variant="secondary" onClick={onClose}>
+        <Button variant="secondary" onClick={kapat}>
           Vazgeç
         </Button>
-        <Button type="submit" form="portfolio-form" loading={busy} disabled={!topicId}>
+        <Button type="submit" form="portfolio-form" loading={busy} disabled={busy || !secilenKonu}>
           Ekle
         </Button>
       </div>
