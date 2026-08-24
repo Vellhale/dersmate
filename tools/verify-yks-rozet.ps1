@@ -1,4 +1,4 @@
-# PeerLearn — YKS müfredatı + branş rozetleri doğrulaması
+﻿# PeerLearn — YKS müfredatı + branş rozetleri doğrulaması
 #
 # NE YAPAR: derleme → göç → tohumlama zincirini koşturur ve sonucun DOĞRU olduğunu
 # veritabanından okuyarak kanıtlar.
@@ -52,7 +52,10 @@ $env:PGPASSWORD = 'PeerLearnDev2026'
   CI için 2. yol şart: koşucuda ne Windows kurulumu ne de compose var, ama psql PATH'te.
 #>
 $WindowsPsql = 'C:\Program Files\PostgreSQL\17\bin\psql.exe'
-$PathPsql = (Get-Command psql -ErrorAction SilentlyContinue)?.Source
+# PS 5.1 UYUMU: `?.` null-koşullu operatörü PowerShell 7 ile geldi ve 5.1'de SÖZDİZİMİ
+# hatası verir — betik hiç başlamaz. Paketler CLAUDE.md gereği 5.1 altında koşuyor.
+$psqlCmd = Get-Command psql -ErrorAction SilentlyContinue
+$PathPsql = if ($psqlCmd) { $psqlCmd.Source } else { $null }
 
 if (Test-Path $WindowsPsql) { $PsqlExe = $WindowsPsql }
 elseif ($PathPsql) { $PsqlExe = $PathPsql }

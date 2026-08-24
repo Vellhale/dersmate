@@ -1,4 +1,4 @@
-# PeerLearn — Bildirilen kusurların regresyon testi
+﻿# PeerLearn — Bildirilen kusurların regresyon testi
 #
 # Bu paket, kod denetiminde bulunup düzeltilen kusurları KİLİTLER. Her bölüm, düzeltme
 # geri alınırsa kırmızıya dönecek biçimde yazıldı — "artık çalışıyor" demek yetmez,
@@ -6,7 +6,7 @@
 #
 # Kapsam:
 #   A. Portföyden çıkarılan konu yeniden eklenebiliyor (409 çıkmazı)
-#   B. Cüzdan yeni ekonomiyi doğru gösteriyor: basılan puan, birikimli toplam, unvan
+#   B. Cüzdan yeni ekonomiyi doğru gösteriyor: basılan puan, birikimli toplam, seviye
 #   C. Tekrar-kanıt sinyali yükleyene sızmıyor
 #   D. Doğrulama e-postası yeniden gönderilebiliyor (hesap kilitlenmiyor)
 #   E. Yaptırım ANINDA etkili ve geri alınabilir (ban / askı / rol)
@@ -20,16 +20,37 @@
 #   sınıfı artık üretilemiyor; ölçtüğü alanlar (availableBalance / lockedBalance /
 #   pendingExpirySweep) cüzdan DTO'sundan tamamen kalktı. Bölüm silinmedi, aynı soruyu
 #   yeni modelde soracak biçimde yeniden yazıldı: cüzdan, emeğin karşılığını (basılan
-#   puan, birikimli toplam, ondan türeyen unvan) DOĞRU gösteriyor mu.
+#   puan, birikimli toplam, ondan türeyen seviye) DOĞRU gösteriyor mu.
 #
 # NOT (kodlama): Bu dosya UTF-8 BOM ile saklanmalı. PS 5.1, BOM'suz betiği ANSI okuyup
-# Türkçe harfleri bozar; B bölümünde unvan adları ('Çırak', 'Üstat') SUNUCUDAN dönen
-# değerle karşılaştırıldığı için bozulan bir literal testi sahte kırmızıya düşürür.
+# Türkçe harfleri bozar. (B bölümü artık seviye RAKAMI karşılaştırıyor, yani o bölüm bu
+# tuzaktan etkilenmiyor; kural dosyanın geri kalanı için geçerli.)
 
 $ErrorActionPreference = 'Stop'
 $Api = 'http://localhost:5000'
 $Psql = 'C:\Program Files\PostgreSQL\17\bin\psql.exe'
 $env:PGPASSWORD = 'PeerLearnDev2026'
+
+<#
+  psql'e üç yoldan erişilebilir; ilk bulunan kullanılır:
+    1. Windows kurulumu   — geliştiricinin makinesinde tipik yol.
+    2. PATH üzerinde psql — Linux/macOS ve CI koşucuları (postgresql-client).
+    3. docker compose     — makinede psql yok ama compose yığını ayakta.
+
+  Üçüncü yol OLMADAN bu paket, docs/GELISTIRME-ORTAMI.md'nin tarif ettiği Docker
+  kurulumunda hiç koşamıyordu: yalnızca yerel PostgreSQL 17 kurulumu varsayılıyor ve
+  betik "psql bulunamadi" ile ortasında düşüyordu. Testin koşamaması, testin
+  başarısız olmasından daha sinsi — özet onu KIRMIZI değil, hiç görünmemiş sayıyor.
+#>
+if (-not (Test-Path $Psql)) {
+    # PS 5.1 UYUMU: `?.` null-koşullu operatörü PowerShell 7 ile geldi. Paketler
+    # CLAUDE.md gereği 5.1 altında koşuyor ve orada bu bir SÖZDİZİMİ hatası —
+    # betik hiç başlamaz, yani "psql yok" durumunu ele alacak kod hiç çalışmaz.
+    $psqlCmd = Get-Command psql -ErrorAction SilentlyContinue
+    $bulunan = if ($psqlCmd) { $psqlCmd.Source } else { $null }
+    if ($bulunan) { $Psql = $bulunan } else { $Psql = $null }
+}
+$script:ComposeYml = Join-Path (Split-Path $PSScriptRoot -Parent) 'docker-compose.yml'
 
 $script:Pass = 0; $script:Fail = 0
 function OK($m) { $script:Pass++; Write-Host "  [OK] $m" -ForegroundColor Green }
@@ -37,6 +58,12 @@ function Fail($m) { $script:Fail++; Write-Host "  [KALDI] $m" -ForegroundColor R
 function Section($m) { Write-Host "`n=== $m ===" -ForegroundColor Cyan }
 
 function Sql($q) {
+    if (-not $Psql) {
+        # Docker yolu: sorgu STDIN'den geçer. `-c` ile argüman olarak geçirmek,
+        # identity."Users" gibi tırnaklı adlardaki tırnakları kabuğa yedirir.
+        $out = $q | docker compose -f $script:ComposeYml exec -T db psql -U peerlearn -d peerlearn -t -A -v ON_ERROR_STOP=1 2>&1
+        return $out
+    }
     $f = Join-Path $env:TEMP "pl-fix-$([Guid]::NewGuid().ToString('N')).sql"
     [IO.File]::WriteAllText($f, $q, [Text.UTF8Encoding]::new($false))
     try { & $Psql -h localhost -U peerlearn -d peerlearn -t -A -f $f } finally { Remove-Item $f -Force }
@@ -152,10 +179,14 @@ $eskiAlanlar = @(@('availableBalance', 'lockedBalance', 'pendingExpirySweep') | 
 if ($eskiAlanlar.Count -eq 0) { OK 'escrow çağının alanları cüzdandan kalktı' }
 else { Fail "cüzdan hâlâ eski alan dönüyor: $($eskiAlanlar -join ', ')" }
 
-$eksikAlanlar = @(@('totalEarnedCredits', 'currentBalance', 'rankTitle', 'rankEmoji', 'activeLots') | Where-Object { $null -eq $w0.$_ })
+$eksikAlanlar = @(@('totalEarnedCredits', 'currentBalance', 'level', 'levelMinCredits', 'activeLots') | Where-Object { $null -eq $w0.$_ })
 if ($eksikAlanlar.Count -eq 0) { OK 'yeni cüzdan alanları eksiksiz dönüyor' }
 else { Fail "cüzdanda eksik alan: $($eksikAlanlar -join ', ')" }
-if ($w0.rankTitle -eq 'Çırak') { OK 'yeni kullanıcı Çırak unvanıyla başlıyor' } else { Fail "başlangıç unvanı: $($w0.rankTitle)" }
+# Yeni hesap 1. seviyeden başlar ve sonraki basamak 100 puandır. İkisi birden
+# sınanıyor: yalnızca seviyeye bakmak, eşik tablosunun ilk satırı bozulsa bile
+# (0 yerine -50 gibi) testi yeşil bırakırdı.
+if ([int]$w0.level -eq 1) { OK 'yeni kullanıcı 1. seviyeden başlıyor' } else { Fail "başlangıç seviyesi: $($w0.level)" }
+if ([int]$w0.nextLevelAt -eq 100) { OK 'sonraki seviye eşiği 100 puan' } else { Fail "nextLevelAt: $($w0.nextLevelAt) (beklenen 100)" }
 
 # Mutlak değil FARK karşılaştırıyoruz: hoş geldin kredisinin birikimli toplama sayılıp
 # sayılmadığı bu bölümün konusu değil, testi ona bağlamak kırılganlık olurdu.
@@ -226,37 +257,45 @@ if ($ogrSon.currentBalance -eq $oncekiOgr.currentBalance -and $ogrSon.totalEarne
     OK 'öğrencinin bakiyesi ve toplamı ders boyunca hiç değişmedi'
 } else { Fail "öğrenci: bakiye $($oncekiOgr.currentBalance)->$($ogrSon.currentBalance), toplam $($oncekiOgr.totalEarnedCredits)->$($ogrSon.totalEarnedCredits)" }
 
-# --- Unvan eşikleri (alt sınır DAHİL, üst sınır HARİÇ) ---
+# --- Seviye eşikleri (alt sınır DAHİL, üst sınır HARİÇ) ---
 # Puanı doğrudan kolona yazıyoruz: 10.000 puanı gerçek derslerle biriktirmek yüzlerce ders
-# demekti. Burada sınanan zaten OKUMA yolu — cüzdan, birikmiş toplamı doğru unvana çeviriyor mu.
-$unvanKul = NewUser 'fixunv' $stamp
+# demekti. Burada sınanan zaten OKUMA yolu — cüzdan, birikmiş toplamı doğru seviyeye
+# çeviriyor mu. Her basamağın hem ALT sınırı hem bir ALTINDAKİ değer sınanıyor; yalnızca
+# alt sınırları yazmak, kural "<=" olarak bozulsa bile testi yeşil bırakırdı.
+$seviyeKul = NewUser 'fixsvy' $stamp
 $esikler = @(
-    @{ Puan = 0;     Unvan = 'Çırak';    Sonraki = 500 },
-    @{ Puan = 499;   Unvan = 'Çırak';    Sonraki = 500 },
-    @{ Puan = 500;   Unvan = 'Öğretici'; Sonraki = 1000 },
-    @{ Puan = 999;   Unvan = 'Öğretici'; Sonraki = 1000 },
-    @{ Puan = 1000;  Unvan = 'Uzman';    Sonraki = 2500 },
-    @{ Puan = 2500;  Unvan = 'Usta';     Sonraki = 5000 },
-    @{ Puan = 5000;  Unvan = 'Mentor';   Sonraki = 10000 },
-    @{ Puan = 10000; Unvan = 'Üstat';    Sonraki = $null }
+    @{ Puan = 0;     Seviye = 1;  Sonraki = 100 },
+    @{ Puan = 99;    Seviye = 1;  Sonraki = 100 },
+    @{ Puan = 100;   Seviye = 2;  Sonraki = 200 },
+    @{ Puan = 199;   Seviye = 2;  Sonraki = 200 },
+    @{ Puan = 200;   Seviye = 3;  Sonraki = 350 },
+    @{ Puan = 350;   Seviye = 4;  Sonraki = 600 },
+    @{ Puan = 600;   Seviye = 5;  Sonraki = 1000 },
+    @{ Puan = 1000;  Seviye = 6;  Sonraki = 1750 },
+    @{ Puan = 1750;  Seviye = 7;  Sonraki = 3000 },
+    @{ Puan = 3000;  Seviye = 8;  Sonraki = 5500 },
+    @{ Puan = 5500;  Seviye = 9;  Sonraki = 10000 },
+    @{ Puan = 9999;  Seviye = 9;  Sonraki = 10000 },
+    @{ Puan = 10000; Seviye = 10; Sonraki = $null }
 )
-$emojiEksik = 0
+# EMOJİ KONTROLÜ KALKTI: seviyenin emojisi yok, rakamı var. Eski test "her unvanın bir
+# simgesi olmalı" diyordu çünkü rozet emoji + kelimeydi ve boş bir simge ekranda
+# görünmez bir boşluk bırakıyordu. Rakam hiçbir zaman boş olamaz — sunucu 1..10
+# aralığında bir tamsayı döndürüyor ve aralığı birim testler kilitliyor.
 foreach ($e in $esikler) {
-    Sql "UPDATE identity.""Users"" SET ""TotalEarnedCredits"" = $($e.Puan) WHERE ""Id"" = '$($unvanKul.UserId)';" | Out-Null
-    $wu = Get_ '/api/wallet' $unvanKul.Token
-    if ([string]::IsNullOrWhiteSpace($wu.rankEmoji)) { $emojiEksik++ }
-    $sonrakiMetin = if ($null -eq $e.Sonraki) { 'yok (en üst unvan)' } else { $e.Sonraki }
-    if ($wu.totalEarnedCredits -eq $e.Puan -and $wu.rankTitle -eq $e.Unvan -and $wu.nextRankAt -eq $e.Sonraki) {
-        OK "$($e.Puan) puan -> $($e.Unvan), sonraki eşik: $sonrakiMetin"
+    Sql "UPDATE identity.""Users"" SET ""TotalEarnedCredits"" = $($e.Puan) WHERE ""Id"" = '$($seviyeKul.UserId)';" | Out-Null
+    $wu = Get_ '/api/wallet' $seviyeKul.Token
+    $sonrakiMetin = if ($null -eq $e.Sonraki) { 'yok (en üst seviye)' } else { $e.Sonraki }
+    if ($wu.totalEarnedCredits -eq $e.Puan -and [int]$wu.level -eq $e.Seviye -and $wu.nextLevelAt -eq $e.Sonraki) {
+        OK "$($e.Puan) puan -> $($e.Seviye). seviye, sonraki eşik: $sonrakiMetin"
     } else {
-        Fail "$($e.Puan) puan -> unvan=$($wu.rankTitle) toplam=$($wu.totalEarnedCredits) sonraki=$($wu.nextRankAt) (beklenen: $($e.Unvan)/$sonrakiMetin)"
+        Fail "$($e.Puan) puan -> seviye=$($wu.level) toplam=$($wu.totalEarnedCredits) sonraki=$($wu.nextLevelAt) (beklenen: $($e.Seviye)/$sonrakiMetin)"
     }
 }
-if ($emojiEksik -eq 0) { OK 'her unvan bir rozet emojisiyle dönüyor' } else { Fail "emojisiz unvan sayısı: $emojiEksik" }
 
 # Bu kullanıcının puanını sıfırla: değeri elle şişirdik, panelin küresel toplamlarını
 # ölçen diğer paketlere yalan taşımasın. (Uygulama yolunda bu kolon asla azalmaz.)
-Sql "UPDATE identity.""Users"" SET ""TotalEarnedCredits"" = 0 WHERE ""Id"" = '$($unvanKul.UserId)';" | Out-Null
+Sql "UPDATE identity.""Users"" SET ""TotalEarnedCredits"" = 0 WHERE ""Id"" = '$($seviyeKul.UserId)';" | Out-Null
 
 # ---------------------------------------------------------------------------
 Section 'C. Tekrar-kanıt sinyali yükleyene sızmamalı'

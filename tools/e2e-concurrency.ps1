@@ -1,4 +1,4 @@
-# PeerLearn — Eşzamanlılık (race condition) testi
+﻿# PeerLearn — Eşzamanlılık (race condition) testi
 #
 # NEDEN İKİ INSTANCE:
 # Redis yapılandırılmadığı sürece dağıtık kilit yerine InProcessLockProvider (SemaphoreSlim)
@@ -48,6 +48,27 @@ $API2 = 'http://localhost:5001'
 $PSQL = 'C:\Program Files\PostgreSQL\17\bin\psql.exe'
 $env:PGPASSWORD = 'PeerLearnDev2026'
 
+<#
+  psql'e üç yoldan erişilebilir; ilk bulunan kullanılır:
+    1. Windows kurulumu   — geliştiricinin makinesinde tipik yol.
+    2. PATH üzerinde psql — Linux/macOS ve CI koşucuları (postgresql-client).
+    3. docker compose     — makinede psql yok ama compose yığını ayakta.
+
+  Üçüncü yol OLMADAN bu paket, docs/GELISTIRME-ORTAMI.md'nin tarif ettiği Docker
+  kurulumunda hiç koşamıyordu: yalnızca yerel PostgreSQL 17 kurulumu varsayılıyor ve
+  betik "psql bulunamadi" ile ortasında düşüyordu. Testin koşamaması, testin
+  başarısız olmasından daha sinsi — özet onu KIRMIZI değil, hiç görünmemiş sayıyor.
+#>
+if (-not (Test-Path $PSQL)) {
+    # PS 5.1 UYUMU: `?.` null-koşullu operatörü PowerShell 7 ile geldi. Paketler
+    # CLAUDE.md gereği 5.1 altında koşuyor ve orada bu bir SÖZDİZİMİ hatası —
+    # betik hiç başlamaz, yani "psql yok" durumunu ele alacak kod hiç çalışmaz.
+    $psqlCmd = Get-Command psql -ErrorAction SilentlyContinue
+    $bulunan = if ($psqlCmd) { $psqlCmd.Source } else { $null }
+    if ($bulunan) { $PSQL = $bulunan } else { $PSQL = $null }
+}
+$script:ComposeYml = Join-Path (Split-Path $PSScriptRoot -Parent) 'docker-compose.yml'
+
 $script:failures = 0
 $script:skipped = 0
 function Step($name) { Write-Host "`n=== $name ===" -ForegroundColor Cyan }
@@ -72,6 +93,12 @@ function Api {
 }
 
 function Sql($query) {
+    if (-not $PSQL) {
+        # Docker yolu: sorgu STDIN'den geçer. `-c` ile argüman olarak geçirmek,
+        # identity."Users" gibi tırnaklı adlardaki tırnakları kabuğa yedirir.
+        $out = $query | docker compose -f $script:ComposeYml exec -T db psql -U peerlearn -d peerlearn -t -A -v ON_ERROR_STOP=1 2>&1
+        return ($out -join '').Trim()
+    }
     $f = Join-Path $env:TEMP ("pl_" + [Guid]::NewGuid().ToString('N') + ".sql")
     Set-Content -Path $f -Value $query -Encoding UTF8
     $out = & $PSQL -h localhost -U peerlearn -d peerlearn -t -A -v ON_ERROR_STOP=1 -f $f 2>&1
@@ -215,28 +242,35 @@ function HoldsForSession($sessionId) { SqlInt "SELECT COUNT(*) FROM information_
 function HoldsForUser($userId) { SqlInt "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='economy' AND table_name='CreditHolds';" }
 
 # Unvan eşikleri: alt sınır DAHİL, üst sınır HARİÇ.
-function RankFor([int]$total) {
-    if     ($total -ge 10000) { return 'Ustat' }
-    elseif ($total -ge 5000)  { return 'Mentor' }
-    elseif ($total -ge 2500)  { return 'Usta' }
-    elseif ($total -ge 1000)  { return 'Uzman' }
-    elseif ($total -ge 500)   { return 'Ogretici' }
-    else                      { return 'Cirak' }
+# Seviye eşikleri — SUNUCUDAKİNİN BAĞIMSIZ KOPYASI, ve bu bilinçli.
+#
+# Normalde eşik tablosunu ikinci bir yere yazmak yasak (arayüz tarafında öyle).
+# Testte kural TERSİNE döner: bağımsız bir kopya olmadan test, sınadığı hesabın
+# kendisini çağırıp "kendi kendine eşit mi" diye sorardı ve her zaman geçerdi.
+# Tablo sunucuda değişip burada değişmezse bu test KIRILIR — istenen davranış budur.
+# Kaynak: src/PeerLearn.Domain/Community/UserLevel.cs
+$script:SeviyeEsikleri = @(0, 100, 200, 350, 600, 1000, 1750, 3000, 5500, 10000)
+
+function SeviyeFor([int]$total) {
+    if ($total -lt 0) { $total = 0 }
+    $seviye = 1
+    for ($i = 0; $i -lt $script:SeviyeEsikleri.Count; $i++) {
+        if ($total -ge $script:SeviyeEsikleri[$i]) { $seviye = $i + 1 }
+    }
+    return $seviye
 }
 
-# Unvan başlıkları diyakritikli döner ("Çırak"). Ham string karşılaştırması sırf harf
-# farkından sahte başarısızlık üretmesin diye iki tarafı da sadeleştirip kıyaslıyoruz.
-function NormTr($s) {
-    if ($null -eq $s) { return '' }
-    $t = [string]$s
-    $t = $t.Replace([char]0x00E7, 'c').Replace([char]0x00C7, 'c')   # ç Ç
-    $t = $t.Replace([char]0x011F, 'g').Replace([char]0x011E, 'g')   # ğ Ğ
-    $t = $t.Replace([char]0x0131, 'i').Replace([char]0x0130, 'i')   # ı İ
-    $t = $t.Replace([char]0x00F6, 'o').Replace([char]0x00D6, 'o')   # ö Ö
-    $t = $t.Replace([char]0x015F, 's').Replace([char]0x015E, 's')   # ş Ş
-    $t = $t.Replace([char]0x00FC, 'u').Replace([char]0x00DC, 'u')   # ü Ü
-    return $t.ToLowerInvariant()
+# Bir sonraki basamağın eşiği; en üst seviyede $null (sunucu da null döner).
+function SonrakiSeviyeEsigi([int]$total) {
+    $seviye = SeviyeFor $total
+    if ($seviye -ge $script:SeviyeEsikleri.Count) { return $null }
+    return $script:SeviyeEsikleri[$seviye]
 }
+
+# NormTr KALDIRILDI. Unvan adları diyakritikliydi ("Çırak") ve ham karşılaştırma sırf
+# harf kodlamasından sahte başarısızlık üretiyordu; sadeleştirici bir yardımcı şarttı.
+# Seviye bir TAMSAYI olduğu için o sorunun tamamı ortadan kalktı — 3 ile 3 karşılaştırmak
+# kodlamadan bağımsız. Adlandırmayı numaraya çevirmenin sessiz bir yan faydası.
 
 # İki instance arasında sırayla dağıt: yarış süreç sınırını aşsın.
 function SplitBases($count) {
@@ -270,7 +304,7 @@ OK 'admin hazır'
 # ya da yenileri yoksa, aşağıdaki "önce/sonra" kontrolleri $null - $null = 0 ile SAHTE geçer.
 # Bu yüzden şekli bir kez, en başta doğruluyoruz.
 $wProbe = Wallet $adminT
-foreach ($alan in @('totalEarnedCredits', 'currentBalance', 'rankTitle', 'rankEmoji')) {
+foreach ($alan in @('totalEarnedCredits', 'currentBalance', 'level', 'levelMinCredits')) {
     if ($null -eq $wProbe.$alan) { Fail "cüzdan yanıtında '$alan' alanı yok — yeni sözleşme karşılanmıyor" }
 }
 $eskiAlanlar = @(@('availableBalance', 'lockedBalance', 'pendingExpirySweep') | Where-Object { $null -ne $wProbe.$_ })
@@ -381,11 +415,16 @@ else { Fail "eğitmen bakiye farkı: $($tw2after.currentBalance - $tw2before.cur
 if ([int]$tw2after.totalEarnedCredits -eq $te2after) { OK 'cüzdan yanıtı ile veritabanı sayacı aynı' }
 else { Fail "cüzdan totalEarnedCredits=$($tw2after.totalEarnedCredits), veritabanı=$te2after" }
 
-# Değişmez 9: eşzamanlı basımlar unvan hesabını da bozmamalı.
-$beklenenUnvan = RankFor $te2after
-if ((NormTr $tw2after.rankTitle) -eq (NormTr $beklenenUnvan)) { OK "unvan eşikle uyumlu: $($tw2after.rankTitle) / $te2after puan" }
-else { Fail "unvan: $($tw2after.rankTitle) — $te2after puan için beklenen: $beklenenUnvan" }
-if ([int]$tw2after.nextRankAt -eq 500) { OK 'bir sonraki unvan eşiği 500 döndü' } else { Fail "nextRankAt: $($tw2after.nextRankAt) (beklenen 500)" }
+# Değişmez 9: eşzamanlı basımlar seviye hesabını da bozmamalı.
+$beklenenSeviye = SeviyeFor $te2after
+if ([int]$tw2after.level -eq $beklenenSeviye) { OK "seviye eşikle uyumlu: $($tw2after.level). seviye / $te2after puan" }
+else { Fail "seviye: $($tw2after.level) — $te2after puan için beklenen: $beklenenSeviye" }
+
+# Sonraki eşik SABİT DEĞİL, hesaplanıyor: eski test 500 yazıyordu ve eşik tablosu
+# değiştiği anda sahte bir başarısızlık üretirdi.
+$beklenenSonraki = SonrakiSeviyeEsigi $te2after
+if ([int]$tw2after.nextLevelAt -eq [int]$beklenenSonraki) { OK "bir sonraki seviye eşiği $beklenenSonraki döndü" }
+else { Fail "nextLevelAt: $($tw2after.nextLevelAt) (beklenen $beklenenSonraki)" }
 
 $earnLots2 = SqlInt "SELECT COUNT(*) FROM economy.""CreditLots"" WHERE ""SourceSessionId"" = '$($b2.sessionId)';"
 if ($earnLots2 -eq 1) { OK 'tek kazanç lotu oluştu' } else { Fail "kazanç lotu sayısı: $earnLots2" }

@@ -1,4 +1,4 @@
-# PeerLearn uçtan uca duman testi
+﻿# PeerLearn uçtan uca duman testi
 # Senaryo: Ayşe (matematik anlatır, kimya öğrenir) <-> Berk (kimya anlatır, matematik öğrenir)
 #
 # KAPSAM NOTU — YENİ PUAN EKONOMİSİ
@@ -17,6 +17,27 @@ $ErrorActionPreference = 'Stop'
 $API = 'http://localhost:5000'
 $PSQL = 'C:\Program Files\PostgreSQL\17\bin\psql.exe'
 $env:PGPASSWORD = 'PeerLearnDev2026'
+
+<#
+  psql'e üç yoldan erişilebilir; ilk bulunan kullanılır:
+    1. Windows kurulumu   — geliştiricinin makinesinde tipik yol.
+    2. PATH üzerinde psql — Linux/macOS ve CI koşucuları (postgresql-client).
+    3. docker compose     — makinede psql yok ama compose yığını ayakta.
+
+  Üçüncü yol OLMADAN bu paket, docs/GELISTIRME-ORTAMI.md'nin tarif ettiği Docker
+  kurulumunda hiç koşamıyordu: yalnızca yerel PostgreSQL 17 kurulumu varsayılıyor ve
+  betik "psql bulunamadi" ile ortasında düşüyordu. Testin koşamaması, testin
+  başarısız olmasından daha sinsi — özet onu KIRMIZI değil, hiç görünmemiş sayıyor.
+#>
+if (-not (Test-Path $PSQL)) {
+    # PS 5.1 UYUMU: `?.` null-koşullu operatörü PowerShell 7 ile geldi. Paketler
+    # CLAUDE.md gereği 5.1 altında koşuyor ve orada bu bir SÖZDİZİMİ hatası —
+    # betik hiç başlamaz, yani "psql yok" durumunu ele alacak kod hiç çalışmaz.
+    $psqlCmd = Get-Command psql -ErrorAction SilentlyContinue
+    $bulunan = if ($psqlCmd) { $psqlCmd.Source } else { $null }
+    if ($bulunan) { $PSQL = $bulunan } else { $PSQL = $null }
+}
+$script:ComposeYml = Join-Path (Split-Path $PSScriptRoot -Parent) 'docker-compose.yml'
 
 $script:failures = 0
 function Step($name)  { Write-Host "`n=== $name ===" -ForegroundColor Cyan }
@@ -83,6 +104,12 @@ function UploadProof {
 # SQL'i dosyadan çalıştır: PowerShell 5.1 native komutlara argüman geçerken gömülü
 # çift tırnakları yiyor ve PostgreSQL identifier'ları küçük harfe katlanıyordu.
 function Sql($query) {
+    if (-not $PSQL) {
+        # Docker yolu: sorgu STDIN'den geçer. `-c` ile argüman olarak geçirmek,
+        # identity."Users" gibi tırnaklı adlardaki tırnakları kabuğa yedirir.
+        $out = $query | docker compose -f $script:ComposeYml exec -T db psql -U peerlearn -d peerlearn -t -A -v ON_ERROR_STOP=1 2>&1
+        return $out
+    }
     $f = Join-Path $env:TEMP ("pl_" + [Guid]::NewGuid().ToString('N') + ".sql")
     Set-Content -Path $f -Value $query -Encoding UTF8
     $out = & $PSQL -h localhost -U peerlearn -d peerlearn -t -A -v ON_ERROR_STOP=1 -f $f 2>&1
@@ -155,10 +182,11 @@ else { Fail "eski alanlar hâlâ dönüyor: available=$($w.availableBalance) loc
 if ($w.totalEarnedCredits -eq 0) { OK 'hoş geldin kredisi unvan sayacına sayılmadı' }
 else { Fail "beklenen totalEarnedCredits 0, gelen $($w.totalEarnedCredits)" }
 
-# Unvan sunucudan geliyor; 0 puanda ilk kademe ve sonraki eşik 500 olmalı.
-# Unvan METNİ yerine eşik sayısı doğrulanıyor: ad/emoji ürün kararı, eşik ise sözleşme.
-if ($w.rankTitle -and $w.rankEmoji -and $w.nextRankAt -eq 500) { OK "başlangıç unvanı: $($w.rankEmoji) $($w.rankTitle) — sonraki eşik $($w.nextRankAt)" }
-else { Fail "unvan alanları eksik/yanlış: title=$($w.rankTitle) emoji=$($w.rankEmoji) next=$($w.nextRankAt)" }
+# Seviye sunucudan geliyor; 0 puanda 1. seviye ve sonraki eşik 100 olmalı.
+# Seviye artık bir TAMSAYI: eski test unvan metnini sınamaktan kaçınıyordu (ad bir ürün
+# kararı, eşik ise sözleşme) — rakamda böyle bir ayrım gerekmiyor, ikisi de sözleşme.
+if ([int]$w.level -eq 1 -and $w.nextLevelAt -eq 100) { OK "başlangıç seviyesi: $($w.level) — sonraki eşik $($w.nextLevelAt)" }
+else { Fail "seviye alanları eksik/yanlış: level=$($w.level) next=$($w.nextLevelAt)" }
 
 # ---------------------------------------------------------------- 3. PORTFÖY
 Step '3. İki yönlü portföy'
@@ -367,9 +395,11 @@ $earnedAfter = EarnedCounter $berkReg.userId
 if ($earnedAfter -eq ($earnedBefore + 100)) { OK "identity.Users.TotalEarnedCredits 100 arttı ($earnedBefore -> $earnedAfter)" }
 else { Fail "veritabanı sayacı $earnedBefore -> $earnedAfter, beklenen +100" }
 
-# Unvan hâlâ ilk kademede (100 < 500) ama bir sonraki eşiği göstermeye devam etmeli.
-if ($wb.rankTitle -and $wb.nextRankAt -eq 500) { OK "eğitmenin unvanı: $($wb.rankEmoji) $($wb.rankTitle) — sonraki eşik $($wb.nextRankAt)" }
-else { Fail "unvan alanları yanlış: title=$($wb.rankTitle) next=$($wb.nextRankAt)" }
+# Tek ders (100 puan) eğitmeni 2. seviyeye çıkarır ve sonraki eşik 200 olur.
+# İLERLEMENİN GÖRÜNÜR OLMASI ürün kararının kendisi: eski merdivende ilk basamak
+# 500 puandaydı, yani bir ders anlatan kullanıcı hiçbir değişiklik görmüyordu.
+if ([int]$wb.level -eq 2 -and $wb.nextLevelAt -eq 200) { OK "eğitmenin seviyesi: $($wb.level) — sonraki eşik $($wb.nextLevelAt)" }
+else { Fail "seviye alanları yanlış: level=$($wb.level) next=$($wb.nextLevelAt)" }
 
 # Kazanç lotu artık SÜRESİZ açılıyor (eski model 30 gün vadeliydi): kazanılan puan yanmaz.
 $earnedLot = @($wb.activeLots | Where-Object { $_.source -eq 'LessonEarning' -and $_.remainingAmount -eq 100 })[0]

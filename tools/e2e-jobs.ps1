@@ -1,4 +1,4 @@
-# PeerLearn — Zamana bağlı background job'ların uçtan uca testi
+﻿# PeerLearn — Zamana bağlı background job'ların uçtan uca testi
 #
 # YÖNTEM: Saati beklemek yerine kayıtların zaman damgaları GEÇMİŞE alınır, sonra job
 # admin ucundan tetiklenir. Job'ın gerçek kodu (SweepSessionsCommand / ExpireCreditsCommand)
@@ -42,6 +42,27 @@ $API = 'http://localhost:5000'
 $PSQL = 'C:\Program Files\PostgreSQL\17\bin\psql.exe'
 $env:PGPASSWORD = 'PeerLearnDev2026'
 
+<#
+  psql'e üç yoldan erişilebilir; ilk bulunan kullanılır:
+    1. Windows kurulumu   — geliştiricinin makinesinde tipik yol.
+    2. PATH üzerinde psql — Linux/macOS ve CI koşucuları (postgresql-client).
+    3. docker compose     — makinede psql yok ama compose yığını ayakta.
+
+  Üçüncü yol OLMADAN bu paket, docs/GELISTIRME-ORTAMI.md'nin tarif ettiği Docker
+  kurulumunda hiç koşamıyordu: yalnızca yerel PostgreSQL 17 kurulumu varsayılıyor ve
+  betik "psql bulunamadi" ile ortasında düşüyordu. Testin koşamaması, testin
+  başarısız olmasından daha sinsi — özet onu KIRMIZI değil, hiç görünmemiş sayıyor.
+#>
+if (-not (Test-Path $PSQL)) {
+    # PS 5.1 UYUMU: `?.` null-koşullu operatörü PowerShell 7 ile geldi. Paketler
+    # CLAUDE.md gereği 5.1 altında koşuyor ve orada bu bir SÖZDİZİMİ hatası —
+    # betik hiç başlamaz, yani "psql yok" durumunu ele alacak kod hiç çalışmaz.
+    $psqlCmd = Get-Command psql -ErrorAction SilentlyContinue
+    $bulunan = if ($psqlCmd) { $psqlCmd.Source } else { $null }
+    if ($bulunan) { $PSQL = $bulunan } else { $PSQL = $null }
+}
+$script:ComposeYml = Join-Path (Split-Path $PSScriptRoot -Parent) 'docker-compose.yml'
+
 # Ödül ölçeği tek yerde: 30 dk = 50 puan. Beklenen tutarlar bu sabitlerden türetilir ki
 # ölçek değişirse testin tek bir yeri güncellensin.
 $MINT_30 = 50
@@ -65,6 +86,12 @@ function Api {
 }
 
 function Sql($query) {
+    if (-not $PSQL) {
+        # Docker yolu: sorgu STDIN'den geçer. `-c` ile argüman olarak geçirmek,
+        # identity."Users" gibi tırnaklı adlardaki tırnakları kabuğa yedirir.
+        $out = $query | docker compose -f $script:ComposeYml exec -T db psql -U peerlearn -d peerlearn -t -A -v ON_ERROR_STOP=1 2>&1
+        return ($out -join '').Trim()
+    }
     $f = Join-Path $env:TEMP ("pl_" + [Guid]::NewGuid().ToString('N') + ".sql")
     Set-Content -Path $f -Value $query -Encoding UTF8
     $out = & $PSQL -h localhost -U peerlearn -d peerlearn -t -A -v ON_ERROR_STOP=1 -f $f 2>&1
@@ -216,9 +243,11 @@ $sayacDb = EarnedDb $due.tutor.userId
 if ($sayacDb -eq "$MINT_60") { OK 'identity."Users"."TotalEarnedCredits" tabloda da doğru' }
 else { Fail "tablodaki sayaç: $sayacDb" }
 
-# Unvan puandan türetiliyor; 100 puan ilk kademede kalmalı (0-500 Çırak).
-if ($tutorAfter.rankTitle -eq 'Çırak' -and $tutorAfter.nextRankAt -eq 500) { OK "unvan: $($tutorAfter.rankEmoji) $($tutorAfter.rankTitle), sonraki eşik 500" }
-else { Fail "unvan: $($tutorAfter.rankTitle) / sonraki: $($tutorAfter.nextRankAt)" }
+# Seviye puandan türetiliyor; 100 puan tam olarak 2. seviyenin ALT SINIRI (eşik dahil).
+# Sınır değerinin seçilmesi kasıtlı: 99 ile 100 arasındaki fark, kuralın "<" mi "<=" mi
+# olduğunu ele veren tek nokta.
+if ([int]$tutorAfter.level -eq 2 -and $tutorAfter.nextLevelAt -eq 200) { OK "seviye: $($tutorAfter.level). seviye, sonraki eşik 200" }
+else { Fail "seviye: $($tutorAfter.level) / sonraki: $($tutorAfter.nextLevelAt)" }
 
 # Basılan lot SÜRESİZ açılmalı — D senaryosunun dayanağı da bu.
 $dueLotExpiry = Sql "SELECT COALESCE(""ExpiresAtUtc""::text, 'SURESIZ') FROM economy.""CreditLots"" WHERE ""SourceSessionId"" = '$($due.sessionId)' LIMIT 1;"

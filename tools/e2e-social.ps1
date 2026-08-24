@@ -1,4 +1,4 @@
-# PeerLearn — Sosyal profil, değerlendirme ve gönüllü ders testi
+﻿# PeerLearn — Sosyal profil, değerlendirme ve gönüllü ders testi
 #
 # Kapsam:
 #   • Değerlendirme kuralları (yalnızca tamamlanmış ders, yalnızca öğrenci, tek kez)
@@ -7,7 +7,7 @@
 #   • GÖNÜLLÜ DERS (IsVolunteer bayrağı): eğitmene HİÇ puan basılmaz
 #   • ÜCRETLİ DERS karşıtlığı: onayda eğitmene puan BASILIR (60 dk -> 100) ve
 #     TotalEarnedCredits aynı miktarda artar; öğrencinin bakiyesi HİÇ oynamaz
-#   • Profil kartı alanları ve UNVAN eşikleri (rankTitle / rankEmoji / nextRankAt)
+#   • Profil kartı alanları ve SEVİYE eşikleri (level / levelMinCredits / nextLevelAt)
 #
 # BASIM MODELİNE GEÇİŞ — bu dosyada değişen varsayımlar:
 #   • Öğrenci ders için ödeme YAPMIYOR. "Kredi bloke edildi mi / transfer edildi mi"
@@ -33,12 +33,39 @@ $Api = 'http://localhost:5000'
 $Psql = 'C:\Program Files\PostgreSQL\17\bin\psql.exe'
 $env:PGPASSWORD = 'PeerLearnDev2026'
 
+<#
+  psql'e üç yoldan erişilebilir; ilk bulunan kullanılır:
+    1. Windows kurulumu   — geliştiricinin makinesinde tipik yol.
+    2. PATH üzerinde psql — Linux/macOS ve CI koşucuları (postgresql-client).
+    3. docker compose     — makinede psql yok ama compose yığını ayakta.
+
+  Üçüncü yol OLMADAN bu paket, docs/GELISTIRME-ORTAMI.md'nin tarif ettiği Docker
+  kurulumunda hiç koşamıyordu: yalnızca yerel PostgreSQL 17 kurulumu varsayılıyor ve
+  betik "psql bulunamadi" ile ortasında düşüyordu. Testin koşamaması, testin
+  başarısız olmasından daha sinsi — özet onu KIRMIZI değil, hiç görünmemiş sayıyor.
+#>
+if (-not (Test-Path $Psql)) {
+    # PS 5.1 UYUMU: `?.` null-koşullu operatörü PowerShell 7 ile geldi. Paketler
+    # CLAUDE.md gereği 5.1 altında koşuyor ve orada bu bir SÖZDİZİMİ hatası —
+    # betik hiç başlamaz, yani "psql yok" durumunu ele alacak kod hiç çalışmaz.
+    $psqlCmd = Get-Command psql -ErrorAction SilentlyContinue
+    $bulunan = if ($psqlCmd) { $psqlCmd.Source } else { $null }
+    if ($bulunan) { $Psql = $bulunan } else { $Psql = $null }
+}
+$script:ComposeYml = Join-Path (Split-Path $PSScriptRoot -Parent) 'docker-compose.yml'
+
 $script:Pass = 0; $script:Fail = 0
 function OK($m) { $script:Pass++; Write-Host "  [OK] $m" -ForegroundColor Green }
 function Fail($m) { $script:Fail++; Write-Host "  [KALDI] $m" -ForegroundColor Red }
 function Section($m) { Write-Host "`n=== $m ===" -ForegroundColor Cyan }
 
 function Sql($q) {
+    if (-not $Psql) {
+        # Docker yolu: sorgu STDIN'den geçer. `-c` ile argüman olarak geçirmek,
+        # identity."Users" gibi tırnaklı adlardaki tırnakları kabuğa yedirir.
+        $out = $q | docker compose -f $script:ComposeYml exec -T db psql -U peerlearn -d peerlearn -t -A -v ON_ERROR_STOP=1 2>&1
+        return $out
+    }
     $f = Join-Path $env:TEMP "pl-soc-$([Guid]::NewGuid().ToString('N')).sql"
     [IO.File]::WriteAllText($f, $q, [Text.UTF8Encoding]::new($false))
     try { & $Psql -h localhost -U peerlearn -d peerlearn -t -A -f $f } finally { Remove-Item $f -Force }
@@ -164,8 +191,8 @@ $cuzdanAlanlari = $ogrenciSonra.PSObject.Properties.Name
 $kalanEski = @(@('availableBalance', 'lockedBalance', 'pendingExpirySweep') | Where-Object { $cuzdanAlanlari -contains $_ })
 if ($kalanEski.Count -eq 0) { OK 'escrow dönemi cüzdan alanları yanıttan kalkmış' }
 else { Fail "kaldırılması gereken alan duruyor: $($kalanEski -join ',')" }
-$eksikYeni = @(@('totalEarnedCredits', 'currentBalance', 'rankTitle', 'rankEmoji', 'nextRankAt', 'activeLots') | Where-Object { $cuzdanAlanlari -notcontains $_ })
-if ($eksikYeni.Count -eq 0) { OK 'cüzdan yeni alanları döndürüyor (kazanç + unvan + lotlar)' }
+$eksikYeni = @(@('totalEarnedCredits', 'currentBalance', 'level', 'levelMinCredits', 'nextLevelAt', 'activeLots') | Where-Object { $cuzdanAlanlari -notcontains $_ })
+if ($eksikYeni.Count -eq 0) { OK 'cüzdan yeni alanları döndürüyor (kazanç + seviye + lotlar)' }
 else { Fail "eksik cüzdan alanı: $($eksikYeni -join ',')" }
 
 $holdSayisi = (Sql "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='economy' AND table_name='CreditHolds';").Trim()
@@ -366,13 +393,13 @@ try {
 # Gönüllü ders puan BASTIRMADIĞI için eğitmen hâlâ sıfır kazançta ve en alt unvanda.
 if ($profil2.totalEarnedCredits -eq 0) { OK 'gönüllü ders birikimli kazancı artırmadı (profilde 0)' }
 else { Fail "totalEarnedCredits: $($profil2.totalEarnedCredits)" }
-# Unvan adları Türkçe; betik BOM'suz UTF-8 olduğu için PS 5.1 karakterleri güvenilir
-# okuyamayabilir. Bu yüzden karşılaştırma unvanın ASCII kalan kuyruğuyla yapılıyor
-# (kuyruklar unvan kümesinde birbirinden ayırt edici).
-if ($profil2.rankTitle -like '*rak') { OK "unvan kartı geldi: $($profil2.rankTitle) $($profil2.rankEmoji)" }
-else { Fail "unvan: $($profil2.rankTitle)" }
-if ($profil2.rankEmoji) { OK 'unvan simgesi dolu' } else { Fail 'rankEmoji boş' }
-if ($profil2.nextRankAt -eq 500) { OK 'bir sonraki unvan eşiği bildirildi (500)' } else { Fail "nextRankAt: $($profil2.nextRankAt)" }
+# TÜRKÇE KARAKTER SORUNU ORTADAN KALKTI. Unvan adları diyakritikliydi ve betik BOM'suz
+# UTF-8 olduğu için PS 5.1 onları güvenilir okuyamıyordu; karşılaştırma bu yüzden adın
+# ASCII kuyruğuyla (-like '*rak') yapılıyordu. Seviye bir tamsayı olduğundan artık
+# doğrudan ve tam eşitlikle karşılaştırılabiliyor.
+if ([int]$profil2.level -eq 1) { OK "seviye kartı geldi: $($profil2.level). seviye" }
+else { Fail "seviye: $($profil2.level)" }
+if ($profil2.nextLevelAt -eq 100) { OK 'bir sonraki seviye eşiği bildirildi (100)' } else { Fail "nextLevelAt: $($profil2.nextLevelAt)" }
 
 if ($profil2.teacherCandidate -and -not $profil2.teacherCandidate.isVerified) {
     OK 'öğretmen adaylığı "beyan" olarak işaretli (doğrulanmış değil)'
@@ -499,56 +526,58 @@ Section 'G. Unvan eşikleri (rozet vitrininin yerine geçen gösterim)'
 
 $unvanci = NewUser 'socu' $stamp
 
-# Unvan adları Türkçe; betik BOM'suz UTF-8 olduğundan PS 5.1 bu karakterleri güvenilir
-# okuyamayabilir. Bu yüzden karşılaştırma unvanın ASCII kalan kuyruğuyla (-like) yapılıyor;
-# kuyruklar unvan kümesinde birbirinden ayırt edici ('*rak' Çırak, '*retici' Öğretici,
-# '*stat' Üstat; Uzman/Usta/Mentor zaten ASCII).
+# Seviye bir TAMSAYI olduğu için tam eşitlikle karşılaştırılıyor. Eski tablo unvan
+# adlarını ASCII kuyruklarıyla (-like '*rak') yokluyordu; o yaklaşım bir kaçak bırakıyordu:
+# "Çırak" ile "Karak" aynı desene uyardı. Rakamda böyle bir belirsizlik yok.
 $esikler = @(
-    @{ Puan = 0    ; Desen = '*rak'     ; Ad = 'Cirak'    ; Sonraki = 500 },
-    @{ Puan = 499  ; Desen = '*rak'     ; Ad = 'Cirak'    ; Sonraki = 500 },
-    @{ Puan = 500  ; Desen = '*retici'  ; Ad = 'Ogretici' ; Sonraki = 1000 },
-    @{ Puan = 999  ; Desen = '*retici'  ; Ad = 'Ogretici' ; Sonraki = 1000 },
-    @{ Puan = 1000 ; Desen = 'Uzman'    ; Ad = 'Uzman'    ; Sonraki = 2500 },
-    @{ Puan = 2499 ; Desen = 'Uzman'    ; Ad = 'Uzman'    ; Sonraki = 2500 },
-    @{ Puan = 2500 ; Desen = 'Usta'     ; Ad = 'Usta'     ; Sonraki = 5000 },
-    @{ Puan = 4999 ; Desen = 'Usta'     ; Ad = 'Usta'     ; Sonraki = 5000 },
-    @{ Puan = 5000 ; Desen = 'Mentor'   ; Ad = 'Mentor'   ; Sonraki = 10000 },
-    @{ Puan = 9999 ; Desen = 'Mentor'   ; Ad = 'Mentor'   ; Sonraki = 10000 },
-    @{ Puan = 10000; Desen = '*stat'    ; Ad = 'Ustat'    ; Sonraki = 0 }
+    @{ Puan = 0    ; Seviye = 1  ; Sonraki = 100 },
+    @{ Puan = 99   ; Seviye = 1  ; Sonraki = 100 },
+    @{ Puan = 100  ; Seviye = 2  ; Sonraki = 200 },
+    @{ Puan = 199  ; Seviye = 2  ; Sonraki = 200 },
+    @{ Puan = 200  ; Seviye = 3  ; Sonraki = 350 },
+    @{ Puan = 349  ; Seviye = 3  ; Sonraki = 350 },
+    @{ Puan = 350  ; Seviye = 4  ; Sonraki = 600 },
+    @{ Puan = 600  ; Seviye = 5  ; Sonraki = 1000 },
+    @{ Puan = 1000 ; Seviye = 6  ; Sonraki = 1750 },
+    @{ Puan = 1750 ; Seviye = 7  ; Sonraki = 3000 },
+    @{ Puan = 3000 ; Seviye = 8  ; Sonraki = 5500 },
+    @{ Puan = 5500 ; Seviye = 9  ; Sonraki = 10000 },
+    @{ Puan = 9999 ; Seviye = 9  ; Sonraki = 10000 },
+    @{ Puan = 10000; Seviye = 10 ; Sonraki = 0 }
 )
 
-$unvanHatasi = @()
+$seviyeHatasi = @()
 $esikHatasi = @()
 foreach ($e in $esikler) {
     Sql "UPDATE identity.""Users"" SET ""TotalEarnedCredits"" = $($e.Puan) WHERE ""Id"" = '$($unvanci.UserId)';" | Out-Null
     $p = Get_ "/api/users/$($unvanci.UserId)/profile" $student.Token
-    if ($p.rankTitle -notlike $e.Desen) { $unvanHatasi += "$($e.Puan)->$($p.rankTitle) (beklenen $($e.Ad))" }
-    if ($p.totalEarnedCredits -ne $e.Puan) { $unvanHatasi += "$($e.Puan): profil kazancı $($p.totalEarnedCredits)" }
+    if ([int]$p.level -ne $e.Seviye) { $seviyeHatasi += "$($e.Puan)->$($p.level) (beklenen $($e.Seviye))" }
+    if ($p.totalEarnedCredits -ne $e.Puan) { $seviyeHatasi += "$($e.Puan): profil kazancı $($p.totalEarnedCredits)" }
     if ($e.Sonraki -eq 0) {
-        # En üst unvanda gidilecek eşik yok: alan boş/0 dönmeli.
-        if ($p.nextRankAt) { $esikHatasi += "$($e.Puan): en üstte nextRankAt=$($p.nextRankAt)" }
-    } elseif ($p.nextRankAt -ne $e.Sonraki) {
-        $esikHatasi += "$($e.Puan): nextRankAt=$($p.nextRankAt) (beklenen $($e.Sonraki))"
+        # En üst seviyede gidilecek eşik yok: alan boş/0 dönmeli.
+        if ($p.nextLevelAt) { $esikHatasi += "$($e.Puan): en üstte nextLevelAt=$($p.nextLevelAt)" }
+    } elseif ($p.nextLevelAt -ne $e.Sonraki) {
+        $esikHatasi += "$($e.Puan): nextLevelAt=$($p.nextLevelAt) (beklenen $($e.Sonraki))"
     }
 }
-if ($unvanHatasi.Count -eq 0) { OK "unvan eşikleri doğru ($($esikler.Count) nokta; alt sınır dahil, üst sınır hariç)" }
-else { Fail "yanlış unvan: $($unvanHatasi -join ' | ')" }
-if ($esikHatasi.Count -eq 0) { OK 'her unvanda bir sonraki eşik doğru bildirildi' }
+if ($seviyeHatasi.Count -eq 0) { OK "seviye eşikleri doğru ($($esikler.Count) nokta; alt sınır dahil, üst sınır hariç)" }
+else { Fail "yanlış seviye: $($seviyeHatasi -join ' | ')" }
+if ($esikHatasi.Count -eq 0) { OK 'her seviyede bir sonraki eşik doğru bildirildi' }
 else { Fail "yanlış eşik: $($esikHatasi -join ' | ')" }
 
-# Aynı kullanıcı için cüzdan ve profil AYNI unvanı söylemeli (iki ayrı DTO, tek kaynak).
+# Aynı kullanıcı için cüzdan ve profil AYNI seviyeyi söylemeli (iki ayrı DTO, tek kaynak).
 $unvanciCuzdan = Get_ '/api/wallet' $unvanci.Token
-if ($unvanciCuzdan.rankTitle -like '*stat' -and $unvanciCuzdan.totalEarnedCredits -eq 10000) {
-    OK "cüzdan ve profil aynı unvanı bildiriyor ($($unvanciCuzdan.rankTitle) $($unvanciCuzdan.rankEmoji))"
-} else { Fail "cüzdan unvanı: $($unvanciCuzdan.rankTitle) / $($unvanciCuzdan.totalEarnedCredits)" }
+if ([int]$unvanciCuzdan.level -eq 10 -and $unvanciCuzdan.totalEarnedCredits -eq 10000) {
+    OK "cüzdan ve profil aynı seviyeyi bildiriyor ($($unvanciCuzdan.level). seviye)"
+} else { Fail "cüzdan seviyesi: $($unvanciCuzdan.level) / $($unvanciCuzdan.totalEarnedCredits)" }
 
-# Unvan HARCANABİLİR bakiyeden değil, BİRİKİMLİ kazançtan hesaplanmalı: bu kullanıcı hiç
-# ders vermeden 10.000 kazanç sayacına sahip ama cüzdanı boş sayılır; unvan yine de en üst.
+# Seviye HARCANABİLİR bakiyeden değil, BİRİKİMLİ kazançtan hesaplanmalı: bu kullanıcı hiç
+# ders vermeden 10.000 kazanç sayacına sahip ama cüzdanı boş sayılır; seviye yine de en üst.
 if ($unvanciCuzdan.currentBalance -ne $unvanciCuzdan.totalEarnedCredits) {
-    OK "unvan, harcanabilir bakiyeden bağımsız (bakiye $($unvanciCuzdan.currentBalance), kazanç $($unvanciCuzdan.totalEarnedCredits))"
+    OK "seviye, harcanabilir bakiyeden bağımsız (bakiye $($unvanciCuzdan.currentBalance), kazanç $($unvanciCuzdan.totalEarnedCredits))"
 } else { Fail "bakiye ve birikimli kazanç ayrışmadı: $($unvanciCuzdan.currentBalance)" }
 
-# Birikimli sayaç ASLA azalmaz: eğitmenin puanı harcansa bile unvanı geri gitmemeli.
+# Birikimli sayaç ASLA azalmaz: eğitmenin puanı harcansa bile seviyesi geri gitmemeli.
 # (Harcama ucu bu pakette yok; sayacın bakiyeden bağımsızlığı yukarıda gösterildi.)
 $unvanciSatir = (Sql "SELECT ""TotalEarnedCredits"" FROM identity.""Users"" WHERE ""Id"" = '$($unvanci.UserId)';").Trim()
 if ($unvanciSatir -eq '10000') { OK 'birikimli kazanç sütunu profil ile tutarlı' } else { Fail "sütun: $unvanciSatir" }
