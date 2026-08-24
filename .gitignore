@@ -52,3 +52,11 @@ Thumbs.db
 # DEPODA KALIR: bu dosya olmadan kendiliğinden çalışmaz, yani klonlayan kimseyi
 # sürprize uğratmaz — isteyen aynı hook'u kendi settings.local.json'ıyla açar.
 .claude/settings.local.json
+
+# --- önizleme çıktısı ---
+# `npm run onizleme:tekdosya` üretiyor: derlenmiş arayüzün tamamını taşıyan ~430 KB'lık
+# tek dosya HTML. Her koşuda yeniden üretiliyor, yani depoda tutulması gereken bir şey
+# değil — girseydi her önizlemede tarihçeye yeni bir yarım megabaytlık blob eklenirdi.
+# Kökteki dersmate-onizleme.html eski bir kopya ve HÂLÂ İZLENİYOR (kural yalnızca yeni
+# yolu kapsıyor); onun temizliği ayrı bir karar.
+frontend/dersmate-onizleme.html
