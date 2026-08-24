@@ -4,6 +4,7 @@ import { useAsync } from '../state/useAsync'
 import { formatDateTime } from '../lib/format'
 import { Avatar } from './Avatar'
 import { Badge, Button, Card, EmptyState, ErrorBox, Loading } from './ui'
+import { GrafikIkonu, KepIkonu, TakvimIkonu, YildizIkonu } from './Ikonlar'
 import { SubjectBadges } from './SubjectBadges'
 import { UniversiteRozetleri } from './UniversiteRozetleri'
 import { seviyeEtiketi, seviyeHesapla, seviyeIlerlemeMetni } from '../lib/seviye'
@@ -40,44 +41,62 @@ export function UserProfileView({ userId }) {
   const p = profile.data
 
   return (
-    <div className="space-y-6">
-      {/* StatsRow KALDIRILDI: dört ayrı sayaç kartı, profil kartının İÇİNDEKİ tek
-          şeride indi (bkz. SayacSeridi). Yüzey sayısı beşten ikiye düştü ve sayfa bir
-          gösterge paneli değil, bir kişi gibi okunmaya başladı. */}
-      <ProfileHeader profile={p} />
-
-      {/* Branş rozetleri istatistiklerin hemen altında: ikisi de "bu kişi ne yapmış"
-          sorusunu yanıtlıyor, konu panellerinden ("ne yapabilir") önce gelmeli.
-          Bileşen, rozet de ilerleme de yoksa kendini tamamen gizler. */}
-      <SubjectBadges userId={userId} />
-
+    <div className="relative">
       {/*
-        ÜNİVERSİTE ROZETLERİ yalnızca üniversite bilgisi olan profilde.
+        DEKORATİF ZEMİN ŞERİDİ: sayfanın üst kısmında, kartların ARKASINDA çok hafif
+        bir marka tonu geçişi. Kartlar bembeyaz ve zemin düz slate-50 olunca sayfa
+        steril duruyordu; bu şerit kart aralarından ve yuvarlak köşelerden sızarak
+        üst bölgeye ferahlık veriyor. Kartların kendisi beyaz kalıyor — şerit sadece
+        zeminde.
 
-        İki şerit birden görünebilir ve bu bir tutarsızlık değil: branş rozetleri "hangi
-        derste ne kadar anlattı", görüşme rozeti "toplamda ne kadar görüştü" diyor. Aynı
-        kişide ikisi de doğru olabilir. Üniversite bilgisi olmayan profilde ikinci şerit
-        hiç çizilmiyor; üniversite bilgisi olup hiç oturumu olmayanda ise bileşen kendini
-        gizliyor (bkz. UniversiteRozetleri).
+        z-index YOK, sıralama ağaç düzeniyle: içerik sarmalayıcısı `relative` ve
+        şeritten SONRA geldiği için üstte boyanıyor. Negatif z-index kullanılsaydı
+        şerit, gövdenin slate-50 zemininin de arkasına düşüp görünmez olabilirdi.
       */}
-      {p.university && <UniversiteRozetleri userId={userId} />}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute -inset-x-3 -top-4 h-48 rounded-[2rem] bg-gradient-to-b from-brand-100/60 via-brand-50/30 to-transparent"
+      />
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <TopicPanel
-          title="Anlatabilirim"
-          tone="brand"
-          topics={p.canTeach}
-          emptyText="Henüz konu eklenmemiş."
-        />
-        <TopicPanel
-          title="Öğrenmek istiyorum"
-          tone="success"
-          topics={p.wantsToLearn}
-          emptyText="Henüz konu eklenmemiş."
-        />
+      <div className="relative space-y-6">
+        {/* StatsRow KALDIRILDI: dört ayrı sayaç kartı, profil kartının İÇİNDEKİ tek
+            şeride indi (bkz. SayacSeridi). Yüzey sayısı beşten ikiye düştü ve sayfa bir
+            gösterge paneli değil, bir kişi gibi okunmaya başladı. */}
+        <ProfileHeader profile={p} />
+
+        {/* Branş rozetleri istatistiklerin hemen altında: ikisi de "bu kişi ne yapmış"
+            sorusunu yanıtlıyor, konu panellerinden ("ne yapabilir") önce gelmeli.
+            Bileşen, rozet de ilerleme de yoksa kendini tamamen gizler. */}
+        <SubjectBadges userId={userId} />
+
+        {/*
+          ÜNİVERSİTE ROZETLERİ yalnızca üniversite bilgisi olan profilde.
+
+          İki şerit birden görünebilir ve bu bir tutarsızlık değil: branş rozetleri "hangi
+          derste ne kadar anlattı", görüşme rozeti "toplamda ne kadar görüştü" diyor. Aynı
+          kişide ikisi de doğru olabilir. Üniversite bilgisi olmayan profilde ikinci şerit
+          hiç çizilmiyor; üniversite bilgisi olup hiç oturumu olmayanda ise bileşen kendini
+          gizliyor (bkz. UniversiteRozetleri).
+        */}
+        {p.university && <UniversiteRozetleri userId={userId} />}
+
+        <div className="grid gap-4 lg:grid-cols-2">
+          <TopicPanel
+            title="Anlatabilirim"
+            tone="brand"
+            topics={p.canTeach}
+            emptyText="Henüz konu eklenmemiş."
+          />
+          <TopicPanel
+            title="Öğrenmek istiyorum"
+            tone="success"
+            topics={p.wantsToLearn}
+            emptyText="Henüz konu eklenmemiş."
+          />
+        </div>
+
+        <ReviewsSection reviews={reviews} page={reviewPage} onPage={setReviewPage} />
       </div>
-
-      <ReviewsSection reviews={reviews} page={reviewPage} onPage={setReviewPage} />
     </div>
   )
 }
@@ -115,15 +134,19 @@ function ProfileHeader({ profile }) {
           olarak verilemez. Avatar bileşeni görseli yetkili uçtan blob olarak çeker ve
           önbelleğe alır; fotoğraf yoksa baş harflere düşer.
 
-          ring-4 + ring-white + gölge: portreyi zeminden ayıran ince bir halka. Kartın
-          kendisi zaten beyaz olduğu için halka görünmüyor, gölgeyi taşıyor.
+          HALKA ARTIK MARKA TONUNDA (ring-brand-200, eskiden ring-white): beyaz halka
+          beyaz kartın üstünde görünmüyordu, yalnızca gölgeyi taşıyordu. Açık mavi halka
+          portreyi gerçekten çerçeveliyor ve sayfadaki tek marka-rengi olmayan büyük
+          öğeyi (fotoğrafı) kimliğe bağlıyor. shadow-brand-500/10: gölgeye çok hafif
+          marka tonu — %10 opaklık bilinçli, daha koyusu "parlama" efektine kayar ve
+          bu projede glow yasak.
         */}
         <Avatar
           userId={profile.userId}
           name={profile.displayName}
           size="xl"
           buyutulebilir
-          className="shrink-0 shadow-lg ring-4 ring-white"
+          className="shrink-0 shadow-lg shadow-brand-500/10 ring-4 ring-brand-200"
         />
 
         <div className="min-w-0 flex-1">
@@ -185,14 +208,21 @@ function ProfileHeader({ profile }) {
  * ızgaranın ortasında havada kalırdı.
  */
 function SayacSeridi({ profile }) {
+  /*
+    Her sayaca bir ikon: rakam tek başına "kaç" diyor ama "neyin kaçı" olduğunu
+    okumak için etiketi beklemek gerekiyordu. İkon, göz etikete inmeden sayacın
+    konusunu söylüyor. Renk text-brand-600: süs değil işaret, ama rakamla da
+    (text-slate-900) vurgu yarışına girmiyor.
+  */
   const kalemler = [
-    { deger: profile.taughtSessionCount, etiket: 'ders anlattı' },
+    { deger: profile.taughtSessionCount, etiket: 'ders anlattı', Ikon: KepIkonu },
     {
       deger: profile.ratingCount > 0 ? `${Number(profile.averageRating).toFixed(1)} ★` : '—',
       etiket: profile.ratingCount > 0 ? `${profile.ratingCount} değerlendirme` : 'değerlendirme yok',
+      Ikon: YildizIkonu,
     },
-    { deger: seviyeEtiketi(seviyeHesapla(profile)), etiket: seviyeIlerlemeMetni(profile) },
-    { deger: new Date(profile.joinedAtUtc).getFullYear(), etiket: 'katılım' },
+    { deger: seviyeEtiketi(seviyeHesapla(profile)), etiket: seviyeIlerlemeMetni(profile), Ikon: GrafikIkonu },
+    { deger: new Date(profile.joinedAtUtc).getFullYear(), etiket: 'katılım', Ikon: TakvimIkonu },
   ]
 
   /*
@@ -202,14 +232,24 @@ function SayacSeridi({ profile }) {
     dengesiz görünüyordu. En uzun etiket ilerleme metni ve o metin SUNUCUDAN geliyor
     (uzunluğu puana göre değişiyor), yani sabit bir genişlik varsayılamaz. 2×2 düzen
     lg'ye kadar sürüyor; orada dört sütuna gerçekten yer var.
+
+    DİKEY AYRAÇLAR (lg:divide-x) KALDIRILDI: sayaçlar artık kendi pastel zeminli
+    kutucuklarında (bg-brand-50/60) ve ayrımı kutucuk kenarları yapıyor. Zeminli
+    kutuların ARASINA bir de çizgi çekmek aynı işi iki kez yapmak olurdu. Zemin /60
+    opaklıkta: tam opak brand-50, dört kutu yan yana gelince şeridi kartın geri
+    kalanından koparıp ayrı bir panel gibi gösteriyordu.
   */
   return (
-    <dl className="mt-5 grid grid-cols-2 gap-x-4 gap-y-4 border-t border-slate-100 pt-4 lg:grid-cols-4 lg:divide-x lg:divide-slate-100">
-      {kalemler.map((k, i) => (
-        <div key={k.etiket} className={i > 0 ? 'lg:pl-4' : ''}>
+    <dl className="mt-5 grid grid-cols-2 gap-3 border-t border-slate-100 pt-4 lg:grid-cols-4">
+      {kalemler.map((k) => (
+        <div key={k.etiket} className="rounded-xl bg-brand-50/60 p-3">
           <dt className="sr-only">{k.etiket}</dt>
           <dd>
-            <span className="block text-lg font-bold leading-tight text-slate-900">{k.deger}</span>
+            {/* mx-auto sm:mx-0 — kart dar ekranda ortalı, sm üstünde sola yaslı
+                (bkz. ProfileHeader); ikon blok elemanı olduğu için text-center'a
+                uymuyor, hizayı kendi taşımak zorunda. */}
+            <k.Ikon className="mx-auto h-4 w-4 text-brand-600 sm:mx-0" />
+            <span className="mt-1.5 block text-lg font-bold leading-tight text-slate-900">{k.deger}</span>
             <span className="mt-0.5 block text-xs leading-snug text-slate-500">{k.etiket}</span>
           </dd>
         </div>

@@ -33,7 +33,15 @@ export default function Profile() {
 
         {isSelf && (
           <div className="flex flex-wrap gap-2">
-            <Button variant="secondary" onClick={() => setDialog('avatar')}>
+            {/* hover'da marka tonu: ikincil buton normalde nötr kalır (birincilin
+                vurgusunu çalmasın) ama üzerine gelince "tıklanabilirim" der.
+                ui.jsx'e DOKUNULMADI — görünüm className ile ekleniyor; className,
+                variant sınıflarından sonra geldiği için hover'da kazanır. */}
+            <Button
+              variant="secondary"
+              className="hover:border-brand-300 hover:text-brand-700"
+              onClick={() => setDialog('avatar')}
+            >
               Fotoğrafı değiştir
             </Button>
             {/* "Öğretmen adaylığı" düğmesi kaldırıldı: adaylık beyanı ve ona bağlı

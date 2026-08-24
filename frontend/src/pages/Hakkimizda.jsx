@@ -111,8 +111,20 @@ export default function Hakkimizda() {
   return (
     /* Zemin: gövdenin kendi bg-slate-50'si. Sayfayı saran mavi gradyan sarmalayıcı
        (-mx-4 ile tam kanamalı) denendi ve sahibin isteğiyle kaldırıldı ("yoğun
-       duruyor"). Negatif kenar boşluğu kalmadığı için eski taşma tuzağı da konu dışı. */
-    <div className="mx-auto max-w-5xl pb-10">
+       duruyor"). Negatif kenar boşluğu kalmadığı için eski taşma tuzağı da konu dışı.
+
+       AŞAĞIDAKİ ŞERİT O GRADYAN DEĞİL, geri getirilmiş sayılmasın: tam kanamasız
+       (içerik genişliğinde kalır, negatif kenar boşluğu yok), brand-50'nin yarı
+       saydamından şeffafa iner ve başlık hizasında söner. Amaç zemine bir nefes
+       katmak; -z-10 ile içeriğin ARKASINDA durduğu için metin kontrastına ve
+       kartların beyazına dokunmaz (isolate, negatif z'yi sayfanın geri kalanından
+       yalıtmak için). */
+    <div className="relative isolate mx-auto max-w-5xl pb-10">
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-80 rounded-3xl
+                   bg-gradient-to-b from-brand-50/70 via-brand-50/25 to-transparent"
+      />
       {/* ── AÇILIŞ ────────────────────────────────────────────────────────── */}
       <header>
         <Logo boyut="lg" />
@@ -190,7 +202,14 @@ export default function Hakkimizda() {
         <div className="mt-8 grid gap-4 border-t border-slate-100 pt-6 sm:grid-cols-3">
           {GUVENCELER.map(({ Ikon, baslik, metin }) => (
             <div key={baslik} className="flex items-start gap-3">
-              <span className="mt-0.5 shrink-0 text-brand-600">
+              {/* Güvence ikonları üstteki değer kartlarıyla aynı çip diline taşındı:
+                  çıplak ikon beyaz zeminde kayboluyordu, brand-50 kutu üç maddeyi
+                  aynı ailenin üyesi gibi okutuyor. Hover yok — bunlar tıklanmaz,
+                  değer kartlarındaki dolgu efekti buraya taşınmadı. */}
+              <span
+                className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-brand-50
+                           text-brand-600 ring-1 ring-inset ring-brand-100"
+              >
                 <Ikon className="h-5 w-5" />
               </span>
               <div className="min-w-0">
