@@ -146,34 +146,46 @@ export function XIkonu(props) {
   hepsi tek bir kavramı gösteriyor — süs değil, başlığın görsel karşılığı.
 */
 
-/** Misyon: hedef tahtası. "Bugün ne yapıyoruz" — nişan alınmış, belirli bir şey. */
-export function HedefIkonu(props) {
+/*
+  Misyon/Vizyon çifti yenilendi (2026-08-24): hedef tahtası + doğan güneş sahibin
+  isteğiyle emekli edildi — ikisi de anlamca doğruydu ama durgun duruyordu. Yeni çift
+  aynı ikiliyi hareketle anlatıyor: roket "yola çıktık", göz "oraya bakıyoruz".
+  Eski HedefIkonu/UfukIkonu hiçbir yerde kullanılmadığı için SİLİNDİ — bu projede
+  çağrılmayan export iki kez gizli hata sakladı, ölü ikon bırakılmaz.
+*/
+
+/** Misyon: fırlatılmış roket. "Bugün ne yapıyoruz" — duran bir hedef değil, yola
+    çıkmış bir araç; iddia hareket hâlinde. Geometri Lucide'ın `rocket` çiziminden,
+    kütüphane yine eklenmedi (dosya başındaki gerekçe geçerli). */
+export function RoketIkonu(props) {
   return (
     <Cizgi {...props}>
-      <circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="5" /><circle cx="12" cy="12" r="1.5" />
+      <path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z" />
+      <path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.9 7.5-6 11a22.35 22.35 0 0 1-4 2z" />
+      <path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0" />
+      <path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5" />
     </Cizgi>
   )
 }
 
-/** Vizyon: ufuk çizgisinin üstünde yükselen güneş. "Neye doğru gidiyoruz" — henüz uzak. */
-export function UfukIkonu(props) {
+/** Vizyon: göz. "Neye bakıyoruz" — uzaktaki resmi bugünden görmek. Güneşli ufuk da
+    uzaklık anlatıyordu ama 20px'te kısa ışın çizgileri silinip ikonu yarım daireye
+    indiriyordu; gözün iki hattı o ölçekte de net kalıyor. */
+export function GozIkonu(props) {
   return (
     <Cizgi {...props}>
-      <path d="M3 18h18" /><path d="M6.5 18a5.5 5.5 0 0 1 11 0" />
-      <path d="M12 4v2.5" /><path d="M4.9 7.4l1.8 1.8" /><path d="M19.1 7.4l-1.8 1.8" />
+      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" />
+      <circle cx="12" cy="12" r="3" />
     </Cizgi>
   )
 }
 
-/** Güvence: ücretsizlik. Üzeri çizili etiket — "fiyat yok". */
-export function EtiketsizIkonu(props) {
-  return (
-    <Cizgi {...props}>
-      <path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0l-7.2-7.2A2 2 0 0 1 2.8 12V4.8A2 2 0 0 1 4.8 2.8H12a2 2 0 0 1 1.4.6l7.2 7.2a2 2 0 0 1 0 2.8Z" />
-      <path d="M7.5 7.5h.01" /><path d="M3 21 21 3" />
-    </Cizgi>
-  )
-}
+/*
+  EtiketsizIkonu (üzeri çizili fiyat etiketi) SİLİNDİ — tek çağıranı Hakkımızda'daki
+  "Ders almak ücretsiz" güvence maddesiydi ve o madde "Karşılıklı takas" ile değişti.
+  HedefIkonu/UfukIkonu ile aynı gerekçe: bu dosyada çağrılmayan bir export daha önce
+  iki kez gizli hata sakladı (bkz. LogoMark'taki ReferenceError), ölü ikon bırakılmaz.
+*/
 
 /** Güvence: para dolaşmıyor. Üzeri çizili cüzdan. */
 export function CuzdansizIkonu(props) {
