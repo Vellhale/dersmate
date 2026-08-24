@@ -79,23 +79,66 @@ export default function Sessions() {
   const [pastLoading, setPastLoading] = useState(false)
   const [pastError, setPastError] = useState(null)
 
-  // Time-Lock ve otomatik onay geri sayımları canlı aksın diye periyodik yeniden çizim.
-  const [, setTick] = useState(0)
+  /*
+    Time-Lock ve otomatik onay geri sayımları canlı aksın diye periyodik yeniden çizim.
+
+    `tick` ARTIK OKUNUYOR (eskiden `const [, setTick]` ile atılıyordu) çünkü aşağıdaki
+    gruplama saate bakıyor: yalnızca yeniden render yetmez, useMemo'nun bağımlılığına
+    girmezse önbellekteki eski gruplama döner ve saati dolan ders ekranda "Yaklaşan"
+    olarak asılı kalır. Sayfa açık dururken de doğru tarafa geçmesi bu bağımlılıkla oluyor.
+  */
+  const [tick, setTick] = useState(0)
   useEffect(() => {
     const id = setInterval(() => setTick((t) => t + 1), 20000)
     return () => clearInterval(id)
   }, [])
 
   const groups = useMemo(() => {
-    // Aktif dersler sunucuda ayrılıyor (Booked/AwaitingApproval/Disputed); burada
-    // yalnızca "senden aksiyon bekleyen" ile "yaklaşan" ayrımı yapılır.
+    /*
+      ─────────────────────────────────────────────────────────────────────────
+      SAATİ GEÇMİŞ DERS "YAKLAŞAN"DA KALAMAZ (2026-08-24, hata düzeltmesi).
+
+      Sunucu aktif/geçmiş ayrımını YALNIZCA DURUMA göre yapıyor: Booked,
+      AwaitingApproval ve Disputed "aktif" sayılıyor (GetMySessions.cs). Saat hiç
+      hesaba katılmıyor — çünkü sunucu açısından doğru olan bu: saati geçmiş ama
+      tamamlanmamış bir ders hâlâ AÇIK bir kayıt, kapanmış değil.
+
+      Ama arayüzde "Yaklaşan" kelimesi bir SÖZ veriyor: bu ders henüz olmadı. Ölçüldü —
+      bugün 15:10'da, sabah 08:10'da bitmiş bir ders hâlâ "Yaklaşan dersler" listesinde
+      duruyordu (bitişinin üzerinden 367 dakika geçmişti). Kullanıcının gördüğü şey
+      yanlıştı.
+
+      Ayrım artık ÜÇ yönlü:
+        action     → senden bir şey bekliyor (tamamla / onayla / itirazlı)
+        upcoming   → saati HENÜZ GELMEDİ
+        gecmisAcik → saati GEÇTİ ama kayıt hâlâ açık
+
+      Üçüncü grup "past" ile birleştirilmedi ve bu bilinçli: `past` sunucudan SAYFALI
+      geliyor, araya istemci tarafında satır sokmak sayfa sayılarını yalanlardı. Bunun
+      yerine sağ sütunun BAŞINA, kendi başlığıyla sabitleniyor — böylece hem "Yaklaşan"
+      listesini kirletmiyor hem de sayfalama içinde kaybolmuyor. Durum rozeti hâlâ
+      "Rezerve" diyor, yani kaydın kapanmadığı görünmeye devam ediyor.
+
+      KIYAS BİTİŞ SAATİYLE, başlangıçla değil: 60 dakikalık bir ders başladı diye geçmiş
+      olmuyor. Sunucu `scheduledEndUtc` alanını zaten gönderiyor (ISO + Z), yani yerel
+      saat dilimine göre kayma riski yok — `new Date()` doğrudan çözümlüyor.
+      ─────────────────────────────────────────────────────────────────────────
+    */
     const active = sessions.data?.active ?? []
+    const simdi = Date.now()
+
+    const aksiyonBekliyor = (s) => s.canComplete || s.canApprove || s.status === 'Disputed'
+    const saatiGecti = (s) => new Date(s.scheduledEndUtc).getTime() <= simdi
+
     return {
-      action: active.filter((s) => s.canComplete || s.canApprove || s.status === 'Disputed'),
-      upcoming: active.filter((s) => !s.canComplete && !s.canApprove && s.status !== 'Disputed'),
+      action: active.filter(aksiyonBekliyor),
+      upcoming: active.filter((s) => !aksiyonBekliyor(s) && !saatiGecti(s)),
+      gecmisAcik: active.filter((s) => !aksiyonBekliyor(s) && saatiGecti(s)),
       past: (pastView ?? sessions.data?.past)?.items ?? [],
     }
-  }, [sessions.data, pastView])
+    // tick: 20 saniyede bir yeniden hesapla — saat ilerledikçe ders kendiliğinden
+    // "Yaklaşan"dan "saati geçmiş"e düşsün, sayfa yenilenmesini beklemesin.
+  }, [sessions.data, pastView, tick])
 
   const pastSayfa = pastView ?? sessions.data?.past
   const pastTotal = pastSayfa?.totalCount ?? 0
@@ -139,7 +182,7 @@ export default function Sessions() {
   }
 
   const hicDersYok =
-    groups.action.length + groups.upcoming.length + groups.past.length === 0
+    groups.action.length + groups.upcoming.length + groups.gecmisAcik.length + groups.past.length === 0
 
   return (
     /*
@@ -248,7 +291,7 @@ export default function Sessions() {
           {/* ── SAĞ: GEÇMİŞ ───────────────────────────────────────────────── */}
           <Sutun
             baslik="Geçmiş dersler"
-            sayi={pastTotal}
+            sayi={pastTotal + groups.gecmisAcik.length}
             altBilgi={
               pastTotalPages > 1 ? (
                 <Pagination
@@ -260,15 +303,38 @@ export default function Sessions() {
               ) : null
             }
           >
+            {/*
+              SAATİ GEÇMİŞ AMA AÇIK DERSLER EN ÜSTTE ve ayrı başlıkla. Sayfalı geçmişin
+              İÇİNE karıştırılmadılar: `past` sunucudan sayfalı geliyor, araya istemci
+              tarafında satır sokmak sayfa sayılarını yalanlardı. Üstte sabit durunca hem
+              sayfalamadan etkilenmiyorlar hem de kullanıcı "bu ders oldu mu, ne oldu?"
+              sorusunu ilk bakışta görüyor.
+            */}
+            {groups.gecmisAcik.length > 0 && (
+              <>
+                <AltBaslik tone="amber">
+                  Saati geçti, hâlâ açık ({groups.gecmisAcik.length})
+                </AltBaslik>
+                {groups.gecmisAcik.map((s) => (
+                  <SessionCard key={s.sessionId} session={s} onAction={setDialog} />
+                ))}
+              </>
+            )}
+
             {groups.past.length > 0 ? (
-              groups.past.map((s) => (
-                <SessionCard key={s.sessionId} session={s} onAction={setDialog} past />
-              ))
+              <>
+                {groups.gecmisAcik.length > 0 && <AltBaslik>Tamamlananlar ({pastTotal})</AltBaslik>}
+                {groups.past.map((s) => (
+                  <SessionCard key={s.sessionId} session={s} onAction={setDialog} past />
+                ))}
+              </>
             ) : (
-              <BosSutun
-                baslik="Geçmiş ders yok"
-                metin="Tamamlanan dersler onaylandıktan sonra burada birikir."
-              />
+              groups.gecmisAcik.length === 0 && (
+                <BosSutun
+                  baslik="Geçmiş ders yok"
+                  metin="Tamamlanan dersler onaylandıktan sonra burada birikir."
+                />
+              )
             )}
 
             <ErrorBox error={pastError} onRetry={() => sayfayaGit(pastPage)} />
@@ -588,18 +654,14 @@ function SessionCard({ session, onAction, past = false }) {
       listeyi taramakta olan gözün durumu OKUMADAN ayırt etmesini sağlıyor — okuma
       rozetle yapılıyor.
 
-      GÖLGE `!` İLE EZİLİYOR ve bu Tailwind'in bir tuzağı: çakışan iki yardımcı sınıfta
-      (shadow-md ↔ shadow-sm) kazanan, class attribute'undaki SIRA değil üretilen CSS'teki
-      sıradır — shadow-md sonra tanımlandığı için sade `shadow-sm` hiçbir şey yapmazdı.
-      Kart burada bilerek hafif: sütun içinde alt alta duran on kartın her biri shadow-md
-      taşıyınca liste kabartmalı bir duvara dönüşüyor. Ağırlık hover'da geliyor.
+      GÖLGE ARTIK EZİLMİYOR: Card'ın kendi varsayılanı shadow-sm oldu (ui.jsx, yüzey
+      dili revizyonu), yani buradaki eski `!shadow-sm` gereksizleşti ve kaldırıldı.
+      Yalnızca hover ağırlığı ekleniyor — çakışma olmadığı için `!` de gerekmiyor.
 
       p-4 (Card'ın p-5'i yerine): sütun genişliği tam sayfadan dar, aynı dolgu içeriği
       sıkıştırıyordu.
     */
-    <Card
-      className={`border-l-4 !p-4 !shadow-sm transition-shadow duration-200 hover:!shadow-md ${stil.serit}`}
-    >
+    <Card className={`border-l-4 !p-4 transition-shadow duration-200 hover:shadow-md ${stil.serit}`}>
       {/*
         Üst satır: SOLDA kimlik (konu + karşı taraf), SAĞDA durum.
         Eski düzende konu adı iki rozetin arasına sıkışmış bir <span>'di ve kart
