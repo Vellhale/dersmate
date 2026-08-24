@@ -54,6 +54,11 @@ function agacKur(satirlar) {
 /*
   Tek bir seçenek düğmesi. Kart biçiminde çünkü seçenekler parmakla basılıyor: 44px'lik
   dokunma hedefi (min-h-11) lg altında zorunlu, üstünde de zarar vermiyor.
+
+  active:bg-brand-100 dokunmatik için: hover masaüstü lüksü, telefonda yok. Basma
+  anında bir kademe koyulaşan zemin "dokunuşun algılandı" der; bu seçicide her seçim
+  yeni bir basamak açtığı için o anlık geri bildirim olmadan geçiş "takıldı mı?"
+  hissi veriyordu.
 */
 function Secenek({ children, alt, onClick, secili = false }) {
   return (
@@ -63,8 +68,8 @@ function Secenek({ children, alt, onClick, secili = false }) {
       aria-pressed={secili}
       className={`flex min-h-11 w-full items-center justify-between gap-3 rounded-lg border px-3.5 py-2.5 text-left text-sm transition ${
         secili
-          ? 'border-brand-400 bg-brand-50 font-semibold text-brand-800'
-          : 'border-slate-200/80 bg-white text-slate-800 hover:border-brand-300 hover:bg-brand-50/50'
+          ? 'border-brand-400 bg-brand-50 font-semibold text-brand-800 active:bg-brand-100'
+          : 'border-slate-200/80 bg-white text-slate-800 hover:border-brand-300 hover:bg-brand-50/50 active:border-brand-400 active:bg-brand-100'
       }`}
     >
       <span className="min-w-0">

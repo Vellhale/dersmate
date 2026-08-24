@@ -104,7 +104,14 @@ function PortfolioColumn({ title, tone, entries, emptyText, onAdd, onRemoved }) 
       ) : (
         <div className="space-y-2">
           {entries.map((entry) => (
-            <Card key={entry.entryId} className="flex items-start justify-between gap-3 p-4">
+            /* Hover'da marka tonlu kenarlık + bir kademe koyu gölge: kartın içinde
+               basılabilir bir eylem ("Kaldır") var, ama kart gövdesi tepkisiz kalınca
+               liste ölü duruyordu. Geçiş Card'ın kendi sınıflarına EK olarak veriliyor —
+               ui.jsx yüzey dilinin tek sahibi, ona dokunulmuyor. */
+            <Card
+              key={entry.entryId}
+              className="flex items-start justify-between gap-3 p-4 transition hover:border-brand-200 hover:shadow-md"
+            >
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-medium text-slate-800">{entry.topicName}</span>
@@ -116,8 +123,13 @@ function PortfolioColumn({ title, tone, entries, emptyText, onAdd, onRemoved }) 
                 {entry.note && <p className="mt-2 text-sm text-slate-600">{entry.note}</p>}
               </div>
 
+              {/* "Kaldır" yıkıcı bir eylem; hover rengi anlamını söylüyor. rose,
+                  Tailwind paletinde slate'ten SONRA üretildiği için ghost varyantının
+                  hover:bg-slate-100 değerini güvenle ezer — sıra tersine dönseydi bu
+                  sınıflar sessizce etkisiz kalırdı. */}
               <Button
                 variant="ghost"
+                className="hover:bg-rose-50 hover:text-rose-600"
                 loading={removingId === entry.entryId}
                 onClick={() => remove(entry.entryId)}
                 title="Listeden çıkar"
@@ -227,7 +239,7 @@ function AddEntryModal({ direction, konular, konularYukleniyor, onClose, onSaved
           <button
             type="button"
             onClick={() => setSecilenKonu(null)}
-            className="shrink-0 rounded px-2 py-1 text-xs font-medium text-brand-700 underline transition hover:bg-white/60 hover:no-underline"
+            className="shrink-0 rounded px-2 py-1 text-xs font-medium text-brand-700 underline transition hover:bg-white/60 hover:no-underline active:bg-white"
           >
             Değiştir
           </button>

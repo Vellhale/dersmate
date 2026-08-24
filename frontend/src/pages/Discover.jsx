@@ -118,8 +118,12 @@ export default function Discover() {
       )}
 
       <div className="flex gap-2">
+        {/* shadow-sm: arama kutusu sayfanın ana giriş noktası ama .input tek başına
+            zeminle aynı düzlemde kalıyordu; kartlarla aynı ince gölge onu da "dokunulur
+            bir yüzey" yapıyor. Odak halkası ve yumuşak köşe zaten .input'tan geliyor
+            (index.css) — burada yalnızca derinlik ekleniyor, ikinci bir stil dili değil. */}
         <input
-          className="input"
+          className="input shadow-sm"
           type="search"
           placeholder="Konu, ders ya da eğitmen ara…"
           value={term}
@@ -204,7 +208,14 @@ function Suggestions({ suggestions, mySeekCount, portfolioLoading, onRequest }) 
       ) : (
         <div className="grid gap-4 md:grid-cols-2">
           {suggestions.data.map((person) => (
-            <Card key={person.userId} className="flex flex-col justify-between">
+            /* Öneri ve arama sonucu kartları AYNI hover dilini taşıyor (marka tonlu
+               kenarlık + koyulaşan gölge): iki mod tek sayfada yaşıyor, kartların
+               tepkisi mod değiştikçe farklılaşsaydı sayfa iki ayrı uygulama gibi
+               hissettirirdi. */
+            <Card
+              key={person.userId}
+              className="flex flex-col justify-between transition hover:border-brand-200 hover:shadow-md"
+            >
               <div>
                 <div className="flex flex-wrap items-center gap-2">
                   <PersonLink userId={person.userId} className="font-semibold text-brand-700">
@@ -268,7 +279,11 @@ function SearchResults({ results, onRequest, onClearFilters, onPage }) {
 
           <div className="grid gap-4 md:grid-cols-2">
             {data.items.map((offer) => (
-              <Card key={offer.offerId} className="flex flex-col justify-between">
+              /* Öneri kartlarıyla birebir aynı hover — gerekçesi Suggestions'ta. */
+              <Card
+                key={offer.offerId}
+                className="flex flex-col justify-between transition hover:border-brand-200 hover:shadow-md"
+              >
                 <div>
                   <div className="flex flex-wrap items-center gap-2">
                     <PersonLink userId={offer.tutorUserId} className="font-semibold text-brand-700">

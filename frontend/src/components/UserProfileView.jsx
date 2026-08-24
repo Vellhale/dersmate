@@ -177,10 +177,18 @@ function SayacSeridi({ profile }) {
     { deger: new Date(profile.joinedAtUtc).getFullYear(), etiket: 'katılım' },
   ]
 
+  /*
+    TEK SATIRA GEÇİŞ sm'DE DEĞİL lg'DE. Kırılım önce sm (640px) idi ve 689px'lik bir
+    ekranda ölçüldü: dört sütun ~140px'e düşünce "4 değerlendirme" iki satıra,
+    "4300 puan · sonraki seviyeye 1200" üç satıra sarıyordu — sayaçlar hizasız, şerit
+    dengesiz görünüyordu. En uzun etiket ilerleme metni ve o metin SUNUCUDAN geliyor
+    (uzunluğu puana göre değişiyor), yani sabit bir genişlik varsayılamaz. 2×2 düzen
+    lg'ye kadar sürüyor; orada dört sütuna gerçekten yer var.
+  */
   return (
-    <dl className="mt-5 grid grid-cols-2 gap-x-4 gap-y-4 border-t border-slate-100 pt-4 sm:grid-cols-4 sm:divide-x sm:divide-slate-100">
+    <dl className="mt-5 grid grid-cols-2 gap-x-4 gap-y-4 border-t border-slate-100 pt-4 lg:grid-cols-4 lg:divide-x lg:divide-slate-100">
       {kalemler.map((k, i) => (
-        <div key={k.etiket} className={i > 0 ? 'sm:pl-4' : ''}>
+        <div key={k.etiket} className={i > 0 ? 'lg:pl-4' : ''}>
           <dt className="sr-only">{k.etiket}</dt>
           <dd>
             <span className="block text-lg font-bold leading-tight text-slate-900">{k.deger}</span>

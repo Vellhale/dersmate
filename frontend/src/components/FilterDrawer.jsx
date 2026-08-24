@@ -8,6 +8,21 @@ const SORTS = [
   { value: 'Newest', label: 'En yeni' },
 ]
 
+/*
+  Eğitmen puanı eşikleri PILL, kaydırıcı değil: 0–5 arası 0.5 adımlı kaydırıcı on bir
+  değer sunuyordu ama anlamlı eşik zaten üç tane (3.5 / 4.0 / 4.5) — "en az 1.5 puan"
+  diye filtreleyen kullanıcı yok. Sıra katıdan gevşeğe: puana bakan önce en iyileri
+  süzmek ister, "4.5+" ilk sırada. `value: null` = filtre kapalı; Discover'ın
+  activeFilterCount ve filtersTouched sözleşmesi null'u "dokunulmamış" sayar, 0 değil —
+  burada 0 kullanmak sayaç rozetini yanlışlıkla yakardı.
+*/
+const RATINGS = [
+  { value: 4.5, label: '4.5+' },
+  { value: 4, label: '4.0+' },
+  { value: 3.5, label: '3.5+' },
+  { value: null, label: 'Hepsi' },
+]
+
 /**
  * Filtre çekmecesi (Modül 1).
  *
@@ -104,16 +119,24 @@ export function FilterPanel({
         display={value.minLevel ? `${value.minLevel} ve üzeri` : 'Hepsi'}
       />
 
-      <RangeField
-        label="Eğitmen puanı"
-        hint="Aldığı değerlendirmelerin ortalaması."
-        min={0}
-        max={5}
-        step={0.5}
-        value={value.minRating ?? 0}
-        onChange={(v) => set({ minRating: v === 0 ? null : v })}
-        display={value.minRating ? `★ ${value.minRating} ve üzeri` : 'Hepsi'}
-      />
+      <section>
+        <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-500">
+          Eğitmen puanı
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {RATINGS.map((rating) => (
+            <Pill
+              key={rating.label}
+              small
+              active={value.minRating === rating.value}
+              onClick={() => set({ minRating: rating.value })}
+            >
+              {rating.label}
+            </Pill>
+          ))}
+        </div>
+        <p className="mt-1 text-xs text-slate-500">Aldığı değerlendirmelerin ortalaması.</p>
+      </section>
 
       {/* Gönüllülük onay kutusu kaldırıldı: ilanlar arasında böyle bir ayrım kalmadı,
           filtrelenecek bir nitelik de yok. */}
@@ -130,16 +153,29 @@ export function FilterPanel({
   )
 }
 
+/*
+  Tek pill (chip) — panelin bütün seçim gruplarının ortak düğmesi.
+
+  aria-pressed: bu düğmeler görsel olarak buton, anlamsal olarak aç/kapa; ekran okuyucu
+  "basılı" durumunu ancak bu öznitelikle duyurur. Aktif hâldeki shadow-sm, seçili pill'i
+  beyaz zeminli komşularından yalnız renkle değil derinlikle de ayırıyor. Pasif kenarlık
+  slate-300 → slate-200: .input'la aynı gerekçe (index.css) — sınır zaten zemin
+  karşıtlığıyla okunuyor, koyu çerçeve gereksiz ağırlık. active:bg-brand-50 dokunmatik
+  için: hover orada yok, "tıklamam algılandı" hissi basma anındaki bu renkten gelir.
+  min-h-11 lg altında 44px dokunma hedefini korur.
+*/
 function Pill({ active, small, onClick, children }) {
   return (
     <button
+      type="button"
       onClick={onClick}
+      aria-pressed={active}
       className={`min-h-11 rounded-full border px-3 font-medium transition lg:min-h-0 lg:py-1.5 ${
         small ? 'text-xs' : 'text-sm'
       } ${
         active
-          ? 'border-brand-500 bg-brand-600 text-white'
-          : 'border-slate-300 bg-white text-slate-600 hover:border-brand-300 hover:text-brand-700'
+          ? 'border-brand-500 bg-brand-600 text-white shadow-sm'
+          : 'border-slate-200 bg-white text-slate-600 hover:border-brand-300 hover:text-brand-700 active:bg-brand-50'
       }`}
     >
       {children}
