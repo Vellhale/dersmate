@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { api } from '../lib/api'
 import { KonuSecici } from '../components/KonuSecici'
 import { useAsync } from '../state/useAsync'
-import { Badge, Button, Card, EmptyState, ErrorBox, Field, Loading, Modal, SectionTitle } from '../components/ui'
+import { Badge, Button, Card, ErrorBox, Field, Loading, Modal } from '../components/ui'
 import { AnalyticsEvents, trackEvent } from '../lib/analytics'
 
 /**
@@ -44,6 +44,7 @@ export default function Portfolio() {
           <PortfolioColumn
             title="Verebileceğim konular"
             tone="success"
+            aciklama="Onaylanan her ders sana puan kazandırır."
             emptyText="Henüz anlatabileceğin bir konu eklemedin. En iyi olduğun konuyla başla."
             entries={offers}
             onAdd={() => setModalDirection('Offer')}
@@ -52,6 +53,7 @@ export default function Portfolio() {
           <PortfolioColumn
             title="Almak istediğim konular"
             tone="brand"
+            aciklama="Ücretsizdir; eşleşme önerileri için sinyaldir."
             emptyText="İhtiyacın olan konuları ekle; sana anlatabilecek öğrenciler önerilsin."
             entries={seeks}
             onAdd={() => setModalDirection('Seek')}
@@ -74,7 +76,15 @@ export default function Portfolio() {
   )
 }
 
-function PortfolioColumn({ title, tone, entries, emptyText, onAdd, onRemoved }) {
+/*
+  SÜTUNUN TAMAMI TEK KART (2026-08-25). Eski hâlde başlık çıplak zeminde duruyor, her
+  satır ayrı bir Card'dı: on konu eklendiğinde ekran gölgeli küçük kutulardan bir duvara
+  dönüşüyordu. Kart artık sütunun kendisi; başlık şeridi, liste ve boş durum tek yüzeyin
+  parçaları olarak okunuyor. Satırlar ayrı kart DEĞİL — kart içinde kart, gölge üstünde
+  gölge demek olurdu; satır sakin durur, hover'da bir kademe koyulaşarak üzerinde
+  basılabilir bir eylem ("Kaldır") taşıdığını söyler.
+*/
+function PortfolioColumn({ title, aciklama, tone, entries, emptyText, onAdd, onRemoved }) {
   const [removingId, setRemovingId] = useState(null)
 
   async function remove(entryId) {
@@ -88,29 +98,37 @@ function PortfolioColumn({ title, tone, entries, emptyText, onAdd, onRemoved }) 
   }
 
   return (
-    <section>
-      <SectionTitle
-        action={
-          <Button variant="secondary" onClick={onAdd}>
-            + Konu ekle
-          </Button>
-        }
-      >
-        {title}
-      </SectionTitle>
+    <Card className="flex h-full flex-col">
+      {/* Başlık şeridi çok hafif marka zemini taşıyor: sütunun "kapağı" olduğu bir
+          bakışta anlaşılsın. Sayı rozeti başlığın hemen yanında — kaç konu olduğu
+          liste kaydırılmadan görünür. */}
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-brand-50/40 px-4 py-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <h2 className="text-lg font-semibold text-slate-900">{title}</h2>
+            <Badge tone={tone}>{entries.length}</Badge>
+          </div>
+          <p className="mt-0.5 text-xs text-slate-500">{aciklama}</p>
+        </div>
+        <Button variant="secondary" onClick={onAdd} className="shrink-0">
+          + Konu ekle
+        </Button>
+      </div>
 
       {entries.length === 0 ? (
-        <EmptyState title="Liste boş" description={emptyText} />
+        /* Boş durum flex-1 ile sütunu doldurur: karşı sütun doluyken bu taraf güdük
+           kalmasın. Zemin bir kademe koyu (slate-50), çünkü beyaz kartın içindeki
+           beyaz bir kutu görünmez olurdu; kesik kenarlık "buraya bir şey gelecek" der. */
+        <div className="mt-4 flex flex-1 flex-col items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50 px-6 py-10 text-center">
+          <p className="font-medium text-slate-700">Liste boş</p>
+          <p className="mx-auto mt-1 max-w-md text-sm text-slate-500">{emptyText}</p>
+        </div>
       ) : (
-        <div className="space-y-2">
+        <ul className="mt-4 space-y-1">
           {entries.map((entry) => (
-            /* Hover'da marka tonlu kenarlık + bir kademe koyu gölge: kartın içinde
-               basılabilir bir eylem ("Kaldır") var, ama kart gövdesi tepkisiz kalınca
-               liste ölü duruyordu. Geçiş Card'ın kendi sınıflarına EK olarak veriliyor —
-               ui.jsx yüzey dilinin tek sahibi, ona dokunulmuyor. */
-            <Card
+            <li
               key={entry.entryId}
-              className="flex items-start justify-between gap-3 p-4 transition hover:border-brand-200 hover:shadow-md"
+              className="flex items-start justify-between gap-3 rounded-xl px-3 py-3 transition hover:bg-slate-50"
             >
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
@@ -136,11 +154,11 @@ function PortfolioColumn({ title, tone, entries, emptyText, onAdd, onRemoved }) 
               >
                 Kaldır
               </Button>
-            </Card>
+            </li>
           ))}
-        </div>
+        </ul>
       )}
-    </section>
+    </Card>
   )
 }
 
