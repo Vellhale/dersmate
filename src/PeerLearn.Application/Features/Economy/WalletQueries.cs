@@ -14,22 +14,22 @@ public sealed record GetWalletQuery(Guid UserId) : IRequest<WalletDto>;
 /// geçmiş görüntüleme için duruyor.
 /// </summary>
 /// <param name="TotalEarnedCredits">
-/// Ders anlatarak biriktirilen TOPLAM puan — unvanın dayandığı sayı. Bakiyeden farklı
+/// Ders anlatarak biriktirilen TOPLAM puan — seviyenin dayandığı sayı. Bakiyeden farklı
 /// olarak asla azalmaz.
 /// </param>
 /// <param name="CurrentBalance">
 /// Cüzdandaki güncel bakiye. Harcanacak bir yer olmadığı için ürün açısından
 /// ikincildir; yönetim tarafında defter denetimi için tutuluyor.
 /// </param>
-/// <param name="RankTitle">Unvan adı — başlıktaki rozet bunu gösterir.</param>
-/// <param name="RankEmoji">Unvan simgesi.</param>
-/// <param name="NextRankAt">Bir sonraki unvanın eşiği; en üstte <c>null</c>.</param>
+/// <param name="Level">Krediden türeyen seviye (1..10) — başlıktaki rozet bunu gösterir.</param>
+/// <param name="LevelMinCredits">Bu seviyenin başladığı puan.</param>
+/// <param name="NextLevelAt">Bir sonraki seviyenin eşiği; en üstte <c>null</c>.</param>
 public sealed record WalletDto(
     int TotalEarnedCredits,
     int CurrentBalance,
-    string RankTitle,
-    string RankEmoji,
-    int? NextRankAt,
+    int Level,
+    int LevelMinCredits,
+    int? NextLevelAt,
     IReadOnlyList<CreditLotDto> ActiveLots);
 
 /// <param name="ExpiresAtUtc">
@@ -58,16 +58,16 @@ public sealed class GetWalletHandler : IRequestHandler<GetWalletQuery, WalletDto
             .Select(u => u.TotalEarnedCredits)
             .SingleOrDefaultAsync(ct);
 
-        // Unvan tek yerde hesaplanıyor (profil sorgusuyla aynı saf fonksiyon); eşikler
+        // Seviye tek yerde hesaplanıyor (profil sorgusuyla aynı saf fonksiyon); eşikler
         // iki ayrı yerde yazılsaydı er geç birbirinden ayrılırlardı.
-        var rank = UserRankCalculator.Hesapla(toplamKazanc);
+        var seviye = UserLevelRules.Hesapla(toplamKazanc);
 
         var wallet = await _db.Wallets.AsNoTracking()
             .SingleOrDefaultAsync(w => w.UserId == request.UserId, ct);
 
         if (wallet is null)
         {
-            return new WalletDto(toplamKazanc, 0, rank.Title, rank.Emoji, rank.NextRankAt, []);
+            return new WalletDto(toplamKazanc, 0, seviye.Level, seviye.MinCredits, seviye.NextLevelAt, []);
         }
 
         var now = _clock.UtcNow;
@@ -84,9 +84,9 @@ public sealed class GetWalletHandler : IRequestHandler<GetWalletQuery, WalletDto
         return new WalletDto(
             toplamKazanc,
             lots.Sum(l => l.RemainingAmount),
-            rank.Title,
-            rank.Emoji,
-            rank.NextRankAt,
+            seviye.Level,
+            seviye.MinCredits,
+            seviye.NextLevelAt,
             lots.Select(l => new CreditLotDto(l.RemainingAmount, l.Source.ToString(), l.ExpiresAtUtc)).ToList());
     }
 }

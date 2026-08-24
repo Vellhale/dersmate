@@ -192,22 +192,22 @@ public sealed record UserProfileDto(
     int TaughtSessionCount,
     int TaughtMinutes,
 
-    /// <summary>Ders anlatarak biriktirilen toplam puan — unvanın dayanağı.</summary>
+    /// <summary>Ders anlatarak biriktirilen toplam puan — seviyenin dayanağı.</summary>
     int TotalEarnedCredits,
 
-    /// <summary>Unvan adı (ör. "Öğretici").</summary>
-    string RankTitle,
+    /// <summary>Krediden türeyen seviye (1..10). Ad ve emoji YOK: rozet artık rakam gösteriyor.</summary>
+    int Level,
 
-    /// <summary>Unvan simgesi (ör. "📚").</summary>
-    string RankEmoji,
+    /// <summary>Bu seviyenin başladığı puan. İlerleme çubuğunun sol ucu.</summary>
+    int LevelMinCredits,
 
     /// <summary>
-    /// Bir sonraki unvanın başladığı puan; en üst unvanda <c>null</c>.
-    /// SUNUCUDAN GELİYOR ki eşikler değiştiğinde arayüzdeki ilerleme çubuğu yalan söylemesin —
+    /// Bir sonraki seviyenin başladığı puan; en üst seviyede <c>null</c>.
+    /// SUNUCUDAN GELİYOR ki eşikler değiştiğinde arayüzdeki ilerleme satırı yalan söylemesin —
     /// eşikleri istemciye kopyalamak, bu projede daha önce fiyat formülünde yaşanan
     /// sapmanın aynısını üretirdi.
     /// </summary>
-    int? NextRankAt,
+    int? NextLevelAt,
 
     bool IsSelf,
     TeacherCandidateDto? TeacherCandidate,
@@ -238,7 +238,7 @@ public sealed class GetUserProfileHandler : IRequestHandler<GetUserProfileQuery,
           Hesap saf bir fonksiyon ve User satırı zaten okunmuş durumda; ek sorgu yok.
           Eşikler değişirse geçmişe dönük kendiliğinden düzelir.
         */
-        var rank = UserRankCalculator.Hesapla(user.TotalEarnedCredits);
+        var seviye = UserLevelRules.Hesapla(user.TotalEarnedCredits);
 
         var portfolio = await (
                 from entry in _db.PortfolioEntries.AsNoTracking()
@@ -298,9 +298,9 @@ public sealed class GetUserProfileHandler : IRequestHandler<GetUserProfileQuery,
             user.TaughtSessionCount,
             user.TaughtMinutes,
             user.TotalEarnedCredits,
-            rank.Title,
-            rank.Emoji,
-            rank.NextRankAt,
+            seviye.Level,
+            seviye.MinCredits,
+            seviye.NextLevelAt,
             IsSelf: kendisi,
             aday,
             portfolio.Where(e => e.Direction == PortfolioDirection.Offer).Select(e =>

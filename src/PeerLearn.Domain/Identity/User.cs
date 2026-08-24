@@ -38,7 +38,7 @@ public class User : BaseEntity
     public int TaughtMinutes { get; set; }
 
     /// <summary>
-    /// Ders anlatarak kazanılmış TOPLAM kredi. Unvan (<see cref="Community.UserRank"/>)
+    /// Ders anlatarak kazanılmış TOPLAM kredi. Seviye (<see cref="Community.UserLevelRules"/>)
     /// bu sayıdan hesaplanır.
     /// </summary>
     /// <remarks>
