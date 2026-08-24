@@ -7,9 +7,10 @@ import { Logo } from './Logo'
 import { CookieSettingsLink } from './CookieBanner'
 import { ProductTour, RestartTourLink } from './ProductTour'
 import { Avatar } from './Avatar'
+import { SeviyeRozeti } from './SeviyeRozeti'
 import {
   MenuIkonu,
-  PusulaIkonu,
+  AramaIkonu,
   KitapIkonu,
   KisilerIkonu,
   MesajIkonu,
@@ -48,7 +49,7 @@ import {
   yedek, hedef değil.
 */
 const NAV = [
-  { to: '/kesfet', label: 'Keşfet', tour: 'discover', Ikon: PusulaIkonu },
+  { to: '/kesfet', label: 'Keşfet', tour: 'discover', Ikon: AramaIkonu },
   { to: '/portfolio', label: 'Ders Portföyü', tour: 'portfolio', Ikon: KitapIkonu },
   { to: '/eslesmeler', label: 'Eşleşmeler', Ikon: KisilerIkonu },
   { to: '/sohbet', label: 'Sohbet', Ikon: MesajIkonu },
@@ -56,14 +57,18 @@ const NAV = [
 ]
 
 /*
-  Sosyal hesaplar tek sabitte: üç platformda da kullanıcı adı aynı (dersmate_) ve
-  değişirse tek satır değişsin. Satırlar yalnız ikon + kullanıcı adı gösterir —
+  Sosyal hesaplar tek sabitte. Satırlar yalnız ikon + kullanıcı adı gösterir —
   "Instagram sayfamız" gibi açıklama metni bilinçli olarak yok (tasarım isteri).
+
+  KULLANICI ADI ARTIK PLATFORM BAŞINA: TikTok hesabı `dersmate`, Instagram ve X ise
+  `dersmate_`. Eskiden üçü de tek sabitten (`dersmate_`) yazdırılıyordu ve TikTok
+  bağlantısı var olmayan bir hesaba gidiyordu. Ad, href ile aynı satırda duruyor ki
+  ikisi bir daha ayrışmasın: linki değiştiren, altındaki metni de görür.
 */
 const SOSYAL = [
-  { ad: 'Instagram', href: 'https://instagram.com/dersmate_', Ikon: InstagramIkonu },
-  { ad: 'TikTok', href: 'https://tiktok.com/@dersmate_', Ikon: TiktokIkonu },
-  { ad: 'X', href: 'https://x.com/dersmate_', Ikon: XIkonu },
+  { ad: 'Instagram', kullanici: 'dersmate_', href: 'https://instagram.com/dersmate_', Ikon: InstagramIkonu },
+  { ad: 'TikTok', kullanici: 'dersmate', href: 'https://tiktok.com/@dersmate', Ikon: TiktokIkonu },
+  { ad: 'X', kullanici: 'dersmate_', href: 'https://x.com/dersmate_', Ikon: XIkonu },
 ]
 
 // localStorage anahtarları peerlearn.* biçiminde (bkz. api.js, hwid.js) — F4: bu ad
@@ -100,7 +105,9 @@ function LayoutShell() {
     })
   }
 
-  // Unvan rozeti her sayfada görünür: kullanıcının biriktirdiği tek ölçü budur.
+  // Seviye rozeti her sayfada görünür. Cüzdan hâlâ okunuyor çünkü seviye bir gün
+  // sunucudan gelecek ve aynı yerden beslenecek (bkz. lib/seviye.js); bugün rozet
+  // bu veriyi kullanmıyor ama bağlantı kopmasın diye duruyor.
   const { wallet } = useWallet()
 
   /*
@@ -122,7 +129,36 @@ function LayoutShell() {
   return (
     <div className="min-h-[100dvh]">
       <header className="sticky top-0 z-40 h-16 bg-slate-900">
-        <div className="flex h-full items-center justify-between px-3 sm:px-6">
+        {/*
+          ÜÇ BÖLGELİ BAR (2026-08-24): solda hamburger, SAĞDA seviye rozeti, ORTADA logo.
+
+          Logo eskiden hamburgerin hemen sağındaydı ve barın soluna yığılmış bir kümenin
+          parçası gibi görünüyordu — marka, gezinme düğmelerinin arasına sıkışmıştı.
+          Şimdi barın kendi merkezinde duruyor.
+
+          MERKEZLEME `absolute` İLE, flex ile DEĞİL: sağ küme masaüstünde avatar + isim +
+          çıkış taşıyor, solda tek düğme var. Üç eşit sütunlu bir ızgarada logo, sağ
+          kümenin genişliği her değiştiğinde (isim uzunluğu kullanıcıdan kullanıcıya
+          değişiyor) yerinden oynardı. Mutlak merkez, barın geometrisine bakar; içeriğe
+          değil, yani her kullanıcıda aynı yerde durur.
+
+          pointer-events: sarmalayıcı tıklamayı GEÇİRİR (none), yalnızca logonun kendisi
+          yakalar (auto). Aksi halde ekranı boydan boya kaplayan görünmez bir katman
+          hamburger ile çıkış düğmesini tıklanamaz yapardı.
+        */}
+        <div className="relative flex h-full items-center justify-between px-3 sm:px-6">
+          <div className="pointer-events-none absolute inset-x-0 flex justify-center">
+            <NavLink
+              to="/"
+              className="pointer-events-auto -my-2 flex items-center py-2"
+              aria-label="Ana sayfa"
+            >
+              {/* vurgulu: barın ortasındaki logo daha kalın ve büyük punto kullanır
+                  (bkz. Logo.jsx). Yükseklik dar ekranda h-9, sm üstünde h-11. */}
+              <Logo onDark vurgulu className="h-9 w-auto sm:h-11" />
+            </NavLink>
+          </div>
+
           <div className="flex items-center gap-1">
             {/* İki hamburger, iki iş: lg altında çekmeceyi açar, lg üstünde rayı daraltır.
                 Tek düğmeye iki işlev yüklemek aria-expanded'ı anlamsızlaştırıyordu. */}
@@ -148,29 +184,21 @@ function LayoutShell() {
               <MenuIkonu />
             </button>
 
-            {/* Logo kilidi marka adını zaten içeriyor — yanına ayrıca metin konmaz.
-                onDark: koyu barda ölçülü varyant (beyaz + brand-100), bkz. Logo.jsx. */}
-            {/* -my-2/py-2: logonun görünen boyu değişmeden dokunma alanı 48px'e çıkıyor. */}
-            <NavLink to="/" className="-my-2 flex shrink-0 items-center py-2 pl-1" aria-label="Ana sayfa">
-              <Logo onDark className="h-8 w-auto sm:h-9" />
-            </NavLink>
           </div>
 
           <div className="flex items-center gap-2 sm:gap-4">
-            {/* Bakiye rozeti yerine UNVAN. Harcanmayan bir sayıyı her sayfada göstermenin
-                anlamı yok; unvan ise kullanıcının biriktirdiği şeyi tek bakışta söylüyor
-                ve profile götürüyor. Zemin brand-300: slate-900 metinle 8.19:1. */}
+            {/* UNVAN yerine SEVİYE. "Çırak / Öğretici / Uzman" merdiveninin kaç basamak
+                olduğu kullanıcıya hiç görünmüyordu; numaralı seviye bunu tek bakışta
+                söylüyor. Hesabın tamamı lib/seviye.js'te — backend XP algoritması
+                gelene kadar herkes 1. Seviye (gerekçe orada yazılı).
+                data-tour="rank" çıpası KORUNDU: ürün turunun ilk adımı bu seçiciye
+                bağlı (lib/tour.js) ve rozet yer değiştirdi, kaybolmadı. */}
             <NavLink
               to="/profil"
               data-tour="rank"
               className="-my-2 flex min-h-11 shrink-0 items-center py-2"
-              title={`${wallet?.rankTitle ?? 'Unvan'} — ${wallet?.totalEarnedCredits ?? 0} puan`}
             >
-              <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-brand-300 px-3 py-1 text-xs font-semibold text-slate-900">
-                <span aria-hidden="true">{wallet?.rankEmoji ?? '🌱'}</span>
-                <span className="hidden sm:inline">{wallet?.rankTitle ?? '—'}</span>
-                <span className="sm:hidden">{wallet?.totalEarnedCredits ?? 0}</span>
-              </span>
+              <SeviyeRozeti kaynak={wallet} />
             </NavLink>
 
             {/* Avatar profile giden kısayol: sosyal bir üründe kendi profiline ulaşmanın
@@ -180,7 +208,10 @@ function LayoutShell() {
               <Avatar userId={session?.userId} name={session?.displayName} size="sm" />
             </NavLink>
 
-            <span className="hidden text-sm font-medium text-white lg:block">
+            {/* max-w + truncate: logo artık barın MUTLAK merkezinde duruyor ve uzun bir
+                görünen ad sağ kümeyi büyütüp logonun üstüne binebilirdi. Ad kırpılır,
+                logo yerinden oynamaz. */}
+            <span className="hidden max-w-[12rem] truncate text-sm font-medium text-white lg:block">
               {session?.displayName}
             </span>
 
@@ -322,20 +353,20 @@ function AltKume({ dar = false, onTikla }) {
         {!dar && <span className="whitespace-nowrap">Hakkımızda</span>}
       </NavLink>
 
-      {SOSYAL.map(({ ad, href, Ikon }) => (
+      {SOSYAL.map(({ ad, kullanici, href, Ikon }) => (
         <a
           key={ad}
           href={href}
           target="_blank"
           rel="noreferrer noopener"
-          aria-label={`${ad}: dersmate_`}
-          title={dar ? `${ad}: dersmate_` : undefined}
+          aria-label={`${ad}: ${kullanici}`}
+          title={dar ? `${ad}: ${kullanici}` : undefined}
           className={`flex min-h-11 items-center rounded-xl text-sm text-slate-400 transition hover:bg-white/5 hover:text-slate-200 ${
             dar ? 'justify-center' : 'gap-3.5 px-3.5'
           }`}
         >
           <Ikon className="h-[18px] w-[18px]" />
-          {!dar && <span className="whitespace-nowrap">dersmate_</span>}
+          {!dar && <span className="whitespace-nowrap">{kullanici}</span>}
         </a>
       ))}
     </div>

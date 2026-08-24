@@ -50,7 +50,22 @@ const ACCENT = '#0088CC'
   ACCENT ve geometri aynı kalır, yani logo iki zeminde de AYNI logodur.
   BG (köprü çizgisi) de zeminle uyumlu olmalı — koyu tarafta saydam bırakılıyor.
 */
-export function Logo({ className = 'h-8 w-auto', title = 'dersmate', onDark = false }) {
+/*
+  vurgulu: kelime markasının BÜYÜK hâli (2026-08-24, üst bar kararı).
+
+  Logo üst barın ortasına alınınca eski oranlar zayıf kaldı: 26px'lik yazı 280 birimlik
+  tuvalde çok boşluk bırakıyordu ve ortaya alınan bir öğe, kenarda duran bir öğeden daha
+  fazla ağırlık ister — yoksa "ortalanmış ama silik" görünür.
+
+  DEĞİŞEN YALNIZCA TİPOGRAFİ: punto 26 → 34, ağırlık 700 → 800, harf aralığı sıkıldı.
+  RENKLER VE GEOMETRİ AYNI — e2e/marka.spec.js logonun daire dolgularını paletle
+  karşılaştırıyor (yalnız #0088CC ve #CCE9F7 serbest); tipografiyi değiştirmek o
+  sözleşmeye dokunmaz, rengi değiştirmek kırardı.
+
+  Kelime büyüyünce düğümlerle arasındaki boşluk da kapanıyor: yazı 75 yerine 72'den
+  başlıyor ve taban çizgisi 52'ye iniyor, böylece iki öğe tek bir kilit gibi okunuyor.
+*/
+export function Logo({ className = 'h-8 w-auto', title = 'dersmate', onDark = false, vurgulu = false }) {
   const mürekkep = onDark ? '#FFFFFF' : INK
   const vurgu = onDark ? ACCENT_DARK : ACCENT
   return (
@@ -68,12 +83,12 @@ export function Logo({ className = 'h-8 w-auto', title = 'dersmate', onDark = fa
       </g>
 
       <text
-        x="75"
-        y="49"
+        x={vurgulu ? 72 : 75}
+        y={vurgulu ? 52 : 49}
         fontFamily="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"
-        fontSize="26"
-        fontWeight="700"
-        letterSpacing="-0.5"
+        fontSize={vurgulu ? 34 : 26}
+        fontWeight={vurgulu ? 800 : 700}
+        letterSpacing={vurgulu ? -1.2 : -0.5}
       >
         <tspan fill={mürekkep}>ders</tspan>
         <tspan fill={vurgu}>mate</tspan>
@@ -82,12 +97,20 @@ export function Logo({ className = 'h-8 w-auto', title = 'dersmate', onDark = fa
   )
 }
 
-/** Yazısız kare rozet — dar alanlar için (favicon ile aynı geometri). */
+/**
+ * Yazısız kare rozet — dar alanlar için (favicon ile aynı geometri).
+ *
+ * ⚠️ ÇALIŞMA ZAMANI HATASI DÜZELTİLDİ (2026-08-24): ilk daire `fill={vurgu}` diyordu ama
+ * `vurgu` yalnızca `Logo` fonksiyonunun İÇİNDE tanımlı bir yerel değişken — burada
+ * tanımsızdı ve bileşen render edilse `ReferenceError` atardı. Hata bugüne kadar
+ * görünmedi çünkü `LogoMark` hiçbir yerden çağrılmıyor; yani derleme de test de bunu
+ * yakalayamazdı. Doğrusu açık zeminin vurgu rengi: ACCENT.
+ */
 export function LogoMark({ className = 'h-8 w-8', title = 'dersmate' }) {
   return (
     <svg viewBox="0 0 64 64" role="img" aria-label={title} className={className}>
       <rect width="64" height="64" fill={BG} rx="14" />
-      <circle cx="23" cy="34" r="11" fill={vurgu} opacity="0.95" />
+      <circle cx="23" cy="34" r="11" fill={ACCENT} opacity="0.95" />
       <circle cx="41" cy="34" r="11" fill={INK} opacity="0.95" />
       <path d="M 23 34 Q 32 22, 41 34" stroke={BG} strokeWidth="3.5" fill="none" strokeLinecap="round" />
     </svg>
