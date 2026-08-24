@@ -151,7 +151,10 @@ function ExchangeArt({ onDark = false }) {
 
 const VAATLER = [
   ['🎓', 'Ders almak ücretsiz', 'Öğrenirken hiçbir şey ödemezsin, puan da harcamazsın.'],
-  ['⏱️', 'Anlattıkça kazan', 'Verdiğin her ders puana dönüşür, puan biriktikçe unvanın yükselir.'],
+  // "puan biriktikçe unvanın yükselir" cümlesi kaldırıldı: unvan sistemi seviyeye
+  // dönüştü ve seviye şu an puandan türemiyor (bkz. lib/seviye.js). Giriş ekranında
+  // duran bir vaat, ürünün artık vermediği bir söz olamaz.
+  ['⏱️', 'Anlattıkça kazan', 'Verdiğin her ders puana dönüşür; puan harcanmaz, birikir.'],
   ['🛡️', 'Doğrulanmış dersler', 'Her ders kanıtla kapanır; değerlendirmeler yalnızca gerçek derslerden gelir.'],
 ]
 
@@ -266,7 +269,7 @@ export function AuthShell({ title, subtitle, children }) {
 
           <p className="mt-6 text-center text-xs leading-relaxed text-slate-500 lg:text-left">
             dersmate'te para transferi yoktur. Ders almak ücretsizdir; ders anlattığında puan
-            kazanır, puan biriktikçe unvanın yükselir.
+            kazanırsın ve bu puan harcanmaz, profilinde birikir.
           </p>
 
           <div className="mt-3 text-center lg:text-left">

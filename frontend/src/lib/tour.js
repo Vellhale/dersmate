@@ -15,10 +15,16 @@
  * (bkz. ProductTour). Bu sayede ekran boyutuna göre gizlenen öğeler turu KIRMAZ —
  * mobilde üst gezinme çubuğu hamburgere dönüştüğü için bu gerçek bir durum.
  *
- * Çıpalar Layout'taki NAV tanımından ve unvan rozetinden gelir; buradaki her selector'ın
+ * Çıpalar Layout'taki NAV tanımından ve seviye rozetinden gelir; buradaki her selector'ın
  * karşılığı orada VARDIR. (Eskiden ilk adım `[data-tour="wallet"]` arıyordu ama cüzdan
  * rozeti kaldırılıp yerine `rank` konmuştu — yani turun ilk adımı sessizce çıpasız
- * kalmıştı.)
+ * kalmıştı.) Rozetin içeriği unvandan seviyeye dönerken `data-tour="rank"` adı BİLEREK
+ * korundu: çıpa adını değiştirmek aynı sessiz kırılmayı bir kez daha üretirdi.
+ *
+ * UNVAN MERDİVENİ ANLATILMIYOR ARTIK. Önceki metin "biriken puan unvanını yükseltir
+ * (Çırak → Öğretici → Uzman → …)" diyordu; unvan sistemi kalktı ve seviye şu an
+ * puandan türemiyor (bkz. lib/seviye.js). Tur, arkasında kural olmayan bir ilerleme
+ * sözü vermemeli — doğru olan tek şey söyleniyor: ders anlatmak puan kazandırır.
  */
 export const TOUR_STEPS = [
   {
@@ -26,9 +32,10 @@ export const TOUR_STEPS = [
     selector: '[data-tour="rank"]',
     title: 'Ders almak ücretsiz 🌱',
     body:
-      'Burada para da, ödediğin bir kredi de yok. Ders ALMAK tamamen ücretsiz. ' +
-      'Ders ANLATTIĞINDA puan kazanırsın; biriken puan buradaki unvanını yükseltir ' +
-      '(Çırak → Öğretici → Uzman → …). Yani puan harcanan bir bakiye değil, emeğinin karşılığı.',
+      'Burada para da, ödediğin bir kredi de yok. Ders ALMAK tamamen ücretsiz; ' +
+      'ders ANLATTIĞINDA puan kazanırsın. Puan harcanan bir bakiye değil, emeğinin ' +
+      'karşılığı. Buradaki rozet ise seviyeni gösterir: 10 basamaklı ölçekte şu an nerede ' +
+      'olduğun.',
   },
   {
     id: 'discover',
@@ -45,7 +52,7 @@ export const TOUR_STEPS = [
     title: 'Ders Portföyü — ne anlatabilirsin',
     body:
       'Anlatabildiğin konuları buraya ekle; Keşfet’te başkalarına böyle görünürsün. ' +
-      'Puan kazanmanın tek yolu ders anlatmak olduğu için portföyün boşsa unvanın da yerinde sayar.',
+      'Puan kazanmanın tek yolu ders anlatmak — portföyün boşken kimse senden ders isteyemez.',
   },
   {
     id: 'sessions',
