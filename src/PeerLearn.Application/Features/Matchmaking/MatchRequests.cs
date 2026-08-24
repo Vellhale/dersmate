@@ -4,6 +4,7 @@ using PeerLearn.Application.Abstractions;
 using PeerLearn.Application.Common;
 using PeerLearn.Application.Features.Community;
 using PeerLearn.Domain.Communication;
+using PeerLearn.Domain.Identity;
 using PeerLearn.Domain.Matchmaking;
 
 namespace PeerLearn.Application.Features.Matchmaking;
@@ -11,11 +12,14 @@ namespace PeerLearn.Application.Features.Matchmaking;
 /// <summary>
 /// Eşleşme isteği: RequestedTopicId = karşı taraftan almak istediğim konu;
 /// OfferedTopicId (opsiyonel) = karşılığında anlatmayı önerdiğim konu (çapraz teklif).
+///
+/// RequestedTopicId NULL ise bu bir ÜNİVERSİTE AĞI isteğidir: ders değil, tanışma.
+/// İki türün doğrulama kapıları farklı — aşağıdaki handler'da gerekçesiyle birlikte.
 /// </summary>
 public sealed record CreateMatchRequestCommand(
     Guid InitiatorUserId,
     Guid ResponderUserId,
-    Guid RequestedTopicId,
+    Guid? RequestedTopicId,
     Guid? OfferedTopicId) : IRequest<Guid>;
 
 public sealed class CreateMatchRequestHandler : IRequestHandler<CreateMatchRequestCommand, Guid>
@@ -31,27 +35,76 @@ public sealed class CreateMatchRequestHandler : IRequestHandler<CreateMatchReque
             throw new AppException(ErrorCodes.SelfMatch, "Kendinizle eşleşemezsiniz.");
         }
 
-        // Karşı taraf bu konuyu gerçekten Offer ediyor olmalı (rastgele istek spam'ini keser).
-        var offers = await _db.PortfolioEntries.AnyAsync(p =>
-            p.UserId == request.ResponderUserId && p.TopicId == request.RequestedTopicId &&
-            p.Direction == PortfolioDirection.Offer && p.IsActive, ct);
+        /*
+          İKİ TÜR, İKİ AYRI KAPI — ve ikisi de "rastgele kişiye istek" spam'ini kesmek için.
 
-        if (!offers)
+          DERS isteğinde kapı: karşı taraf o konuyu gerçekten sunuyor mu. Yani istek,
+          karşı tarafın kendi ilan ettiği bir şeye dayanıyor.
+
+          ÜNİVERSİTE AĞI isteğinde konu yok, dolayısıyla o kapı çalışamaz. Yerine konan
+          kapı aynı mantığı taşıyor: karşı taraf üniversite bilgisini GİRMİŞ olmalı.
+          Profiline üniversitesini yazmak, bu ağda görünmeyi seçmektir; yazmayan kişi
+          listede zaten çıkmıyor (bkz. SearchUniversityPeers) ve ona bu yoldan istek de
+          gidemez.
+
+          Bu kapı olmadan uç, "herhangi bir kullanıcıya doğrudan mesaj isteği" hâline
+          gelirdi — bu üründe engelleme/blok mekanizması OLMADIĞI için bunun bedeli
+          yüksek olurdu.
+        */
+        if (request.RequestedTopicId is { } topicId)
         {
-            throw new AppException(ErrorCodes.MatchNotFound,
-                "Karşı taraf bu konuyu portföyünde sunmuyor.", statusCode: 409);
+            var offers = await _db.PortfolioEntries.AnyAsync(p =>
+                p.UserId == request.ResponderUserId && p.TopicId == topicId &&
+                p.Direction == PortfolioDirection.Offer && p.IsActive, ct);
+
+            if (!offers)
+            {
+                throw new AppException(ErrorCodes.MatchNotFound,
+                    "Karşı taraf bu konuyu portföyünde sunmuyor.", statusCode: 409);
+            }
+        }
+        else
+        {
+            var agdaMi = await _db.Users.AnyAsync(u =>
+                u.Id == request.ResponderUserId &&
+                u.Status == UserStatus.Active &&
+                u.University != null && u.University != "", ct);
+
+            if (!agdaMi)
+            {
+                throw new AppException(ErrorCodes.MatchNotFound,
+                    "Bu kişi üniversite ağında görünmüyor.", statusCode: 409);
+            }
         }
 
-        var pendingExists = await _db.Matches.AnyAsync(m =>
-            m.InitiatorUserId == request.InitiatorUserId &&
-            m.ResponderUserId == request.ResponderUserId &&
-            m.RequestedTopicId == request.RequestedTopicId &&
-            m.Status == MatchStatus.Pending, ct);
+        /*
+          MÜKERRER BEKLEYEN İSTEK.
+
+          Konusuz istekte karşılaştırma `RequestedTopicId == null` ile yapılmalı,
+          `== request.RequestedTopicId` ile DEĞİL: SQL'de NULL = NULL sonucu NULL'dır,
+          yani hiçbir zaman true olmaz ve kontrol sessizce hiçbir şey bulmazdı. Aynı
+          tuzak veritabanı tarafında da var — bu yüzden ikinci bir kısmi tekillik indeksi
+          eklendi (bkz. MatchmakingConfigurations).
+        */
+        var pendingExists = request.RequestedTopicId is { } istenenKonu
+            ? await _db.Matches.AnyAsync(m =>
+                m.InitiatorUserId == request.InitiatorUserId &&
+                m.ResponderUserId == request.ResponderUserId &&
+                m.RequestedTopicId == istenenKonu &&
+                m.Status == MatchStatus.Pending, ct)
+            : await _db.Matches.AnyAsync(m =>
+                m.InitiatorUserId == request.InitiatorUserId &&
+                m.ResponderUserId == request.ResponderUserId &&
+                m.RequestedTopicId == null &&
+                m.Status == MatchStatus.Pending, ct);
 
         if (pendingExists)
         {
             throw new AppException(ErrorCodes.DuplicateMatchRequest,
-                "Bu kişiye bu konu için zaten bekleyen isteğiniz var.", statusCode: 409);
+                request.RequestedTopicId is null
+                    ? "Bu kişiye zaten bekleyen bir isteğiniz var."
+                    : "Bu kişiye bu konu için zaten bekleyen isteğiniz var.",
+                statusCode: 409);
         }
 
         var match = new Match

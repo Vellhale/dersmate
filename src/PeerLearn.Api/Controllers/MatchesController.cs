@@ -19,7 +19,11 @@ public sealed class MatchesController : ControllerBase
     public async Task<MyMatchesDto> GetMine(CancellationToken ct)
         => await _mediator.Send(new GetMyMatchesQuery(User.GetUserId()), ct);
 
-    public sealed record CreateRequest(Guid ResponderUserId, Guid RequestedTopicId, Guid? OfferedTopicId);
+    /// <summary>
+    /// <paramref name="RequestedTopicId"/> null gönderilebilir: o zaman istek bir ÜNİVERSİTE
+    /// AĞI isteğidir (ders değil, tanışma). Kabul edilirse yalnızca sohbet açılır.
+    /// </summary>
+    public sealed record CreateRequest(Guid ResponderUserId, Guid? RequestedTopicId, Guid? OfferedTopicId);
 
     [HttpPost]
     public async Task<ActionResult<Guid>> Create(CreateRequest request, CancellationToken ct)

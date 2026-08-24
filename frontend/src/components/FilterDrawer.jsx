@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useId } from 'react'
 import { Button } from './ui'
 
 const SORTS = [
@@ -215,6 +215,91 @@ function RangeField({ label, hint, min, max, step, value, onChange, display }) {
       />
       <p className="mt-1 text-xs text-slate-500">{hint}</p>
     </section>
+  )
+}
+
+/**
+ * Üniversite ağı filtre paneli (Modül 1'in yanındaki ikinci keşif kipi).
+ *
+ * ─── NEDEN YALNIZCA İKİ ALAN ───────────────────────────────────────────────────
+ * Üniversite ağı DERS/KONU KAVRAMI TAŞIMIYOR. Buradaki kayıt bir ilan değil, bir
+ * kişinin okuduğu yer: üniversite + bölüm. Kategori ağacı, konu seviyesi (1–5) ve
+ * eğitmen puanı bu veride KARŞILIĞI OLMAYAN alanlar — hepsi katalog ilanına bağlı.
+ * FilterPanel'i kopyalayıp "şimdilik boş dursun" demek, kullanıcıya hiçbir zaman
+ * sonucu değiştirmeyecek denetimler göstermek olurdu; filtrenin sessizce çalışmaması,
+ * olmamasından daha kötü.
+ *
+ * Bu bir ÜRÜN KARARIDIR, eksik iş değil: ders/konu filtreleri buraya sonradan da
+ * eklenmez — eklenecekse önce veri modelinin o kavramı kazanması gerekir.
+ * ───────────────────────────────────────────────────────────────────────────────
+ *
+ * Görsel dil FilterPanel ile birebir aynı (başlık biçimi, 5'lik boşluk ritmi, alt
+ * satır); iki panel aynı çekmecede yan yana görülebiliyor, ayrışmaları gerekmiyor.
+ * FilterDrawer'a çocuk olarak verilebilir — çekmece içeriğinden habersizdir.
+ */
+export function UniversiteFiltrePaneli({ value, onChange, onReset, resultCount }) {
+  /*
+    FilterPanel'deki `set` kalıbının aynısı; `page: 1` kasıtlı. Üniversite adını
+    daraltırken 7. sayfada kalmak, sonuç kümesi küçüldüğü için boş sayfa gösterirdi.
+  */
+  const set = (patch) => onChange({ ...value, ...patch, page: 1 })
+
+  /*
+    useId: panel Discover'da HEM masaüstü sütununda HEM mobil çekmecede aynı anda
+    monte olabiliyor. Sabit bir id iki kez basılır, label'lar ilk girdiye bağlanır ve
+    "Bölüm" etiketine tıklamak odağı Üniversite'ye taşırdı.
+  */
+  const idOnEki = useId()
+  const universiteId = `universite-${idOnEki}`
+  const bolumId = `bolum-${idOnEki}`
+
+  return (
+    <div className="space-y-5">
+      <section>
+        <label
+          htmlFor={universiteId}
+          className="mb-2 block text-xs font-medium uppercase tracking-wide text-slate-500"
+        >
+          Üniversite
+        </label>
+        <input
+          id={universiteId}
+          type="text"
+          className="input"
+          placeholder="Üniversite adı ara…"
+          value={value.university ?? ''}
+          onChange={(e) => set({ university: e.target.value })}
+        />
+      </section>
+
+      <section>
+        <label
+          htmlFor={bolumId}
+          className="mb-2 block text-xs font-medium uppercase tracking-wide text-slate-500"
+        >
+          Bölüm
+        </label>
+        <input
+          id={bolumId}
+          type="text"
+          className="input"
+          placeholder="Bölüm ara…"
+          value={value.department ?? ''}
+          onChange={(e) => set({ department: e.target.value })}
+        />
+      </section>
+
+      {/* Alt satır FilterPanel'in aynısı — boş `span` gerekçesi orada yazılı: sonuç
+          sayısı yokken tire basmak, yüklenememiş bir değer gibi okunuyordu. */}
+      <div className="flex items-center justify-between gap-3 border-t border-slate-200/80 pt-4">
+        <span className="text-sm text-slate-500">
+          {resultCount === null ? '' : `${resultCount} sonuç`}
+        </span>
+        <Button variant="secondary" onClick={onReset}>
+          Filtreleri temizle
+        </Button>
+      </div>
+    </div>
   )
 }
 

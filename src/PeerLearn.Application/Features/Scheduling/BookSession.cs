@@ -76,6 +76,26 @@ public sealed class BookSessionHandler : IRequestHandler<BookSessionCommand, Boo
             throw new AppException(ErrorCodes.NotMatchParticipant, "Bu eşleşmenin tarafı değilsiniz.", statusCode: 403);
         }
 
+        /*
+          ÜNİVERSİTE AĞI EŞLEŞMESİNDEN DERS REZERVE EDİLEMEZ — AÇIK MUHAFIZ.
+
+          Konusuz eşleşmede iki konu alanı da null; aşağıdaki kapsam kontrolü bunu
+          zaten engelliyordu ama TESADÜFEN: C#'ta `Guid != Guid?` karşılaştırması
+          null tarafta false döndüğü için koşul sağlanıyor ve "Konu bu eşleşmenin
+          kapsamında değil" hatası veriliyordu. Doğru sonuç, yanlış gerekçe — ve
+          kullanıcıya anlamsız bir mesaj.
+
+          Ayrı bir muhafız hem doğru mesajı veriyor hem de niyeti kayda geçiriyor:
+          üniversite ağı eşleşmesi sohbet içindir, ders akışına girmez. Kapsam kontrolü
+          bir gün değişirse bu kural onunla birlikte sessizce kaybolmaz.
+        */
+        if (match.RequestedTopicId is null && match.OfferedTopicId is null)
+        {
+            throw new AppException(ErrorCodes.InvalidBooking,
+                "Bu eşleşme üniversite ağı üzerinden kuruldu; ders rezervasyonu içermiyor.",
+                statusCode: 409);
+        }
+
         if (request.TopicId != match.RequestedTopicId && request.TopicId != match.OfferedTopicId)
         {
             throw new AppException(ErrorCodes.InvalidBooking, "Konu bu eşleşmenin kapsamında değil.");

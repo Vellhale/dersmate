@@ -5,6 +5,7 @@ import { formatDateTime } from '../lib/format'
 import { Avatar } from './Avatar'
 import { Badge, Button, Card, EmptyState, ErrorBox, Loading } from './ui'
 import { SubjectBadges } from './SubjectBadges'
+import { UniversiteRozetleri } from './UniversiteRozetleri'
 import { seviyeEtiketi, seviyeHesapla, seviyeIlerlemeMetni } from '../lib/seviye'
 
 /**
@@ -49,6 +50,17 @@ export function UserProfileView({ userId }) {
           sorusunu yanıtlıyor, konu panellerinden ("ne yapabilir") önce gelmeli.
           Bileşen, rozet de ilerleme de yoksa kendini tamamen gizler. */}
       <SubjectBadges userId={userId} />
+
+      {/*
+        ÜNİVERSİTE ROZETLERİ yalnızca üniversite bilgisi olan profilde.
+
+        İki şerit birden görünebilir ve bu bir tutarsızlık değil: branş rozetleri "hangi
+        derste ne kadar anlattı", görüşme rozeti "toplamda ne kadar görüştü" diyor. Aynı
+        kişide ikisi de doğru olabilir. Üniversite bilgisi olmayan profilde ikinci şerit
+        hiç çizilmiyor; üniversite bilgisi olup hiç oturumu olmayanda ise bileşen kendini
+        gizliyor (bkz. UniversiteRozetleri).
+      */}
+      {p.university && <UniversiteRozetleri userId={userId} />}
 
       <div className="grid gap-4 lg:grid-cols-2">
         <TopicPanel

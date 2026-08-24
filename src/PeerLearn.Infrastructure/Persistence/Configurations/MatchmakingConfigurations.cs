@@ -47,6 +47,26 @@ public sealed class MatchConfiguration : IEntityTypeConfiguration<Match>
             .IsUnique()
             .HasFilter("\"Status\" = 'Pending'");
 
+        /*
+          KONUSUZ İSTEKLER İÇİN AYRI BİR TEKİLLİK İNDEKSİ — üstteki index onları KAPSAMAZ.
+
+          PostgreSQL'de UNIQUE kısıtı NULL'ları birbirinden FARKLI sayar. Yani
+          (A, B, NULL) satırı istendiği kadar tekrarlanabilir: üniversite ağı isteği
+          konusuz olduğu için yukarıdaki spam freni orada sessizce devre dışı kalıyor ve
+          bir kullanıcı aynı kişiye sınırsız bekleyen istek gönderebiliyordu.
+
+          Bu ikinci index tam olarak o boşluğu kapatıyor: konu YOKKEN çift başına tek bir
+          bekleyen istek. Filtre iki koşulu birden taşıyor çünkü kısmi index yalnızca
+          sorgunun WHERE'i koşulu BİREBİR içerdiğinde kullanılır (bkz. CLAUDE.md).
+
+          Uygulama katmanı da aynı kontrolü yapıyor (MatchRequests). Bu index son savunma
+          hattı: iki paralel istek arasındaki yarışı kapatan şey o kontrol değil, burası.
+        */
+        builder.HasIndex(x => new { x.InitiatorUserId, x.ResponderUserId })
+            .IsUnique()
+            .HasFilter("\"Status\" = 'Pending' AND \"RequestedTopicId\" IS NULL")
+            .HasDatabaseName("UX_Matches_PendingKonusuz");
+
         // "Bana gelen bekleyen istekler" ekranı.
         builder.HasIndex(x => new { x.ResponderUserId, x.Status });
 

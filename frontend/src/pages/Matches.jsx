@@ -234,12 +234,27 @@ function MatchCard({ match, tab, onChanged }) {
             {match.offeredTopicId && <Badge tone="success">Takas teklifi</Badge>}
           </div>
 
-          <p className="mt-1.5 text-sm text-slate-600">
-            <span className="text-slate-500">
-              {match.iAmInitiator ? 'Almak istediğin:' : 'Senden istediği:'}
-            </span>{' '}
-            <strong>{match.requestedTopicName}</strong>
-          </p>
+          {/*
+            KONUSUZ EŞLEŞME = ÜNİVERSİTE AĞI İSTEĞİ.
+
+            `requestedTopicName` null geliyor (Match.RequestedTopicId nullable). Koşulsuz
+            basılırsa "Almak istediğin:" yazıp yanına BOŞ bir <strong> koyuyordu — kart
+            yüklenememiş bir veri gibi görünüyordu. Üniversite ağı isteğinde alınan bir
+            konu yok; anlatılacak şey isteğin NE OLDUĞU: tanışma.
+          */}
+          {match.requestedTopicName ? (
+            <p className="mt-1.5 text-sm text-slate-600">
+              <span className="text-slate-500">
+                {match.iAmInitiator ? 'Almak istediğin:' : 'Senden istediği:'}
+              </span>{' '}
+              <strong>{match.requestedTopicName}</strong>
+            </p>
+          ) : (
+            <p className="mt-1.5 text-sm text-slate-600">
+              <span className="text-slate-500">Üniversite ağı ·</span>{' '}
+              <strong>Sohbet isteği</strong>
+            </p>
+          )}
 
           {match.offeredTopicName && (
             <p className="text-sm text-slate-600">
@@ -272,9 +287,14 @@ function MatchCard({ match, tab, onChanged }) {
               {match.conversationId && (
                 <Button onClick={() => navigate(`/sohbet/${match.conversationId}`)}>Sohbet</Button>
               )}
-              <Button variant="secondary" onClick={() => navigate('/dersler')}>
-                Ders rezerve et
-              </Button>
+              {/* Üniversite ağı eşleşmesinden ders rezerve EDİLEMEZ (sunucu da reddeder,
+                  bkz. BookSession'daki muhafız). Düğmeyi göstermek kullanıcıyı Derslerim'e
+                  gönderip orada kendisini bir hata mesajıyla karşılamak olurdu. */}
+              {match.requestedTopicName && (
+                <Button variant="secondary" onClick={() => navigate('/dersler')}>
+                  Ders rezerve et
+                </Button>
+              )}
               <Button variant="secondary" onClick={() => setConfirmClose(true)}>
                 Sonlandır
               </Button>
