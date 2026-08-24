@@ -144,17 +144,22 @@ function LayoutShell() {
           pointer-events: sarmalayıcı tıklamayı GEÇİRİR (none), yalnızca logonun kendisi
           yakalar (auto). Aksi halde ekranı boydan boya kaplayan görünmez bir katman
           hamburger ile çıkış düğmesini tıklanamaz yapardı.
+
+          DİKEY HİZA (2026-08-24): sarmalayıcı `inset-x-0` idi, yani yalnızca YATAY
+          eksende geriliyordu; dikey konumu tarayıcının mutlak konumlu flex çocuğu nereye
+          koyduğuna kalmıştı. `inset-0 + items-center` bunu belirsizlikten çıkarıyor:
+          logo, hamburger ve rozetle aynı dikey merkeze oturuyor.
         */}
         <div className="relative flex h-full items-center justify-between px-3 sm:px-6">
-          <div className="pointer-events-none absolute inset-x-0 flex justify-center">
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
             <NavLink
               to="/"
-              className="pointer-events-auto -my-2 flex items-center py-2"
+              className="pointer-events-auto flex h-11 items-center"
               aria-label="Ana sayfa"
             >
-              {/* vurgulu: barın ortasındaki logo daha kalın ve büyük punto kullanır
-                  (bkz. Logo.jsx). Yükseklik dar ekranda h-9, sm üstünde h-11. */}
-              <Logo onDark vurgulu className="h-9 w-auto sm:h-11" />
+              {/* Tek geometri, boyut yalnızca yükseklikten: dar ekranda h-8, sm üstünde
+                  h-9. (Eski `vurgulu` varyantı kaldırıldı — bkz. Logo.jsx.) */}
+              <Logo onDark className="h-8 w-auto sm:h-9" />
             </NavLink>
           </div>
 
