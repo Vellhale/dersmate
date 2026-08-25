@@ -9,6 +9,7 @@ import Discover from './pages/Discover'
 import Matches from './pages/Matches'
 import Chat from './pages/Chat'
 import Sessions from './pages/Sessions'
+import Topluluk from './pages/Topluluk'
 import Profile from './pages/Profile'
 import Admin from './pages/Admin'
 import Hakkimizda from './pages/Hakkimizda'
@@ -59,6 +60,11 @@ export default function App() {
         <Route path="/sohbet" element={<Chat />} />
         <Route path="/sohbet/:conversationId" element={<Chat />} />
         <Route path="/dersler" element={<Sessions />} />
+        {/* Topluluk (forum). Menüde "Yakında" rozetiyle duruyor ama rota GERÇEK ve
+            gezilebilir: tıklanamayan bir menü öğesi, kullanıcının neyin geldiğini
+            görmesini engeller. Sayfanın kendisi arkasında sunucu olmadığını ekranda
+            söylüyor (bkz. pages/Topluluk.jsx). */}
+        <Route path="/topluluk" element={<Topluluk />} />
         {/* CÜZDAN KALDIRILDI: puan artık harcanan bir bakiye değil, profilde görünen bir
             unvan. Eski bağlantılar (yer imi, tur adımı) kırık kalmasın diye yönlendiriliyor;
             işlem geçmişi Derslerim'e taşındı. */}

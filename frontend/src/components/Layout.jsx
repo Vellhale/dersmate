@@ -18,6 +18,7 @@ import {
   KisilerIkonu,
   MesajIkonu,
   KepIkonu,
+  ToplulukIkonu,
   KalkanIkonu,
   CikisIkonu,
   BilgiIkonu,
@@ -62,6 +63,21 @@ const NAV = [
   { to: '/eslesmeler', label: 'Eşleşmeler', tour: 'matches', Ikon: KisilerIkonu },
   { to: '/sohbet', label: 'Sohbet', tour: 'chat', Ikon: MesajIkonu },
   { to: '/dersler', label: 'Derslerim', tour: 'sessions', Ikon: KepIkonu },
+  /*
+    TOPLULUK — Derslerim'in hemen ALTINDA ve bilerek burada.
+
+    Menü, kullanıcının bir dersi baştan sona yaşadığı sırayı izliyor: bul (Keşfet) →
+    ne anlatabildiğini söyle (Portföy) → eşleş → konuş → ders al/ver. Topluluk bu
+    zincirin SONRASI: dersle bağı olmayan, herkese açık ortak alan. Zincirin ortasına
+    girseydi (ör. Sohbet'in üstüne) birebir konuşma ile forumu aynı basamak gibi
+    gösterirdi.
+
+    "Yakında" rozeti KALDIRILDI (2026-08-25, ürün sahibi kararı): bölüm artık diğer
+    sekmelerle aynı ağırlıkta duruyor. Rozeti taşıyan `durumEtiketi` desteği de
+    RayOgesi'nden silindi — çağrılmayan bir prop, ilk okuyana var olmayan bir özellik
+    vaat eder. Yeniden gerekirse git geçmişinde duruyor.
+  */
+  { to: '/topluluk', label: 'Topluluk', Ikon: ToplulukIkonu },
 ]
 
 /*
