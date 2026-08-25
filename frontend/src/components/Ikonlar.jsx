@@ -368,3 +368,70 @@ export function ArtiIkonu(props) {
     </Cizgi>
   )
 }
+
+/*
+  ── TOPLULUK (FORUM) EKRANININ İKONLARI ──────────────────────────────────────
+  Aynı 24'lük ızgara, aynı çizgi ağırlığı, currentColor. Dördü de forumun kendi
+  kavramları: gezinme öğesi, oy oku, şikayet bayrağı ve "tartışmalı" işareti.
+*/
+
+/**
+ * Topluluk — ÜST ÜSTE BİNMİŞ İKİ KONUŞMA BALONU.
+ *
+ * Ayrım MesajIkonu ile karşıtlığından doğuyor ve ikisi aynı menüde alt alta duruyor:
+ * tek balon BİREBİR konuşma (Sohbet), iki balon ÇOK KİŞİLİ tartışma (Topluluk).
+ * Kullanıcı ikisini yan yana gördüğünde farkı okuyabiliyor.
+ *
+ * KisilerIkonu (insan siluetleri) bilerek kullanılmadı: o zaten Eşleşmeler'in ikonu ve
+ * "topluluk = insanlar" çizimi menüde iki satırı birbirinin kopyası gibi gösterirdi.
+ * Buradaki iş insanları değil, KONUŞMAYI göstermek.
+ */
+export function ToplulukIkonu(props) {
+  return (
+    <Cizgi {...props}>
+      <path d="M14 9a2 2 0 0 1-2 2H6l-4 3V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2z" />
+      <path d="M18 9h2a2 2 0 0 1 2 2v11l-4-3h-6a2 2 0 0 1-2-2v-1" />
+    </Cizgi>
+  )
+}
+
+/**
+ * Oy oku — YUKARI çizilir, aşağı oy `rotate-180` ile gösterilir.
+ *
+ * OkAsagiIkonu'ndan (saf chevron) AYRI bir çizim ve sebebi kavramsal: chevron bir
+ * AÇILIR BÖLÜMÜN durumunu söyler, bu ise bir EYLEM. Gövdeli ok (sap + baş) basılabilir
+ * bir düğme gibi okunuyor; çıplak chevron oy düğmesinde "aşağı kaydır" gibi duruyordu.
+ * Tek çizim iki yön: ikinci bir "aşağı ok" çizmek aynı kavramı ikiye bölerdi.
+ */
+export function OyOkuIkonu(props) {
+  return (
+    <Cizgi {...props}>
+      <path d="M12 19V5" /><path d="m5 12 7-7 7 7" />
+    </Cizgi>
+  )
+}
+
+/** Şikayet: bayrak. Gönderi ve yorumların "Şikayet et" eyleminde.
+    UyariIkonu (üçgen içinde ünlem) bilerek kullanılmadı — o SİSTEMİN kullanıcıya
+    verdiği uyarı, bayrak ise kullanıcının sisteme verdiği işaret. İkisi aynı ekranda
+    yan yana görünüyor (incelemeye alınmış gönderide üçgen, altındaki eylemde bayrak)
+    ve aynı çizimle gösterilselerdi hangisinin tıklanabilir olduğu anlaşılmazdı. */
+export function BayrakIkonu(props) {
+  return (
+    <Cizgi {...props}>
+      <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" />
+      <path d="M4 22v-7" />
+    </Cizgi>
+  )
+}
+
+/** Tartışmalı: alev. Sıralama şeridinde "oyların ikiye bölündüğü" başlıkları
+    işaretliyor. ArtanIkonu (yükselen çizgi) "en çok oy alan"ı anlatıyor; tartışmalı
+    olan ise ÇOK oy alan değil, ZIT oy alan — yükseliş çizgisi bunu yanlış söylerdi. */
+export function AlevIkonu(props) {
+  return (
+    <Cizgi {...props}>
+      <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.4-.5-2-1-3-1.1-2.1-.2-4.1 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.2.4-2.3 1-3a2.5 2.5 0 0 0 2.5 2.5z" />
+    </Cizgi>
+  )
+}
