@@ -38,30 +38,22 @@ import { useCallback, useEffect, useRef, useState } from 'react'
      tarayıcının GERİ GİT hareketini tetikliyordu. Kullanıcı listeyi kaydırırken
      sayfadan atılıyordu.
 
-  ─── NEDEN İKİ SATIR (lg ve üstü) ─────────────────────────────────────────────
-  Tek satıra geçince sayfa kısaldı ama bu sefer TERS problem çıktı: kart şeridi
-  ~330px'te bitiyor, yanındaki filtre sütunu ~700px sürüyordu ve bu kez ekranın
-  ALT YARISI boş kaldı. Yükseklik dengesi iki taraftan da tutmak zorunda.
+  ─── TEK SATIR, ARTAN BOŞLUK ÜSTE VE ALTA BÖLÜNÜYOR ───────────────────────────
+  Kart şeridi ~430px'te bitiyor, yanındaki filtre sütunu ~700px sürüyor. Fark
+  kaçınılmaz: tek satır kartın boyu içeriğinden geliyor, filtre panelininki de
+  kendi seçeneklerinden — biri diğerine uydurulamaz.
 
-  İki satır (2 × 330px + boşluk ≈ 690px) filtre sütununun boyuna denk geliyor ve
-  aynı anda görünen kart sayısını da ikiye katlıyor.
+  İki satır denendi ve BIRAKILDI: yüksekliği dolduruyordu ama tek satırın taranabilir
+  olması (bir bakışta bütün sonuç şeridi) ondan daha değerliydi.
 
-  lg ALTINDA TEK SATIR kalıyor: filtre sütunu orada zaten yok (çekmecede), yani
-  hizalanacak bir şey de yok. İki satır orada yalnızca sayfayı uzatır — az önce
-  kaldırdığımız dikey kaydırmayı geri getirirdi.
+  Kartları filtre boyuna GERMEK de reddedildi: kart `justify-between` taşıyor, yani
+  gerilen yükseklik içerikle düğme arasında ~250px'lik bir deliğe dönüşüyordu.
+
+  Kalan çözüm boşluğu yok etmek değil, DENGELEMEK: şerit sütunun içinde dikey
+  ortalanıyor (bkz. pages/Discover.jsx, sonuç sütunundaki `justify-center`), böylece
+  artan yer alta yığılmak yerine üste ve alta eşit dağılıyor.
   ══════════════════════════════════════════════════════════════════════════════
 */
-
-/*
-  Satır sayısı Tailwind sınıfına SABİT eşleniyor, şablon dizesiyle üretilmiyor.
-  Tailwind sınıf adlarını kaynak METNİNDEN tarıyor; `grid-rows-${n}` gibi çalışma
-  anında kurulan bir ad derlenen CSS'te hiç oluşmaz ve stil sessizce kaybolur —
-  hata da vermez, sadece ızgara tek satıra düşer.
-*/
-const SATIR_SINIFI = {
-  1: 'grid-rows-1',
-  2: 'grid-rows-1 lg:grid-rows-2',
-}
 
 /** Bir adımda kaç piksel kayılacağı: kaba tam sığan kart sayısı × (kart + boşluk). */
 function adimHesapla(el) {
@@ -90,11 +82,10 @@ function yumusakKaydirmaAcikMi() {
  * @param etiket  ekran okuyucuya rafın ne listelediğini söyler (`aria-label`).
  *   Zorunlu: etiketsiz bir `role="group"` odaklanınca "grup" diye okunur ve
  *   kullanıcı neyin içinde olduğunu bilemez.
- * @param children  kartlar. Her biri kendi genişliğini taşımalı — ızgara sütunu
- *   kartın genişliğinden doğuyor, tersi değil.
- * @param satir  lg ve üstünde kaç satır (1 veya 2). Varsayılan 2.
+ * @param children  kartlar. Her biri kendi genişliğini taşımalı (`shrink-0`) —
+ *   flex kabında esneyen bir kart, raf uzadıkça incelir.
  */
-export function YatayRaf({ etiket, children, satir = 2, className = '' }) {
+export function YatayRaf({ etiket, children, className = '' }) {
   const rafRef = useRef(null)
   const [solaGidebilir, setSolaGidebilir] = useState(false)
   const [sagaGidebilir, setSagaGidebilir] = useState(false)
@@ -184,9 +175,7 @@ export function YatayRaf({ etiket, children, satir = 2, className = '' }) {
         role="group"
         aria-label={etiket}
         onKeyDown={tusla}
-        className={`kaydirma-ince grid snap-x snap-proximity grid-flow-col ${
-          SATIR_SINIFI[satir] ?? SATIR_SINIFI[2]
-        } gap-4 overflow-x-auto overscroll-x-contain pb-3 pt-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2`}
+        className="kaydirma-ince flex snap-x snap-proximity gap-4 overflow-x-auto overscroll-x-contain pb-3 pt-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
       >
         {children}
       </div>
