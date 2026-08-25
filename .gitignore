@@ -76,3 +76,15 @@ dump.rdb
 # Sunucudaki işletim dosyaları: nginx yapılandırması (alan adlarıyla birlikte) ve
 # Let's Encrypt sertifikaları + özel anahtarları. Şablonu tools/ornek-nginx.conf.
 deploy/
+
+# --- kökteki ekran görüntüleri ---
+# Depo kökü, çalışırken alınan ekran görüntülerinin düştüğü yer. Oto-commit hook'u
+# onları değişiklik sanıp commit'liyor: bir turda 4,7 MB'lık iki PNG bir PR'a karıştı.
+#
+# Kural YALNIZCA KÖKÜ kapsıyor (baştaki `/`). docs/ ya da frontend/ altındaki görseller
+# etkilenmez — kasıtlı bir görsel zaten bir klasöre ait.
+#
+# Bugün izlenen 11 kök PNG'nin hiçbiri hiçbir yerden referans verilmiyor (ölçüldü);
+# yani buraya düşen bir PNG bugüne kadar HER SEFERİNDE kazaydı. Zaten izlenenler bu
+# kuraldan etkilenmiyor, temizlikleri ayrı bir karar.
+/*.png
