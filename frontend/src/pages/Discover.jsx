@@ -365,8 +365,8 @@ export default function Discover() {
   Kartlar artık yatay rafta (bkz. components/YatayRaf.jsx): sayfa yüksekliği sabit,
   filtre sütunu her zaman sonuçların hizasında.
 
-  Genişlik artık kırılımdan değil KARTIN KENDİSİNDEN geliyor — flex kabında esneyen bir
-  kart, raf uzadıkça incelirdi. `shrink-0` bu yüzden zorunlu.
+  Genişlik artık kırılımdan değil KARTIN KENDİSİNDEN geliyor: raf `grid-flow-col`
+  kullanıyor ve sütun genişliği kartın genişliğinden doğuyor, tersi değil.
 
   300px ALT SINIR, eski ızgaranın ölçümünden: o düzen 1024–1280 bandında kartı 240px'e
   düşürüyordu ve orada 80px avatarın yanındaki kimlik sütunu ~100px kalıyor, isim iki
@@ -376,7 +376,7 @@ export default function Discover() {
   Mobilde 300px, 375px'lik ekranda bir sonraki kartın ucunu görünür bırakıyor: rafın
   yatay kaydığını parmakla gezen kullanıcıya söyleyen şey bu ipucu.
 */
-const KART_OGESI = 'w-[300px] shrink-0 snap-start sm:w-[332px] xl:w-[360px]'
+const KART_OGESI = 'w-[300px] snap-start sm:w-[332px] xl:w-[360px]'
 
 /** Kartların odak noktası. shrink-0 Avatar'ın kendisinden geliyor: dar ekranda
     küçülen şey kimlik sütunu olmalı, yüz değil. */
