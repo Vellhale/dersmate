@@ -15,6 +15,7 @@ import {
 import { PersonLink } from '../components/PersonLink'
 import { CamKart } from '../components/SayfaZemini'
 import { SeviyeRozeti } from '../components/SeviyeRozeti'
+import { YatayRaf } from '../components/YatayRaf'
 import {
   Badge,
   Button,
@@ -357,17 +358,25 @@ export default function Discover() {
 */
 
 /*
-  KART IZGARASI — üç liste de aynı kırılımları kullanıyor.
+  RAF ÖĞESİ — üç liste de aynı kart genişliğini kullanıyor.
 
-  lg'de TEK SÜTUNA DÜŞÜYOR ve bu bir yazım hatası değil: filtre sütunu (260px) tam
-  lg'de görünür oluyor ve yanına iki kart sığdırınca kart 240px'e iniyor. O genişlikte
-  80px avatarın yanındaki kimlik sütunu ~100px kalıyor, isim iki satıra bölünüyor,
-  etiketler kırpılıyor. Ölçüldü: 1024–1280 bandında iki sütun, tek sütundan DAHA AZ
-  bilgi gösteriyor. xl'de yer yeniden yetiyor (kart ≈ 385px) ve iki sütuna dönülüyor.
+  DİKEY IZGARA KALDIRILDI (2026-08-25). Liste aşağı doğru büyüdükçe, solundaki 260px'lik
+  filtre sütunu kendi yüksekliğinde bittiği için ekranın sol yarısı boş kalıyordu.
+  Kartlar artık yatay rafta (bkz. components/YatayRaf.jsx): sayfa yüksekliği sabit,
+  filtre sütunu her zaman sonuçların hizasında.
 
-  md–lg arasında iki sütun kalabiliyor çünkü filtre sütunu orada gizli (çekmecede).
+  Genişlik artık kırılımdan değil KARTIN KENDİSİNDEN geliyor — flex kabında esneyen bir
+  kart, raf uzadıkça incelirdi. `shrink-0` bu yüzden zorunlu.
+
+  300px ALT SINIR, eski ızgaranın ölçümünden: o düzen 1024–1280 bandında kartı 240px'e
+  düşürüyordu ve orada 80px avatarın yanındaki kimlik sütunu ~100px kalıyor, isim iki
+  satıra bölünüyor, etiketler kırpılıyordu. 300px'te kimlik sütunu ~190px — isim tek
+  satırda kalıyor.
+
+  Mobilde 300px, 375px'lik ekranda bir sonraki kartın ucunu görünür bırakıyor: rafın
+  yatay kaydığını parmakla gezen kullanıcıya söyleyen şey bu ipucu.
 */
-const KART_IZGARASI = 'grid gap-4 md:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2'
+const KART_OGESI = 'w-[300px] shrink-0 snap-start sm:w-[332px] xl:w-[360px]'
 
 /** Kartların odak noktası. shrink-0 Avatar'ın kendisinden geliyor: dar ekranda
     küçülen şey kimlik sütunu olmalı, yüz değil. */
@@ -445,11 +454,11 @@ function UniversiteSonuclari({ sonuclar, onSohbet, onSayfa }) {
         <>
           <SectionTitle>{veri.totalCount} öğrenci</SectionTitle>
 
-          <div className={KART_IZGARASI}>
+          <YatayRaf etiket="Üniversite ağındaki öğrenciler">
             {veri.items.map((kisi) => (
               <UniversiteKarti key={kisi.userId} kisi={kisi} onSohbet={onSohbet} />
             ))}
-          </div>
+          </YatayRaf>
 
           <Pagination page={veri.page} totalPages={veri.totalPages} onChange={onSayfa} />
         </>
@@ -475,7 +484,9 @@ function UniversiteSonuclari({ sonuclar, onSohbet, onSayfa }) {
 function UniversiteKarti({ kisi, onSohbet }) {
   return (
     /* Hover dili öneri/arama kartlarıyla birebir aynı — gerekçesi Suggestions'ta. */
-    <CamKart className="flex flex-col justify-between transition hover:border-brand-200 hover:shadow-md">
+    <CamKart
+      className={`${KART_OGESI} flex flex-col justify-between transition hover:border-brand-200 hover:shadow-md`}
+    >
       <div>
         {/* items-start: uzun bir isim iki satıra düştüğünde avatar ve rozet ilk satırın
             hizasında kalsın, ortalanıp aşağı kaymasın. */}
@@ -611,7 +622,7 @@ function Suggestions({ suggestions, mySeekCount, portfolioLoading, onRequest }) 
           description="Almak istediğin konuları genişlet ya da yukarıdaki arama kutusundan katalogda ara."
         />
       ) : (
-        <div className={KART_IZGARASI}>
+        <YatayRaf etiket="Önerilen eşleşmeler">
           {/* Öneri ve arama sonucu kartları AYNI hover dilini taşıyor (marka tonlu
               kenarlık + koyulaşan gölge): iki mod tek sayfada yaşıyor, kartların
               tepkisi mod değiştikçe farklılaşsaydı sayfa iki ayrı uygulama gibi
@@ -619,7 +630,7 @@ function Suggestions({ suggestions, mySeekCount, portfolioLoading, onRequest }) 
           {suggestions.data.map((person) => (
             <CamKart
               key={person.userId}
-              className="flex flex-col justify-between transition hover:border-brand-200 hover:shadow-md"
+              className={`${KART_OGESI} flex flex-col justify-between transition hover:border-brand-200 hover:shadow-md`}
             >
               <div>
                 {/* Kart hiyerarşisi: avatar + kimlik üstte (isim + seviye rozeti + puan),
@@ -682,7 +693,7 @@ function Suggestions({ suggestions, mySeekCount, portfolioLoading, onRequest }) 
               </div>
             </CamKart>
           ))}
-        </div>
+        </YatayRaf>
       )}
     </div>
   )
@@ -711,12 +722,12 @@ function SearchResults({ results, onRequest, onClearFilters, onPage }) {
         <>
           <SectionTitle>{data.totalCount} ilan</SectionTitle>
 
-          <div className={KART_IZGARASI}>
+          <YatayRaf etiket="Arama sonuçları">
             {/* Öneri kartlarıyla birebir aynı hover — gerekçesi Suggestions'ta. */}
             {data.items.map((offer) => (
               <CamKart
                 key={offer.offerId}
-                className="flex flex-col justify-between transition hover:border-brand-200 hover:shadow-md"
+                className={`${KART_OGESI} flex flex-col justify-between transition hover:border-brand-200 hover:shadow-md`}
               >
                 <div>
                   {/* Öneri kartıyla aynı kimlik hiyerarşisi (avatar + kimlik → bio → konu):
@@ -800,7 +811,7 @@ function SearchResults({ results, onRequest, onClearFilters, onPage }) {
                 </div>
               </CamKart>
             ))}
-          </div>
+          </YatayRaf>
 
           {data.totalPages > 1 && (
             <div className="flex items-center justify-between gap-3">
