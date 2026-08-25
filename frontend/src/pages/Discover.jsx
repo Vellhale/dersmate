@@ -275,9 +275,39 @@ export default function Discover() {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[260px_1fr]">
-        {/* Masaüstünde sabit sütun; mobilde çekmece (aşağıda). */}
+        {/*
+          Masaüstünde YAPIŞKAN sütun; mobilde çekmece (aşağıda).
+
+          ─── NEDEN YAPIŞKAN (2026-08-25) ─────────────────────────────────────────
+          Panel eskiden sayfayla birlikte kayıyordu. Sonuç listesi ondan uzun olduğu
+          için aşağı inildikçe panel yukarıda kalıyor ve ekranın SOL YARISI boşalıyordu.
+          Ölçüldü: panel ~700px, liste ise 20 kartta 2.000px'i geçiyor.
+
+          Boşluk aslında "panel bitti, liste devam ediyor" demekti. Panel ekrana
+          yapışınca hiç bitmiyor — sol sütun her zaman dolu, üstelik filtreyi
+          değiştirmek için yukarı çıkmak da gerekmiyor.
+
+          ─── SINIFLAR NEDEN İÇTEKİ KUTUDA, `aside`'IN KENDİSİNDE DEĞİL ───────────
+          `aside` bir ızgara öğesi ve `align-items` varsayılanı `stretch`, yani
+          KENDİ YÜKSEKLİĞİ ZATEN SATIRIN TAMAMI. Yapışkanlık ona verilseydi kutu
+          kendi kapsayıcısını baştan sona doldurduğu için kayacak yer bulamaz,
+          `sticky` hiçbir şey yapmazdı. İçteki kutu ise uzun `aside`'ın içinde
+          gezinebiliyor — asıl çalışan kurulum bu.
+
+          ─── max-h + overflow ────────────────────────────────────────────────────
+          Panel ekrandan uzunsa (küçük dizüstü, ya da ileride filtre eklenirse) alt
+          kısmı erişilemez kalırdı; kendi içinde kayıyor. `top-20` = 64px'lik yapışkan
+          üst bar + 16px pay; `6rem` = o 80px + altta aynı pay.
+
+          UYARI: `sticky`, ATALARINDAN BİRİNDE `overflow` varsa sessizce ölür. Bu
+          zincir bugün temiz (min-h-[100dvh] → lg:flex → relative min-w-0 flex-1 →
+          main); SayfaZemini'nin `overflow-hidden`'ı KARDEŞ bir katmanda, ata değil.
+          Zincire bir gün overflow eklenirse burası hata vermeden bozulur.
+        */}
         <aside className="hidden lg:block">
-          <Card>{aktifPanel}</Card>
+          <div className="kaydirma-ince sticky top-20 max-h-[calc(100dvh-6rem)] overflow-y-auto">
+            <Card>{aktifPanel}</Card>
+          </div>
         </aside>
 
         <div className="min-w-0">
