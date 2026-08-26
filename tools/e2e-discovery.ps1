@@ -11,6 +11,24 @@
 $ErrorActionPreference = 'Stop'
 $Api = 'http://localhost:5000'
 $Psql = 'C:\Program Files\PostgreSQL\17\bin\psql.exe'
+
+<#
+  psql üç yoldan aranır; ilk bulunan kullanılır:
+    1. Windows kurulumu   — geliştiricinin makinesinde tipik yol.
+    2. PATH üzerinde psql — Linux/macOS ve CI koşucuları (postgresql-client).
+    3. docker compose     — makinede psql yok ama compose yığını ayakta (bkz. Sql).
+
+  Üçüncü yol olmadan bu paket, docs/GELISTIRME-ORTAMI.md nin tarif ettiği Docker
+  kurulumunda hiç koşamıyordu: yalnızca yerel PostgreSQL 17 varsayılıyordu ve betik
+  "psql bulunamadi" ile ortasında düşüyordu. Testin KOŞAMAMASI, başarısız olmasından
+  daha sinsi — özet onu kırmızı değil, hiç görünmemiş sayar.
+#>
+if (-not (Test-Path $Psql)) {
+    $psqlCmd = Get-Command psql -ErrorAction SilentlyContinue
+    $bulunan = if ($psqlCmd) { $psqlCmd.Source } else { $null }
+    if ($bulunan) { $Psql = $bulunan } else { $Psql = $null }
+}
+$script:ComposeYml = Join-Path (Split-Path $PSScriptRoot -Parent) 'docker-compose.yml'
 $env:PGPASSWORD = 'PeerLearnDev2026'
 
 $script:Pass = 0
