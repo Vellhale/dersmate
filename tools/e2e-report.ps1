@@ -14,6 +14,24 @@
 $ErrorActionPreference = 'Stop'
 $Api = 'http://localhost:5000'
 $Psql = 'C:\Program Files\PostgreSQL\17\bin\psql.exe'
+
+<#
+  psql üç yoldan aranır; ilk bulunan kullanılır:
+    1. Windows kurulumu   — geliştiricinin makinesinde tipik yol.
+    2. PATH üzerinde psql — Linux/macOS ve CI koşucuları (postgresql-client).
+    3. docker compose     — makinede psql yok ama compose yığını ayakta (bkz. Sql).
+
+  Üçüncü yol olmadan bu paket, docs/GELISTIRME-ORTAMI.md nin tarif ettiği Docker
+  kurulumunda hiç koşamıyordu: yalnızca yerel PostgreSQL 17 varsayılıyordu ve betik
+  "psql bulunamadi" ile ortasında düşüyordu. Testin KOŞAMAMASI, başarısız olmasından
+  daha sinsi — özet onu kırmızı değil, hiç görünmemiş sayar.
+#>
+if (-not (Test-Path $Psql)) {
+    $psqlCmd = Get-Command psql -ErrorAction SilentlyContinue
+    $bulunan = if ($psqlCmd) { $psqlCmd.Source } else { $null }
+    if ($bulunan) { $Psql = $bulunan } else { $Psql = $null }
+}
+$script:ComposeYml = Join-Path (Split-Path $PSScriptRoot -Parent) 'docker-compose.yml'
 $env:PGPASSWORD = 'PeerLearnDev2026'
 
 $script:Pass = 0; $script:Fail = 0
@@ -22,6 +40,12 @@ function Fail($m) { $script:Fail++; Write-Host "  [KALDI] $m" -ForegroundColor R
 function Section($m) { Write-Host "`n=== $m ===" -ForegroundColor Cyan }
 
 function Sql($q) {
+    if (-not $Psql) {
+        # Docker yolu: sorgu STDIN den geçer. -c ile argüman olarak geçirmek,
+        # identity."Users" gibi tırnaklı adlardaki tırnakları kabuğa yedirir.
+        $out = $q | docker compose -f $script:ComposeYml exec -T db psql -U peerlearn -d peerlearn -t -A -v ON_ERROR_STOP=1 2>&1
+        return ($out -join '').Trim()
+    }
     $f = Join-Path $env:TEMP "pl-rep-$([Guid]::NewGuid().ToString('N')).sql"
     [IO.File]::WriteAllText($f, $q, [Text.UTF8Encoding]::new($false))
     try { & $Psql -h localhost -U peerlearn -d peerlearn -t -A -f $f } finally { Remove-Item $f -Force }
