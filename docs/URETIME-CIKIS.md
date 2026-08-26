@@ -14,23 +14,80 @@ ortam değişkeniyle verilir. ASP.NET'te iç içe anahtarlar çift alt çizgiyle
 | `Jwt__Key` | Depodaki anahtar herkese açık; onunla üretilen her token taklit edilebilir. En az 32 karakter, rastgele. |
 | `Jwt__ExposeVerificationTokenInResponse=false` | `true` iken doğrulama token'ı kayıt yanıtında döner ve e-posta sahipliği hiç kanıtlanmaz. |
 | `ConnectionStrings__Postgres` | Depodaki bağlantı dizesi geliştirme parolasını içeriyor. |
-| `ConnectionStrings__Redis` | Boş bırakılırsa kilit ve önbellek **süreç içine** düşer; yalnızca TEK instance için güvenlidir. |
+| `ConnectionStrings__Redis` | Depodaki değer `localhost:6379`. **Üretimde localhost kalırsa kapı açılmaz.** Boş bırakılırsa kilit ve önbellek süreç içine düşer — yalnızca TEK instance için güvenlidir ve bunu açıkça beyan etmek gerekir. |
 | `Cors__Origins__0` | Üretim arayüz alan adı. localhost kalırsa gerçek arayüz API'ye erişemez. |
 | `Email__Provider=Smtp` | `Log` iken e-posta gönderilmez; doğrulama token'ı yalnızca e-postayla gittiği için **hiç kimse hesabını doğrulayamaz**. |
 | `Email__Host`, `Email__Port`, `Email__Username`, `Email__Password`, `Email__FromAddress` | SMTP bağlantısı. |
+| `Email__PublicWebUrl` | Doğrulama e-postasındaki bağlantı buradan kurulur (`https://alanadi/dogrula?token=…`). Boşsa e-posta çıplak token taşır ve kullanıcı 300 karakterlik JWT'yi elle kopyalamak zorunda kalır — mobilde pratikte yapılamıyor. |
 
-### Hız sınırı (isteğe bağlı, varsayılanlar üretim için güvenli)
+### Hız sınırı (⚠️ ZORUNLU — varsayılanlara güvenmeyin)
 
 | Değişken | Varsayılan | Anlamı |
 |---|---|---|
 | `RateLimit__AuthPerMinute` | 10 | Kayıt/giriş/doğrulama yeniden gönderimi — IP başına dakikada |
 | `RateLimit__GlobalPerMinute` | 300 | Diğer tüm uçlar — IP başına dakikada |
 
-`appsettings.json` bu değerleri **geliştirme için bilerek yükseltir** (uçtan uca testler
-saniyeler içinde yüzlerce kayıt isteği atıyor). Üretimde ortam değişkeni verilmezse koddaki
-güvenli varsayılanlar geçerlidir.
+⚠️ **"Ortam değişkeni verilmezse koddaki güvenli varsayılanlar geçerlidir" DOĞRU DEĞİL.**
+`appsettings.json` üretimde de taban yapılandırma olarak yüklenir ve içindeki geliştirme
+değerleri (`AuthPerMinute: 2000`, `GlobalPerMinute: 20000`) koddaki 10/300 varsayılanlarını
+EZER. Depoda `appsettings.Production.json` yok. Yani ikisini de **açıkça ortam değişkeniyle
+vermek zorundasınız**; vermezseniz giriş ucu dakikada 2000 parola denemesine açık kalır.
 
-## 2. Şema kurulumu
+Sınır **IP başına** uygulanır (2026-08-27'de düzeltildi; öncesinde kimlik ucundaki sınır
+tüm site için tek kovaydı). Ters vekil arkasında bunun çalışması `UseForwardedHeaders'a
+bağlı — bkz. §3 (TLS ve ters vekil).
+
+## 2. Arayüz derlemesi (⚠️ EN SIK ATLANAN ADIM)
+
+Arayüz, API adresini **derleme zamanında** paketin içine gömer. Ortam değişkeni API
+tarafındaki gibi çalışma zamanında okunmaz.
+
+```bash
+cd frontend
+echo "VITE_API_URL=https://api.alan-adiniz.com" > .env.production
+npm run build          # çıktı: frontend/dist
+```
+
+`.env.production` `.gitignore`'da — depoyu klonlayan hiç kimsede yoktur, her dağıtım
+ortamında yeniden oluşturulur.
+
+**Bu adım unutulursa ne olurdu:** paket `http://localhost:5000` gömer, her ziyaretçinin
+tarayıcısı KENDİ makinesine istek atar, site açılır ama giriş dahil tek istek çalışmaz —
+sunucu tarafı kusursuz kurulmuş olsa bile. 2026-08-27'de `vite.config.js'e bir kapı
+eklendi: `VITE_API_URL` tanımsızsa ya da localhost içeriyorsa **üretim derlemesi hata
+verip durur**, yani bozuk paket artık üretilemiyor. Yine de `dist/` klasörünü yayına
+göndermeden önce içinde `localhost` geçmediğini doğrulayın:
+
+```bash
+grep -c localhost frontend/dist/assets/*.js   # 0 bekleniyor
+```
+
+## 3. TLS ve ters vekil
+
+Uygulama TLS'i **kendisi sonlandırmaz**. Üretimde önünde bir ters vekil olmalı
+(nginx / Caddy / bulut yük dengeleyici) ve o vekil:
+
+- HTTP'yi HTTPS'e yönlendirmeli (uygulama `UseHttpsRedirection` çağırmıyor — bilerek:
+  vekil başlıkları yanlış yapılandırıldığında sonsuz döngü üretirdi),
+- `X-Forwarded-For` ve `X-Forwarded-Proto` başlıklarını geçirmeli.
+
+Uygulama `UseForwardedHeaders` ile bu başlıkları okuyor ve `KnownProxies` listesi
+**bilerek temizlenmiş** durumda (aksi halde loopback dışından gelen başlıklar sessizce
+yok sayılır — en sık rastlanan tuzak). Bunun şartı şudur:
+
+> ⚠️ **API portu dışarıya açık OLMAMALI.** Yalnızca vekil erişebilmeli (güvenlik duvarı
+> ya da yalnız-loopback bind). Doğrudan ulaşabilen biri `X-Forwarded-For` uydurup IP
+> başına hız sınırını atlayabilir.
+
+`UseForwardedHeaders` olmadan iki şey **sessizce** bozulur: (a) IP başına kurulan iki hız
+sınırı tek kovaya döner — `GlobalPerMinute=300` tüm site için 300/dk demek olur;
+(b) `Request.Scheme` "http" kalır.
+
+**Düz HTTP'de yayına çıkmanın bu projeye özel bir bedeli var:** `frontend/src/lib/hwid.js`
+içindeki `sha256Hex`, güvenli bağlam dışında `crypto.subtle` bulamayıp **tamamen farklı**
+bir hash üretir ve onu kalıcı yazar. Yani `canvasSignal()'a hiç dokunmadan, sadece HTTP'de
+yayına çıkarak tüm HWID banlarını geçersizleştirirsiniz (bkz. CLAUDE.md, Dokunulmaz).
+## 4. Şema kurulumu
 
 ```bash
 dotnet run --project src/PeerLearn.Api -- --migrate
@@ -42,7 +99,7 @@ Uygulama açılışında migration koşulmaz: aynı anda başlayan iki instance 
 yarıştırır ve hatalı bir migration fark edilmeden canlıya inerdi. Şema değişikliği
 dağıtımın ayrı ve görünür bir adımıdır.
 
-## 3. Sağlık uçları
+## 5. Sağlık uçları
 
 | Uç | Soru | Bağımlılık yoklar mı |
 |---|---|---|
@@ -53,7 +110,7 @@ Yük dengeleyici **`/health`**'e bakmalı. `/health/ready` DB kopukken `503 Unhe
 Redis kopukken `Degraded` — uygulama çalışmaya devam eder ama kilit ve önbellek süreç
 içine düşer, yani o anda **birden fazla instance çalıştırmak güvenli değildir**.
 
-## 4. Bilinen sınırlar
+## 6. Bilinen sınırlar
 
 - **Dosya depolama yereldir** (`ProofStorage:RootPath`). Birden fazla instance'ta bir
   instance'ın yazdığı kanıtı diğeri bulamaz (404) ve disk yedeklenmiyorsa kanıtlar
@@ -62,7 +119,7 @@ içine düşer, yani o anda **birden fazla instance çalıştırmak güvenli de�
 - Doğrulama yalnızca ortam ayarlarını kontrol eder; SMTP'nin gerçekten çalıştığını
   **denemez**. İlk dağıtımdan sonra bir kayıt yapıp e-postanın ulaştığı elle doğrulanmalı.
 
-## 5. Arka plan işleri ve saklama süreleri
+## 7. Arka plan işleri ve saklama süreleri
 
 | İş | Sıklık | Ne yapar | Elle tetikleme |
 |---|---|---|---|
@@ -89,7 +146,7 @@ erteler (10 dk → 20 → 40 … en fazla 24 saat) ve `scheduling.SweepFailures`
 panelindeki **"Takılı süpürme kaydı"** metriği sıfırdan büyükse o kayıtlarda otomatik
 onay/iade **işlemiyor** demektir; `LastError` sütunu ve sunucu log'u sebebi söyler.
 
-## 6. Dağıtım öncesi doğrulama
+## 8. Dağıtım öncesi doğrulama
 
 ```bash
 powershell -ExecutionPolicy Bypass -File .\tools\verify-production-guard.ps1
@@ -97,3 +154,26 @@ powershell -ExecutionPolicy Bypass -File .\tools\verify-production-guard.ps1
 
 Üretim kapısının ve hız sınırının gerçekten devrede olduğunu sınar (kapı, geliştirme
 ayarlarıyla açılışı durduruyor mu; kimlik ucu 429 veriyor mu; sağlık ucu sınır dışı mı).
+
+## 9. Yedekleme (⛔ İLK KULLANICIDAN ÖNCE)
+
+Depoda yedekleme altyapısı **yoktu**; `tools/yedek-al.ps1` 2026-08-27'de eklendi.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\tools\yedek-al.ps1 -Hedef D:\yedek\dersmate
+```
+
+İki şeyi birlikte alır ve **ayrı alınmaları anlamsızdır**:
+
+- `pg_dump` ile veritabanı (kullanıcılar, kredi defteri, moderasyon kayıtları),
+- `proof-storage/` klasörü (ders kanıt görselleri).
+
+Kanıt satırı veritabanında, dosyası diskte duruyor. Yalnızca birini geri yüklemek,
+"kanıt var" diyen bir satırla var olmayan bir dosya ya da tersini bırakır.
+
+**`ProofStorage__RootPath` MUTLAK bir yol olmalı.** Varsayılan `proof-storage` görelidir;
+servis farklı bir çalışma dizininden başlatılırsa (systemd `WorkingDirectory`, yeni bir
+publish klasörü) uygulama sessizce yeni ve BOŞ bir klasör açar — eski kanıtlar diskte
+durur ama uç 404 döner.
+
+Yedeği geri yüklemeyi **en az bir kez deneyin**. Denenmemiş yedek, yedek değildir.

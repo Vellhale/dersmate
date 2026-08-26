@@ -18,7 +18,6 @@ import {
   KisilerIkonu,
   MesajIkonu,
   KepIkonu,
-  ToplulukIkonu,
   KalkanIkonu,
   CikisIkonu,
   BilgiIkonu,
@@ -64,20 +63,27 @@ const NAV = [
   { to: '/sohbet', label: 'Sohbet', tour: 'chat', Ikon: MesajIkonu },
   { to: '/dersler', label: 'Derslerim', tour: 'sessions', Ikon: KepIkonu },
   /*
-    TOPLULUK — Derslerim'in hemen ALTINDA ve bilerek burada.
+    ⛔ TOPLULUK MENÜDEN ÇIKARILDI (2026-08-27, canlıya çıkış denetimi).
 
-    Menü, kullanıcının bir dersi baştan sona yaşadığı sırayı izliyor: bul (Keşfet) →
-    ne anlatabildiğini söyle (Portföy) → eşleş → konuş → ders al/ver. Topluluk bu
-    zincirin SONRASI: dersle bağı olmayan, herkese açık ortak alan. Zincirin ortasına
-    girseydi (ör. Sohbet'in üstüne) birebir konuşma ile forumu aynı basamak gibi
-    gösterirdi.
+    Sayfa duruyor (pages/Topluluk.jsx) ve tasarımı bitmiş durumda; ÇIKARILMA SEBEBİ
+    tasarım değil, arkasında sunucu olmaması. Denetim şunları kanıtladı:
 
-    "Yakında" rozeti KALDIRILDI (2026-08-25, ürün sahibi kararı): bölüm artık diğer
-    sekmelerle aynı ağırlıkta duruyor. Rozeti taşıyan `durumEtiketi` desteği de
-    RayOgesi'nden silindi — çağrılmayan bir prop, ilk okuyana var olmayan bir özellik
-    vaat eder. Yeniden gerekirse git geçmişinde duruyor.
+      • Gönderi, yorum ve oy yalnızca sekmenin belleğinde; F5 = her şey silinir.
+      • Şikayet formu hedefi parametre olarak bile almıyor, hiçbir yere gitmiyor —
+        ama kullanıcıya "Şikayetin iletildi, moderasyon inceleyecek" diyor. Öğrencilerin
+        kullandığı bir platformda taciz bildiren kişi bildirdiğini sanıp bekler.
+      • Yan sütundaki "korumalar" (günde 3 gönderi sınırı, bağlantı eşiği, 3 şikayette
+        otomatik inceleme) kodda karşılığı olmayan vaatler.
+      • Örnek içerikteki g7 gönderisi korsan PDF ilanı ve ekranda "7 kişi bildirdi"
+        yazıyor — o şikayetler hiç var olmadı.
+
+    Bu satırı ve App.jsx'teki rotayı geri koymak bölümü yeniden açar. GERİ KOYMADAN
+    ÖNCE: /api/community uçları (gönderi, yorum, oy, şikayet) yazılmış ve şikayet
+    kuyruğu moderasyon paneline bağlanmış olmalı. Ayrıntı Topluluk.jsx'in başında.
+
+    Menüdeki sıra da orada yazılı duruyor: Derslerim'in hemen altı — menü bir dersin
+    baştan sona akışını izliyor, Topluluk o zincirin sonrası.
   */
-  { to: '/topluluk', label: 'Topluluk', Ikon: ToplulukIkonu },
 ]
 
 /*

@@ -1,7 +1,9 @@
 using System.Text;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -31,6 +33,34 @@ builder.Services.AddInfrastructure(builder.Configuration);
 
 builder.Services.AddPeerLearnRateLimiter(builder.Configuration);
 builder.Services.AddPeerLearnHealthChecks();
+
+/*
+  TERS VEKİL BAŞLIKLARI — 2026-08-27'de eklendi.
+
+  Uygulama TLS'i kendisi sonlandırmıyor; üretimde önünde bir ters vekil (nginx/Caddy/
+  bulut yük dengeleyici) olacak. Vekil arkasında iki şey BOZULUR ve ikisi de sessizdir:
+
+    1. Connection.RemoteIpAddress vekilin IP'si olur. IP başına kurulan iki hız sınırı
+       (kimlik + genel) o anda tek kovaya döner: tüm sitenin trafiği tek bir IP'den
+       geliyormuş gibi sayılır ve GlobalPerMinute=300 "tüm site için 300/dk" anlamına
+       gelir. RateLimiting.cs'teki IP bölümlemesi bu satır olmadan etkisizdir.
+    2. Request.Scheme "http" kalır. Şemaya bakan her şey (üretilen mutlak adresler,
+       çerez Secure bayrağı, HSTS) yanlış tarafa düşer.
+
+  ⚠️ KnownNetworks/KnownProxies BİLEREK TEMİZLENİYOR. Varsayılan olarak yalnızca
+  loopback'ten gelen X-Forwarded-* başlıklarına güvenilir; gerçek bir vekil arkasında
+  bu, başlıkların SESSİZCE yok sayılması demek (en sık rastlanan tuzak — middleware
+  çağrılır, hiçbir şey yapmaz). Temizlemenin bedeli şudur: uygulamaya doğrudan
+  ulaşabilen biri X-Forwarded-For uydurup hız sınırını atlayabilir. Bu yüzden ŞART:
+  API portu dışarıya AÇIK OLMAMALI, yalnızca vekil erişebilmeli (güvenlik duvarı ya da
+  yalnız-loopback bind). Bu, docs/URETIME-CIKIS.md'de de yazılı.
+*/
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
+});
 
 // JWT auth — SignalR websocket'leri header taşıyamadığı için token'ı query'den de kabul eder.
 var jwt = builder.Configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>()
@@ -177,6 +207,32 @@ if (app.Environment.IsDevelopment())
 
     app.UseSwagger();
     app.UseSwaggerUI();
+}
+
+/*
+  EN BAŞTA: vekil başlıkları. Kendisinden SONRAKİ her middleware gerçek istemci IP'sini
+  ve şemasını görsün diye burada — özellikle UseRateLimiter (aşağıda) doğru IP'yi
+  okuyabilmeli. Yapılandırması ve "neden KnownProxies temizlendi" gerekçesi yukarıda.
+*/
+app.UseForwardedHeaders();
+
+/*
+  HSTS yalnızca üretimde: geliştirmede localhost'a HTTPS zorlaması, tarayıcıda kalıcı
+  bir kayıt bırakıp diğer localhost projelerini de kırıyor.
+
+  UseHttpsRedirection BİLEREK YOK: TLS vekilde sonlanıyor, uygulamaya gelen istek zaten
+  düz HTTP. Yönlendirmeyi de vekil yapmalı — burada yapılsaydı, vekil başlıkları bir gün
+  yanlış yapılandırıldığında sonsuz yönlendirme döngüsü oluşurdu. HSTS ise tarayıcıya
+  "bu alan adına bir daha HTTP ile gelme" der; yönlendirmeden farklı ve tamamlayıcı.
+
+  ⚠️ HTTP'de yayına çıkmanın bu projeye özel bir bedeli var: hwid.js'teki sha256Hex,
+  güvenli bağlam dışında crypto.subtle bulamayıp TAMAMEN FARKLI bir hash üretiyor ve
+  onu localStorage'a kalıcı yazıyor. Yani düz HTTP, canvasSignal()'a hiç dokunmadan
+  tüm HWID banlarını geçersizleştirir (CLAUDE.md'nin dokunulmaz bölümü).
+*/
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHsts();
 }
 
 app.UseMiddleware<ExceptionHandlingMiddleware>();

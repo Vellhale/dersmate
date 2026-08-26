@@ -1743,9 +1743,17 @@ function ReportModal({ session, onClose, onDone }) {
         <Notice tone="info">
           Şikayetin <strong>yalnızca yönetime</strong> gider. Karşı taraf ne şikayeti görür,
           ne bildirim alır, ne de yanıt verebilir.
+          {/* "Yönetim gerekli görürse uyarı, askı ya da ban uygular" cümlesi KALDIRILDI
+              (2026-08-27, canlıya çıkış denetimi). Cümle bir söz veriyordu ama arayüz o
+              sözü tutamıyor: yaptırım uçları (sanction / unban / role) backend'de VAR,
+              api.js'te tanımlı DEĞİL — yani moderatör panelden kimseyi uyaramıyor, askıya
+              alamıyor, banlayamıyor. Uçlar bağlandığında cümle geri gelebilir.
+
+              Yerine gelen metin yalnızca KESİN olanı söylüyor: şikayetin incelendiğini.
+              Sonucu hakkında söz vermiyor. */}
           <span className="mt-2 block">
-            Dersin akışı değişmez — bu bir itiraz değil, kişi hakkında bildirimdir. Yönetim
-            gerekli görürse uyarı, askı ya da ban uygular.
+            Dersin akışı değişmez — bu bir itiraz değil, kişi hakkında bildirimdir.
+            Şikayetin yönetim tarafından incelenir.
           </span>
         </Notice>
 

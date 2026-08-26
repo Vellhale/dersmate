@@ -36,12 +36,39 @@ public static class RateLimiting
             // ve istemci tarafında yeniden deneme kararı buna göre verilir.
             limiter.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
 
-            limiter.AddFixedWindowLimiter(AuthPolicy, o =>
+            /*
+              ⚠️ AddFixedWindowLimiter DEĞİL, AddPolicy — ve bu fark üründe bir hataydı
+              (2026-08-27'de canlıya çıkış denetiminde bulundu).
+
+              `AddFixedWindowLimiter(AuthPolicy, o => ...)` aşırı yüklemesi isteğe hiç
+              erişmiyor: politika adı başına TEK bir kova kuruyor. Yani sınır IP başına
+              değil, TÜM SİTE için ortaktı. XML yorumu ve docs/URETIME-CIKIS.md "IP
+              başına dakikada" diyordu; kod bunu yapmıyordu.
+
+              Sonuç iki uçta da kötüydü: belgedeki güvenli değerle (10/dk) açılış günü
+              onbirinci kullanıcı — kim olursa olsun — giriş yapamaz; geliştirme değeriyle
+              (2000/dk) giriş ucu parola denemesine açık kalır. Bu tuzağı testler de
+              yakalayamıyor: verify-production-guard.ps1 tek IP'den istek atıyor, tek
+              kova ile IP başına kova aynı sonucu veriyor.
+
+              AddPolicy her istek için bölüm anahtarını hesaplatıyor; aşağıdaki genel
+              sınırın kalıbıyla aynı (o zaten doğru yazılmıştı).
+
+              ⚠️ TERS VEKİL ARKASINDA RemoteIpAddress vekilin IP'sidir ve o durumda bu
+              sınır yine tek kovaya döner. Program.cs'te UseForwardedHeaders çağrılmadan
+              üretime çıkılırsa buradaki düzeltme etkisiz kalır — ikisi birlikte anlamlı.
+            */
+            limiter.AddPolicy(AuthPolicy, context =>
             {
-                o.PermitLimit = options.AuthPerMinute;
-                o.Window = TimeSpan.FromMinutes(1);
-                o.QueueLimit = options.QueueLimit;
-                o.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+                var key = context.Connection.RemoteIpAddress?.ToString() ?? "bilinmeyen";
+
+                return RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = options.AuthPerMinute,
+                    Window = TimeSpan.FromMinutes(1),
+                    QueueLimit = options.QueueLimit,
+                    QueueProcessingOrder = QueueProcessingOrder.OldestFirst
+                });
             });
 
             /*
