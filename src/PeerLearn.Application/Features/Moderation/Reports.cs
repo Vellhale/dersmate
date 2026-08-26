@@ -91,6 +91,33 @@ public sealed class CreateReportHandler : IRequestHandler<CreateReportCommand, G
 
             var varMi = await _db.Users.AsNoTracking().AnyAsync(u => u.Id == sikayetEdilen, ct);
             if (!varMi) throw new AppException(ErrorCodes.UserNotFound, "Kullanıcı bulunamadı.", statusCode: 404);
+
+            /*
+              MÜKERRERLİK KAPISI — 2026-08-27'de eklendi, bu dal HTTP'den erişilebilir
+              hâle gelirken.
+
+              Ders bazlı dalda bu kapı zaten vardı ("bu ders için zaten şikayet ettin").
+              Ders dışı dalda YOKTU çünkü hiçbir uçtan çağrılmıyordu; uç açılır açılmaz
+              tek bir kullanıcı, başka bir kullanıcı hakkında sınırsız şikayet açıp
+              moderasyon kuyruğunu doldurabilirdi — hem gürültü, hem de panelde "bu kişi
+              hakkında N şikayet" rozetini şişirerek masum birini örüntü gibi gösterme
+              yolu.
+
+              Yalnızca AÇIK şikayetlere bakıyor: yönetim bir şikayeti kapattıktan sonra
+              aynı kişi hakkında yeni bir olayı bildirebilmek gerekiyor. Kapanmış kayda
+              takılsaydı, ikinci kez taciz edilen kullanıcının bildirme yolu kapanırdı.
+            */
+            var acikVar = await _db.Reports.AsNoTracking().AnyAsync(
+                x => x.ReporterUserId == request.ReporterUserId &&
+                     x.ReportedUserId == sikayetEdilen &&
+                     x.SessionId == null &&
+                     x.Status == ReportStatus.Open, ct);
+
+            if (acikVar)
+            {
+                throw new AppException(ErrorCodes.ReportAlreadyExists,
+                    "Bu kullanıcı hakkında zaten bir şikayetin inceleniyor.", statusCode: 409);
+            }
         }
 
         if (sikayetEdilen == request.ReporterUserId)

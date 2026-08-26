@@ -300,6 +300,16 @@ export const api = {
    * Profil ucundan AYRI: rozet şeridi daha seyrek değişiyor ve gecikmeli yüklenebiliyor.
    */
   userSubjectBadges: (userId) => request(`/api/users/${userId}/subject-badges`),
+
+  /*
+    KULLANICI ŞİKAYETİ — ders bağlamı olmadan (2026-08-27).
+
+    Önceden şikayet açmanın TEK yolu bir ders üzerindendi; sohbette taciz eden ama henüz
+    tamamlanmış dersi olmayan biri hiçbir şekilde bildirilemiyordu. Handler bu dalı zaten
+    destekliyordu, eksik olan HTTP kapısı ve buradaki sarmalayıcıydı.
+  */
+  reportUser: (userId, reason, description) =>
+    request(`/api/users/${userId}/report`, { method: 'POST', body: { reason, description } }),
   createReview: (sessionId, payload) =>
     request(`/api/sessions/${sessionId}/review`, { method: 'POST', body: payload }),
 

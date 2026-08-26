@@ -4,6 +4,8 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PeerLearn.Application.Abstractions;
 using PeerLearn.Application.Features.Community;
+using PeerLearn.Application.Features.Moderation;
+using PeerLearn.Domain.Moderation;
 using PeerLearn.Domain.Community;
 using PeerLearn.Domain.Scheduling;
 
@@ -147,4 +149,28 @@ public sealed class ProfileController : ControllerBase
             request.PunctualityScore,
             request.Tags ?? [],
             request.Comment), ct);
+
+    public sealed record ReportUserRequest(ReportReason Reason, string Description);
+
+    /// <summary>
+    /// KULLANICI ŞİKAYETİ — ders bağlamı OLMADAN.
+    ///
+    /// NEDEN EKLENDİ (2026-08-27): şikayet açmanın tek yolu bir DERS üzerindendi
+    /// (<c>POST api/sessions/{id}/report</c>). Yani sohbette taciz eden, uygunsuz içerik
+    /// gönderen ya da kişisel bilgi isteyen biri, henüz o kişiyle tamamlanmış bir dersi
+    /// yoksa <b>hiçbir şekilde bildirilemiyordu</b>. Öğrencilerin eşleşip birebir
+    /// yazıştığı bir üründe en olası taciz anı tam olarak orası — ders öncesi sohbet.
+    ///
+    /// Handler bu dalı zaten destekliyordu (CreateReportHandler, SessionId null yolu);
+    /// eksik olan yalnızca HTTP kapısıydı. Aynı handler'ı kullanmak, iki şikayet türünün
+    /// aynı kuyruğa ve aynı denetim izine düşmesini de garanti ediyor.
+    ///
+    /// Mükerrerlik kapısı handler'da: aynı kişi hakkında AÇIK bir şikayetin varken
+    /// ikincisi 409 döner. Kapanmış şikayetten sonra yeni olay bildirilebilir.
+    /// </summary>
+    [HttpPost("users/{userId:guid}/report")]
+    public async Task<ActionResult<Guid>> ReportUser(
+        Guid userId, ReportUserRequest request, CancellationToken ct)
+        => Ok(await _mediator.Send(new CreateReportCommand(
+            User.GetUserId(), null, userId, request.Reason, request.Description), ct));
 }
