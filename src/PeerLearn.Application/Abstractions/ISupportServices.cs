@@ -61,6 +61,24 @@ public interface ITokenService
 
     /// <summary>Geçersiz/yanlış amaçlı token'da null döner.</summary>
     Guid? ValidatePurposeToken(string token, string purpose);
+
+    /// <summary>
+    /// Amacı verilen ÖNEKLE başlayan token'ı doğrular; kullanıcı kimliğiyle birlikte
+    /// TAM amaç dizesini de döndürür.
+    ///
+    /// NEDEN GEREKLİ: parola sıfırlama token'ının amacı sabit değil — kullanıcının o
+    /// anki parola hash'inin damgasını taşıyor ki bağlantı kullanıldığı anda ölsün
+    /// (bkz. ParolaSifirlama). Ama damgayı hesaplamak için kullanıcıyı bilmek gerekiyor
+    /// ve kullanıcıyı öğrenmenin tek yolu token'ı doğrulamak — yani tam amaç dizesi
+    /// önceden bilinemiyor. Bu aşırı yükleme yumurta-tavuk sorununu çözüyor: imza,
+    /// audience ve süre YİNE doğrulanıyor, yalnızca amaç karşılaştırması "eşittir"
+    /// yerine "ile başlar"a iniyor; kesin eşitlik kontrolünü çağıran, kullanıcıyı
+    /// yükledikten sonra kendisi yapıyor.
+    ///
+    /// ⚠️ Önek MUTLAKA ayırıcıyla bitmeli ("password-reset:"): ayırıcısız bir önek,
+    /// aynı harflerle başlayan başka bir amacın token'ını da kabul ederdi.
+    /// </summary>
+    (Guid UserId, string Purpose)? ValidatePurposeTokenByPrefix(string token, string purposePrefix);
 }
 
 /// <summary>Depodaki tek bir nesne. Temizlik işi bu listeyi DB'deki referanslarla karşılaştırır.</summary>

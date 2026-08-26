@@ -4,6 +4,7 @@ import { useAuth } from './state/AuthContext'
 import Login from './pages/Login'
 import Register from './pages/Register'
 import VerifyEmail from './pages/VerifyEmail'
+import SifreSifirla from './pages/SifreSifirla'
 import Portfolio from './pages/Portfolio'
 import Discover from './pages/Discover'
 import Matches from './pages/Matches'
@@ -38,6 +39,11 @@ export default function App() {
       <Route path="/giris" element={isAuthenticated ? <Navigate to="/kesfet" replace /> : <Login />} />
       <Route path="/kayit" element={isAuthenticated ? <Navigate to="/kesfet" replace /> : <Register />} />
       <Route path="/dogrula" element={<VerifyEmail />} />
+      {/* Parola sıfırlama. Oturum açıkken de erişilebilir bırakıldı (giriş/kayıt gibi
+          yönlendirilmiyor): parolasını değiştirmek isteyen ama eski parolasını
+          hatırlamayan kullanıcı, çıkış yapmak zorunda kalmadan bağlantı isteyebilmeli.
+          Sunucu tarafı zaten token'a bakıyor, oturuma değil. */}
+      <Route path="/sifre-sifirla" element={<SifreSifirla />} />
 
       <Route
         element={

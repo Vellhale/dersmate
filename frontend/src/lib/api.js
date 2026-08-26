@@ -153,6 +153,15 @@ export const api = {
     request('/api/auth/resend-verification', { method: 'POST', body: { email } }),
   login: (payload) => request('/api/auth/login', { method: 'POST', body: payload }),
 
+  /** Parola sıfırlama bağlantısı ister. Yanıt, adres kayıtlı olsun olmasın AYNI (204) —
+      farklı yanıt vermek "bu e-posta kayıtlı mı" sorusunu herkese yanıtlardı. */
+  forgotPassword: (email) =>
+    request('/api/auth/forgot-password', { method: 'POST', body: { email } }),
+
+  /** Bağlantıdaki token'la yeni parolayı yazar. Token tek kullanımlık, 1 saat geçerli. */
+  resetPassword: (token, newPassword) =>
+    request('/api/auth/reset-password', { method: 'POST', body: { token, newPassword } }),
+
   // --- Katalog ---
   topics: () => request('/api/catalog/topics'),
   categories: () => request('/api/catalog/categories'),

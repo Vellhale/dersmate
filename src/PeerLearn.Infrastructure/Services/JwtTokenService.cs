@@ -90,12 +90,40 @@ public sealed class JwtTokenService : ITokenService
 
     public Guid? ValidatePurposeToken(string token, string purpose)
     {
+        var sonuc = Coz(token);
+        if (sonuc is null || sonuc.Value.Purpose != purpose)
+        {
+            return null;
+        }
+
+        return sonuc.Value.UserId;
+    }
+
+    public (Guid UserId, string Purpose)? ValidatePurposeTokenByPrefix(string token, string purposePrefix)
+    {
+        var sonuc = Coz(token);
+        if (sonuc is null || !sonuc.Value.Purpose.StartsWith(purposePrefix, StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        return sonuc;
+    }
+
+    /// <summary>
+    /// İmza + audience + süre doğrulaması ve claim okuma — iki genel metodun ORTAK
+    /// gövdesi. Amaç KARŞILAŞTIRMASI bilerek burada değil, çağıranlarda: biri kesin
+    /// eşitlik, diğeri önek istiyor ve doğrulamanın geri kalanı ikisinde de aynı.
+    /// </summary>
+    private (Guid UserId, string Purpose)? Coz(string token)
+    {
         try
         {
             var principal = new JwtSecurityTokenHandler()
                 .ValidateToken(token, _purposeValidation, out _);
 
-            if (principal.FindFirstValue(PurposeClaim) != purpose)
+            var purpose = principal.FindFirstValue(PurposeClaim);
+            if (purpose is null)
             {
                 return null;
             }
@@ -104,7 +132,7 @@ public sealed class JwtTokenService : ITokenService
             var sub = principal.FindFirstValue(JwtRegisteredClaimNames.Sub)
                       ?? principal.FindFirstValue(ClaimTypes.NameIdentifier);
 
-            return Guid.TryParse(sub, out var userId) ? userId : null;
+            return Guid.TryParse(sub, out var userId) ? (userId, purpose) : null;
         }
         catch (Exception)
         {
