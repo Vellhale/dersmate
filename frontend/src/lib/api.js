@@ -334,6 +334,29 @@ export const api = {
   banUser: (userId, reason) =>
     request(`/api/admin/users/${userId}/ban`, { method: 'POST', body: { reason } }),
 
+  /*
+    YAPTIRIM UÇLARI — 2026-08-27'de bağlandı.
+
+    Üçü de backend'de VARDI ama burada tanımlı DEĞİLDİ, yani panelden erişilemiyordu.
+    Sonuç sessiz ve tehlikeliydi: moderatör şikayeti "yaptırım uyguladım" diye
+    kapatabiliyor, denetim izine gerçekleşmemiş bir yaptırım yazılıyor ve şikayet
+    edilen hesaba hiçbir şey olmuyordu. Kullanıcıya da "yönetim gerekli görürse uyarı,
+    askı ya da ban uygular" yazıyordu — tutulamayan bir söz.
+
+    YETKİ FARKI SUNUCUDA: ban/unban yalnızca Admin, sanction (uyarı + süreli askı)
+    moderatöre de açık. Arayüz bu ayrımı taklit etmiyor, sunucu 403 döndürüyor —
+    yetki kontrolünü iki yerde tutmak, birinin unutulduğu gün sessizce açık bırakır.
+  */
+  unbanUser: (userId, reason) =>
+    request(`/api/admin/users/${userId}/unban`, { method: 'POST', body: { reason } }),
+
+  /** @param type 'Warning' | 'TemporaryBan' — durationHours yalnızca TemporaryBan'de anlamlı. */
+  sanctionUser: (userId, type, reason, durationHours = null) =>
+    request(`/api/admin/users/${userId}/sanction`, {
+      method: 'POST',
+      body: { type, reason, durationHours },
+    }),
+
   /** İtiraz detayı: ders, iki taraf, kanıtlar, escrow durumu — hakem kararı için. */
   disputeDetail: (disputeId) => request(`/api/admin/disputes/${disputeId}`),
 

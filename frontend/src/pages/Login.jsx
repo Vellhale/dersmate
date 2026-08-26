@@ -282,8 +282,18 @@ export function AuthShell({ title, subtitle, children }) {
             kazanırsın ve bu puan harcanmaz — birikip seviyeni yükseltir.
           </p>
 
-          <div className="mt-3 text-center lg:text-left">
+          {/* Yasal metinler giriş/kayıt/doğrulama/sıfırlama ekranlarının HEPSİNDE
+              görünüyor (dördü de AuthShell kullanıyor). Çerez ayarı zaten buradaydı;
+              yanına eklenmeleri, "rızayı geri almak vermek kadar kolay olmalı"
+              kuralının metin tarafındaki karşılığı. */}
+          <div className="mt-3 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 lg:justify-start">
             <CookieSettingsLink />
+            <Link to="/kosullar" className="text-xs text-slate-500 underline hover:text-slate-700">
+              Kullanım koşulları
+            </Link>
+            <Link to="/gizlilik" className="text-xs text-slate-500 underline hover:text-slate-700">
+              Gizlilik
+            </Link>
           </div>
         </div>
       </main>
