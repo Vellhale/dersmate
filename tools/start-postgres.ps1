@@ -1,4 +1,4 @@
-# PostgreSQL'i başlatır (PeerLearn geliştirme cluster'ı)
+﻿# PostgreSQL'i başlatır (PeerLearn geliştirme cluster'ı)
 #
 # NEDEN BU BETİK GEREKLİ:
 # PostgreSQL 17 binary'leri "C:\Program Files\PostgreSQL\17" altında kurulu, ancak EDB

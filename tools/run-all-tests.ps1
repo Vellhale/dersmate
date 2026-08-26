@@ -1,4 +1,4 @@
-# PeerLearn — tüm test paketlerini sırayla çalıştırır ve tek bir özet basar.
+﻿# PeerLearn — tüm test paketlerini sırayla çalıştırır ve tek bir özet basar.
 #
 # SIRA ÖNEMLİ: hafif ve hızlı olanlar önce. Eşzamanlılık paketi en sonda, çünkü İKİ
 # instance ister ve en uzun sürer; öncekiler kırmızıysa ona hiç sıra gelmemeli.

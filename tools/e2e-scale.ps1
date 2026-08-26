@@ -1,4 +1,4 @@
-# PeerLearn — Ölçek ve veri paketi (E grubu)
+﻿# PeerLearn — Ölçek ve veri paketi (E grubu)
 #
 # Kapsam:
 #   A. Derslerim sayfalama — aktif/geçmiş ayrımı, geçmişin sayfalanması, sessiz kesme yok

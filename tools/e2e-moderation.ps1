@@ -1,4 +1,4 @@
-# PeerLearn — Modül 2: Hakem ve yönetim paneli uçtan uca testi
+﻿# PeerLearn — Modül 2: Hakem ve yönetim paneli uçtan uca testi
 #
 # Kapsam:
 #   • RBAC: moderatör karara bağlayabilir, ban VEREMEZ; öğrenci panele hiç giremez.
@@ -37,6 +37,12 @@ function Fail($m) { $script:Fail++; Write-Host "  [KALDI] $m" -ForegroundColor R
 function Section($m) { Write-Host "`n=== $m ===" -ForegroundColor Cyan }
 
 function Sql($query) {
+    if (-not $PSQL) {
+        # Docker yolu: sorgu STDIN den geçer. -c ile argüman olarak geçirmek,
+        # identity."Users" gibi tırnaklı adlardaki tırnakları kabuğa yedirir.
+        $out = $query | docker compose -f $script:ComposeYml exec -T db psql -U peerlearn -d peerlearn -t -A -v ON_ERROR_STOP=1 2>&1
+        return ($out -join '').Trim()
+    }
     $file = Join-Path $env:TEMP "peerlearn-mod-$([Guid]::NewGuid().ToString('N')).sql"
     # Gömülü tırnaklar native argüman geçişinde kayboluyor; dosyadan çalıştırılır.
     [IO.File]::WriteAllText($file, $query, [Text.UTF8Encoding]::new($false))

@@ -71,6 +71,10 @@ Uygulama TLS'i **kendisi sonlandırmaz**. Üretimde önünde bir ters vekil olma
   vekil başlıkları yanlış yapılandırıldığında sonsuz döngü üretirdi),
 - `X-Forwarded-For` ve `X-Forwarded-Proto` başlıklarını geçirmeli.
 
+Çalışan bir örnek yapılandırma depoda: **`tools/ornek-nginx.conf`** — HTTP→HTTPS
+yönlendirmesi, başlık geçirme, SignalR WebSocket yükseltmesi ve tek sayfalık uygulama
+için `try_files` kuralı dahil. Alan adlarını ve sertifika yollarını değiştirip kullanın.
+
 Uygulama `UseForwardedHeaders` ile bu başlıkları okuyor ve `KnownProxies` listesi
 **bilerek temizlenmiş** durumda (aksi halde loopback dışından gelen başlıklar sessizce
 yok sayılır — en sık rastlanan tuzak). Bunun şartı şudur:

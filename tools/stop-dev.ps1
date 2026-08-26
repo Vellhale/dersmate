@@ -1,4 +1,4 @@
-# Yerel geliştirme ortamını düzgün kapatır (start-dev.ps1'in karşılığı).
+﻿# Yerel geliştirme ortamını düzgün kapatır (start-dev.ps1'in karşılığı).
 #
 # NEDEN AYRI BETİK — "hepsini öldür" YETMEZ, hatta zararlıdır:
 #

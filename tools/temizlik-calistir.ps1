@@ -1,4 +1,4 @@
-# Test/bench hesap temizligini calistirir.
+﻿# Test/bench hesap temizligini calistirir.
 #
 # NEDEN SARMALAYICI: komutu elle yazmak iki kez basarisiz oldu. Sebep PowerShell'in inline
 # env-var onekini (PGPASSWORD=... psql) desteklememesi ve proje yolunda kesme isareti

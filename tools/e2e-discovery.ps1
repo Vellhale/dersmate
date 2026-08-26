@@ -1,4 +1,4 @@
-# PeerLearn — Modül 1: Gelişmiş filtreleme ve arama testi
+﻿# PeerLearn — Modül 1: Gelişmiş filtreleme ve arama testi
 #
 # Kapsam: arama (büyük/küçük harf duyarsızlığı), kategori hiyerarşisi, seviye ve puan
 # aralıkları, beş sıralama, sayfalama kararlılığı, önbellek ve yetki.
@@ -20,6 +20,12 @@ function Fail($m) { $script:Fail++; Write-Host "  [KALDI] $m" -ForegroundColor R
 function Section($m) { Write-Host "`n=== $m ===" -ForegroundColor Cyan }
 
 function Sql($query) {
+    if (-not $PSQL) {
+        # Docker yolu: sorgu STDIN den geçer. -c ile argüman olarak geçirmek,
+        # identity."Users" gibi tırnaklı adlardaki tırnakları kabuğa yedirir.
+        $out = $query | docker compose -f $script:ComposeYml exec -T db psql -U peerlearn -d peerlearn -t -A -v ON_ERROR_STOP=1 2>&1
+        return ($out -join '').Trim()
+    }
     $file = Join-Path $env:TEMP "pl-disc-$([Guid]::NewGuid().ToString('N')).sql"
     [IO.File]::WriteAllText($file, $query, [Text.UTF8Encoding]::new($false))
     try { & $Psql -h localhost -U peerlearn -d peerlearn -t -A -f $file } finally { Remove-Item $file -Force }

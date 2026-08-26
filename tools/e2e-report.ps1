@@ -1,4 +1,4 @@
-# PeerLearn — Tek yönlü şikayet (Report) testi
+﻿# PeerLearn — Tek yönlü şikayet (Report) testi
 #
 # NEDEN BU PAKET VAR: itiraz (Dispute) kaldırıldı, yerine tek yönlü şikayet geldi.
 # e2e-dispute.ps1'in test ettiği yeteneğin çoğu artık YOK; buradaki iddialar yeni

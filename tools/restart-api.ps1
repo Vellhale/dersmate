@@ -1,4 +1,4 @@
-# Her iki API instance'ını (:5000 ve :5001) durdurur, derler ve yeniden başlatır.
+﻿# Her iki API instance'ını (:5000 ve :5001) durdurur, derler ve yeniden başlatır.
 #
 # NEDEN AYRI BETİK:
 # 1. Kod değişikliği sıcak yüklenmiyor — süreçler yeniden başlatılmadan test edilen şey
