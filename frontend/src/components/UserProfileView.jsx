@@ -8,8 +8,6 @@ import { CamKart } from './SayfaZemini'
 import { GrafikIkonu, KepIkonu, TakvimIkonu, YildizIkonu } from './Ikonlar'
 import { SubjectBadges } from './SubjectBadges'
 import { UniversiteRozetleri } from './UniversiteRozetleri'
-import { ToplulukRozetleri } from './ToplulukRozetleri'
-import { useAuth } from '../state/AuthContext'
 import { seviyeEtiketi, seviyeHesapla, seviyeIlerlemeMetni } from '../lib/seviye'
 
 /**
@@ -33,12 +31,6 @@ import { seviyeEtiketi, seviyeHesapla, seviyeIlerlemeMetni } from '../lib/seviye
 */
 
 export function UserProfileView({ userId }) {
-  /*
-    Kendi profili mi? Prop olarak DEĞİL, oturumdan okunuyor: bu bileşen iki yerden
-    çağrılıyor (Profile.jsx parametreli ve parametresiz) ve bilgiyi çağıranların elle
-    geçirmesi, birinin unutmasıyla sessizce yanlış sonuç verirdi. Kaynak tek: oturum.
-  */
-  const { session } = useAuth()
   const profile = useAsync(() => api.userProfile(userId), [userId])
   const [reviewPage, setReviewPage] = useState(1)
   const reviews = useAsync(() => api.userReviews(userId, reviewPage), [userId, reviewPage])
@@ -85,18 +77,15 @@ export function UserProfileView({ userId }) {
       */}
       {p.university && <UniversiteRozetleri userId={userId} />}
 
-      {/*
-        TOPLULUK ROZETLERİ — branş rozetleriyle aynı şerit dilinde, hemen altında.
+      {/* ⛔ TOPLULUK ROZETLERİ GİZLENDİ (2026-08-27) — Topluluk bölümüyle birlikte.
 
-        `communityUpvotes` alanı sunucuda HENÜZ YOK; undefined geçmesi bilinçli ve
-        bileşen bunu bir hata değil "henüz kazanılmadı" durumu olarak ele alıyor
-        (kazanılmış rozet uydurmuyor, kademe merdivenini gösteriyor). Alan eklendiğinde
-        bu satır değişmeden çalışmaya başlar — o yüzden şimdiden okunuyor.
-      */}
-      <ToplulukRozetleri
-        oy={p.communityUpvotes}
-        kendiProfilim={session?.userId === userId}
-      />
+          Bileşen (components/ToplulukRozetleri.jsx) duruyor ve doğru çalışıyor: sayaç
+          yokken kazanılmış rozet uydurmuyor, kademe merdivenini gösteriyor. Ama forum
+          erişilemezken profilde "100 oy → Topluluk Üyesi" merdiveni göstermek, var
+          olmayan bir bölüme davet etmek olurdu.
+
+          Topluluk yayına alındığında bu satır geri gelir; o zamana kadar profil ucunun
+          `communityUpvotes` alanını da döndürmesi gerekiyor (şu an döndürmüyor). */}
 
       <div className="grid gap-4 lg:grid-cols-2">
         <TopicPanel

@@ -71,14 +71,79 @@ public static class ProductionGuard
             sorunlar.Add("Cors:Origins hâlâ localhost içeriyor; üretim alan adını yazın.");
         }
 
+        /*
+          REDIS — 2026-08-27'de eklendi ve eksikliği canlıya çıkış denetiminde bulundu.
+
+          docs/URETIME-CIKIS.md bunu zorunlu tabloda listeliyordu ama kapı hiç bakmıyordu.
+          Belgenin anlattığı zarif başarısızlık ("boş bırakılırsa süreç içine düşer") de
+          gerçekleşmiyor: appsettings.json'da "localhost:6379" YAZILI, yani üretimde değer
+          boş değil YANLIŞ olur. AbortOnConnectFail=false sayesinde uygulama açılır,
+          /health yeşil yanar, ama kilit gerektiren her ekonomi işlemi (rezervasyon, ders
+          onayı, puan basımı) bağlantı hatasıyla 500 döner. Sağlık ucu da yardım etmiyor:
+          Redis Degraded olarak kayıtlı ve Degraded HTTP 200 demek.
+
+          Bu yüzden kontrol "boş mu" değil, "hâlâ localhost mu": tek instance'ta bilerek
+          Redis'siz çalışmak isteyen, bağlantı dizesini AÇIKÇA boşaltarak bunu beyan eder.
+        */
+        var redis = configuration.GetConnectionString("Redis");
+        if (!string.IsNullOrWhiteSpace(redis) &&
+            redis.Contains("localhost", StringComparison.OrdinalIgnoreCase))
+        {
+            sorunlar.Add("ConnectionStrings:Redis hâlâ localhost. Üretimde uygulama AÇILIR ve " +
+                         "/health yeşil yanar, ama kilit gerektiren her ekonomi işlemi 500 döner. " +
+                         "Ortam değişkeni: ConnectionStrings__Redis. Tek instance'ta bilerek " +
+                         "Redis'siz çalışacaksanız değeri açıkça BOŞ bırakın (süreç içi kilide düşer).");
+        }
+
         // E-posta gönderilemiyorsa kayıt akışı üretimde TAMAMEN tıkanır: doğrulama token'ı
         // yalnızca e-postayla gidiyor (yukarıdaki kural gereği yanıtta dönmüyor).
         var emailProvider = configuration["Email:Provider"];
+        var smtpSecildi = !string.IsNullOrWhiteSpace(emailProvider) &&
+                          emailProvider.Equals("Smtp", StringComparison.OrdinalIgnoreCase);
+
         if (string.IsNullOrWhiteSpace(emailProvider) ||
             emailProvider.Equals("Log", StringComparison.OrdinalIgnoreCase))
         {
             sorunlar.Add("Email:Provider ayarlanmamış (ya da 'Log'). Gerçek gönderici olmadan " +
                          "hiçbir kullanıcı hesabını doğrulayamaz. Ortam değişkeni: Email__Provider=Smtp");
+        }
+        else if (smtpSecildi)
+        {
+            /*
+              Provider=Smtp KAPIYI GEÇMEYE YETİYORDU ve bu sessiz bir tuzaktı:
+              SmtpEmailSender, Host boşken istisna FIRLATMIYOR, LogError yazıp dönüyor.
+              Sonuç: kayıt ucu 200 döner, kullanıcı "e-postanı kontrol et" ekranını görür,
+              hiçbir e-posta gitmez ve giriş doğrulanmamış hesaba kapalı olduğu için
+              HİÇ KİMSE hesabını açamaz. Tek iz sunucu log'undaki bir ERROR satırı.
+            */
+            var email = configuration.GetSection(EmailOptions.SectionName).Get<EmailOptions>()
+                        ?? new EmailOptions();
+
+            if (string.IsNullOrWhiteSpace(email.Host))
+            {
+                sorunlar.Add("Email:Provider=Smtp ama Email:Host boş. Gönderici sessizce " +
+                             "başarısız olur (istisna fırlatmaz), kimse hesabını doğrulayamaz. " +
+                             "Ortam değişkeni: Email__Host");
+            }
+
+            if (string.IsNullOrWhiteSpace(email.FromAddress) ||
+                email.FromAddress.EndsWith(".local", StringComparison.OrdinalIgnoreCase))
+            {
+                sorunlar.Add("Email:FromAddress hâlâ varsayılan (.local). Çoğu SMTP sunucusu " +
+                             "böyle bir gönderen adresini reddeder. Ortam değişkeni: Email__FromAddress");
+            }
+
+            /*
+              Bağlantısız doğrulama e-postası, kullanıcıdan 300 karakterlik bir JWT'yi elle
+              kopyalamasını istemek demek — mobilde pratikte yapılamıyor, yani kayıt akışı
+              teknik olarak çalışsa bile kullanılamaz. Bkz. DogrulamaEpostasi.Govde.
+            */
+            if (string.IsNullOrWhiteSpace(email.PublicWebUrl))
+            {
+                sorunlar.Add("Email:PublicWebUrl boş — doğrulama e-postası tıklanabilir bağlantı " +
+                             "yerine çıplak token taşır ve kullanıcı onu elle kopyalamak zorunda " +
+                             "kalır. Arayüzün genel adresini verin: Email__PublicWebUrl=https://…");
+            }
         }
 
         if (sorunlar.Count == 0)

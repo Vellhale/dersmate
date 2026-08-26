@@ -1,4 +1,14 @@
-export const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:5000'
+/*
+  API adresi. Yedek DEĞER YALNIZCA GELİŞTİRMEDE geçerli.
+
+  Eskiden koşulsuz `?? 'http://localhost:5000'` yazıyordu ve üretim derlemesinde de
+  devreye giriyordu: canlıda her ziyaretçinin tarayıcısı kendi makinesine istek atıyordu.
+  Asıl koruma vite.config.js'te (üretim derlemesi VITE_API_URL olmadan HİÇ üretilemiyor);
+  buradaki `import.meta.env.DEV` kontrolü ikinci kapı — biri diğerini atlarsa hata
+  sessizce yanlış adrese gitmek yerine konsolda görünür.
+*/
+export const API_BASE =
+  import.meta.env.VITE_API_URL ?? (import.meta.env.DEV ? 'http://localhost:5000' : '')
 
 const TOKEN_KEY = 'peerlearn.session'
 
@@ -55,7 +65,11 @@ async function request(path, { method = 'GET', body, formData, signal, headers: 
   } catch (err) {
     if (err.name === 'AbortError') throw err
     throw new ApiError(
-      'Sunucuya ulaşılamadı. API çalışıyor mu? (varsayılan: http://localhost:5000)',
+      /* Metin ortama göre: üretimde kullanıcıya "API'yi başlat" demek anlamsız (yapamaz)
+         ve mesajın içindeki localhost adresi, canlı pakette yanlış bir ipucu bırakıyordu. */
+      import.meta.env.DEV
+        ? `Sunucuya ulaşılamadı. API çalışıyor mu? (${API_BASE})`
+        : 'Sunucuya ulaşılamadı. Bağlantını kontrol edip tekrar dene.',
       'NETWORK_ERROR',
       0,
     )

@@ -37,14 +37,16 @@ public sealed class ResendVerificationHandler
     private readonly ITokenService _tokens;
     private readonly IEmailSender _email;
     private readonly JwtOptions _jwtOptions;
+    private readonly EmailOptions _emailOptions;
 
     public ResendVerificationHandler(IAppDbContext db, ITokenService tokens,
-        IEmailSender email, IOptions<JwtOptions> jwtOptions)
+        IEmailSender email, IOptions<JwtOptions> jwtOptions, IOptions<EmailOptions> emailOptions)
     {
         _db = db;
         _tokens = tokens;
         _email = email;
         _jwtOptions = jwtOptions.Value;
+        _emailOptions = emailOptions.Value;
     }
 
     public async Task<ResendVerificationResult> Handle(
@@ -70,8 +72,8 @@ public sealed class ResendVerificationHandler
         var token = _tokens.CreatePurposeToken(user.Id, RegisterHandler.EmailVerifyPurpose,
             TimeSpan.FromHours(_jwtOptions.EmailVerifyTokenHours));
 
-        await _email.SendAsync(user.Email, $"{Branding.ProductName} e-posta doğrulama (yeniden gönderim)",
-            $"Doğrulama token'ınız: {token}", ct);
+        await _email.SendAsync(user.Email, DogrulamaEpostasi.Konu(yenidenGonderim: true),
+            DogrulamaEpostasi.Govde(token, _emailOptions.PublicWebUrl), ct);
 
         return new ResendVerificationResult(
             _jwtOptions.ExposeVerificationTokenInResponse ? token : string.Empty);

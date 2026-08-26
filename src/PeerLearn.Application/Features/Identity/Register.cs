@@ -26,15 +26,17 @@ public sealed class RegisterHandler : IRequestHandler<RegisterCommand, RegisterR
     private readonly ITokenService _tokens;
     private readonly IEmailSender _email;
     private readonly JwtOptions _jwtOptions;
+    private readonly EmailOptions _emailOptions;
 
     public RegisterHandler(IAppDbContext db, IPasswordHasher hasher, ITokenService tokens,
-        IEmailSender email, IOptions<JwtOptions> jwtOptions)
+        IEmailSender email, IOptions<JwtOptions> jwtOptions, IOptions<EmailOptions> emailOptions)
     {
         _db = db;
         _hasher = hasher;
         _tokens = tokens;
         _email = email;
         _jwtOptions = jwtOptions.Value;
+        _emailOptions = emailOptions.Value;
     }
 
     public async Task<RegisterResult> Handle(RegisterCommand request, CancellationToken ct)
@@ -70,8 +72,8 @@ public sealed class RegisterHandler : IRequestHandler<RegisterCommand, RegisterR
         var token = _tokens.CreatePurposeToken(user.Id, EmailVerifyPurpose,
             TimeSpan.FromHours(_jwtOptions.EmailVerifyTokenHours));
 
-        await _email.SendAsync(email, $"{Branding.ProductName} e-posta doğrulama",
-            $"Doğrulama token'ınız: {token}", ct);
+        await _email.SendAsync(email, DogrulamaEpostasi.Konu(yenidenGonderim: false),
+            DogrulamaEpostasi.Govde(token, _emailOptions.PublicWebUrl), ct);
 
         return new RegisterResult(
             user.Id,

@@ -60,3 +60,8 @@ Thumbs.db
 # Kökteki dersmate-onizleme.html eski bir kopya ve HÂLÂ İZLENİYOR (kural yalnızca yeni
 # yolu kapsıyor); onun temizliği ayrı bir karar.
 frontend/dersmate-onizleme.html
+
+# Redis anlık görüntüsü. docker-compose Redis kalıcılığını kapatıyor ama süreç
+# elle çalıştırılırsa depo köküne dump.rdb yazıyor ve oto-commit hook u onu
+# depoya alıyordu (claude/oturum-2026-08-25 dalında bir kez oldu).
+dump.rdb

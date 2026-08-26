@@ -64,6 +64,22 @@ public sealed class EmailOptions
     public string Username { get; set; } = string.Empty;
     public string Password { get; set; } = string.Empty;
     public string FromAddress { get; set; } = "noreply@peerlearn.local";
+
+    /// <summary>
+    /// Arayüzün genel adresi — e-postadaki bağlantılar buradan kurulur
+    /// (ör. https://dersmate.com → https://dersmate.com/dogrula?token=...).
+    ///
+    /// NEDEN E-POSTA BÖLÜMÜNDE: bu değerin cevapladığı soru "beni kim çağırabilir"
+    /// (Cors:Origins) değil, "gönderdiğim mektuptaki bağlantı nereye gitsin". İkisi
+    /// üretimde aynı alan adı olsa da farklı iki karar; aynı ayara bağlanırlarsa
+    /// birini değiştiren diğerini fark etmeden bozar.
+    ///
+    /// BOŞ BIRAKILIRSA e-posta bağlantı yerine çıplak token taşır (geliştirme davranışı).
+    /// Üretimde ProductionGuard bunu zorunlu kılıyor: bağlantısız doğrulama e-postası,
+    /// kullanıcıdan 300 karakterlik bir JWT'yi elle kopyalamasını istemek demek ve
+    /// mobilde pratikte yapılamıyor.
+    /// </summary>
+    public string PublicWebUrl { get; set; } = string.Empty;
 }
 
 /// <summary>
