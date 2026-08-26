@@ -6,7 +6,7 @@ import { useAuth } from '../state/AuthContext'
 import { parseHubError } from '../hooks/useChatHub'
 import { useInbox } from '../state/InboxContext'
 import { formatDateTime, formatTime } from '../lib/format'
-import { Badge, Button, EmptyState, ErrorBox, Loading } from '../components/ui'
+import { Badge, Button, EmptyState, ErrorBox, Field, Loading, Modal, Notice } from '../components/ui'
 import { PersonLink } from '../components/PersonLink'
 
 /*
@@ -54,6 +54,8 @@ export default function Chat() {
   const [sendError, setSendError] = useState(null)
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
+  const [sikayetAcik, setSikayetAcik] = useState(false)
+  const [sikayetBildirimi, setSikayetBildirimi] = useState(null)
   const bottomRef = useRef(null)
   // Sohbet değişince sıfırlanır: her sohbetin ilk açılışı yine anında en alta gitsin.
   const jumpedToBottom = useRef(false)
@@ -283,6 +285,33 @@ export default function Chat() {
                         : 'Ders linkini (Zoom / Google Meet / Discord) buradan paylaşabilirsin.'}
                     </p>
                   </div>
+
+                  {/*
+                    ŞİKAYET — SOHBETTEN (2026-08-27).
+
+                    Buraya kadar şikayet açmanın tek yolu bir DERS üzerindendi. Yani
+                    eşleşip yazışmaya başlayan iki kişiden biri taciz ederse, henüz
+                    tamamlanmış ders yoksa karşı tarafın bildirme yolu YOKTU — öğrenci
+                    platformunda tacizin en olası anı tam olarak burası.
+
+                    Kapalı sohbette de görünüyor: eşleşme sonlandırıldıktan sonra
+                    "artık bildiremezsin" demek, kişiyi susturmanın en kolay yolunu
+                    (önce taciz et, sonra eşleşmeyi kapat) açık bırakırdı.
+
+                    Sessiz duruyor (slate-500 + ikonsuz küçük metin), hover'da rose:
+                    dikkat çeken bir düğme sohbeti ihbar hattı gibi gösterirdi, gömülü
+                    bir menü ise ihlali gören kişinin vazgeçtiği yol olurdu.
+                  */}
+                  {active?.otherUserId && (
+                    <button
+                      type="button"
+                      onClick={() => setSikayetAcik(true)}
+                      className="ml-auto shrink-0 rounded-lg px-2 py-1 text-xs font-medium
+                                 text-slate-500 transition hover:bg-rose-50 hover:text-rose-700"
+                    >
+                      Şikayet et
+                    </button>
+                  )}
                 </header>
 
                 <div className="flex-1 space-y-2 overflow-y-auto p-4">
@@ -341,7 +370,131 @@ export default function Chat() {
           </section>
         </div>
       )}
+
+      <SohbetSikayetModali
+        open={sikayetAcik}
+        kisi={active}
+        onClose={() => setSikayetAcik(false)}
+        onGonderildi={() => {
+          setSikayetAcik(false)
+          setSikayetBildirimi('Şikayetin yönetime iletildi. Karşı taraf bunu görmez.')
+        }}
+      />
+
+      {sikayetBildirimi && (
+        <Notice tone="success" onDismiss={() => setSikayetBildirimi(null)}>
+          {sikayetBildirimi}
+        </Notice>
+      )}
     </div>
+  )
+}
+
+/*
+  SOHBET ŞİKAYET MODALI.
+
+  SEBEP LİSTESİ DERS ŞİKAYETİNDEN FARKLI: oradaki seçenekler dersle ilgili
+  ("ders hiç yapılmadı", "kanıt sahte", "süre kısa sürdü") ve sohbette hiçbirinin
+  karşılığı yok. Burada yalnızca ders bağlamı gerektirmeyen ikisi listeleniyor.
+  Sunucu enum'u aynı (ReportReason); ayrılan yalnızca kullanıcıya sunulan alt küme.
+
+  Açıklama ZORUNLU ve alt sınırı var: "Diğer" seçildiğinde moderatörün elinde
+  yalnızca bu metin oluyor. Sunucu 10-2000 karakter istiyor; istemci de aynı alt
+  sınırı uyguluyor ki kullanıcı gidip gelmesin.
+*/
+/* SUNUCUYLA AYNI SAYI (CreateReportHandler). İstemcide daha GEVŞEK bir sınır,
+   kullanıcıya 12 karakter yazdırıp gönderdikten sonra 400 gösterirdi — kontrolün
+   istemcide olmasının tek amacı o gidiş gelişi önlemek. */
+const EN_AZ_ACIKLAMA = 15
+
+const SOHBET_SIKAYET_SEBEPLERI = [
+  { key: 'Abuse', label: 'Hakaret, taciz veya uygunsuz davranış' },
+  { key: 'Other', label: 'Diğer' },
+]
+
+function SohbetSikayetModali({ open, kisi, onClose, onGonderildi }) {
+  const [sebep, setSebep] = useState('Abuse')
+  const [aciklama, setAciklama] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState(null)
+
+  const kapat = () => {
+    setSebep('Abuse')
+    setAciklama('')
+    setError(null)
+    onClose()
+  }
+
+  const gonderilebilir = aciklama.trim().length >= EN_AZ_ACIKLAMA
+
+  async function gonder(event) {
+    event.preventDefault()
+    if (!gonderilebilir) return
+    setBusy(true)
+    setError(null)
+    try {
+      await api.reportUser(kisi.otherUserId, sebep, aciklama.trim())
+      setSebep('Abuse')
+      setAciklama('')
+      onGonderildi()
+    } catch (err) {
+      setError(err)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Modal
+      open={open}
+      onClose={kapat}
+      title="Şikayet et"
+      footer={
+        <>
+          <Button variant="secondary" onClick={kapat}>
+            Vazgeç
+          </Button>
+          <Button
+            type="submit"
+            form="sohbet-sikayet"
+            variant="danger"
+            loading={busy}
+            disabled={!gonderilebilir}
+          >
+            Şikayeti gönder
+          </Button>
+        </>
+      }
+    >
+      <form id="sohbet-sikayet" onSubmit={gonder} className="space-y-4">
+        <Notice tone="info">
+          Şikayetin <strong>yalnızca yönetime</strong> gider. {kisi?.otherDisplayName ?? 'Karşı taraf'}{' '}
+          ne şikayeti görür, ne bildirim alır, ne de kim olduğunu öğrenir.
+        </Notice>
+
+        <Field label="Sebep">
+          <select className="input" value={sebep} onChange={(e) => setSebep(e.target.value)}>
+            {SOHBET_SIKAYET_SEBEPLERI.map(({ key, label }) => (
+              <option key={key} value={key}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </Field>
+
+        <Field label="Ne oldu?" hint={`En az ${EN_AZ_ACIKLAMA} karakter. Mümkünse mesajdan alıntı yap.`}>
+          <textarea
+            className="input h-28 resize-none"
+            value={aciklama}
+            onChange={(e) => setAciklama(e.target.value)}
+            maxLength={2000}
+            placeholder="Örn. Sohbette ısrarla telefon numaramı istedi ve reddedince hakaret etti."
+          />
+        </Field>
+
+        <ErrorBox error={error} />
+      </form>
+    </Modal>
   )
 }
 
