@@ -148,6 +148,7 @@ function ReportQueue({ onNotice }) {
   const reports = useAsync(() => api.reports(true), [])
   const [busyId, setBusyId] = useState(null)
   const [error, setError] = useState(null)
+  const [yaptirimHedefi, setYaptirimHedefi] = useState(null)
 
   async function kapat(reportId, actionTaken) {
     setBusyId(reportId)
@@ -200,12 +201,18 @@ function ReportQueue({ onNotice }) {
               </div>
 
               <div className="flex shrink-0 flex-col gap-2">
+                {/* "Yaptırım uyguladım" → "Yaptırım uygula" (2026-08-27).
+                    Eski düğme yalnızca şikayeti kapatıp denetim izine
+                    actionTaken=true yazıyordu; yaptırımın KENDİSİ hiçbir yerden
+                    verilemiyordu (uçlar backend'de vardı, api.js'te yoktu). Yani
+                    moderatör basıyor, kayda "yaptırım uygulandı" düşüyor ve
+                    şikayet edilen hesaba hiçbir şey olmuyordu. */}
                 <Button
                   variant="danger"
-                  loading={busyId === r.reportId}
-                  onClick={() => kapat(r.reportId, true)}
+                  disabled={busyId === r.reportId}
+                  onClick={() => setYaptirimHedefi(r)}
                 >
-                  Yaptırım uyguladım
+                  Yaptırım uygula
                 </Button>
                 <Button
                   variant="secondary"
@@ -219,7 +226,210 @@ function ReportQueue({ onNotice }) {
           </Card>
         ))
       )}
+
+      <YaptirimModali
+        hedef={yaptirimHedefi}
+        onClose={() => setYaptirimHedefi(null)}
+        onUygulandi={(mesaj) => {
+          setYaptirimHedefi(null)
+          onNotice(mesaj)
+          reports.reload()
+        }}
+      />
     </div>
+  )
+}
+
+/*
+  YAPTIRIM MODALI — yaptırımı GERÇEKTEN uygular, sonra şikayeti kapatır.
+
+  ⚠️ SIRA ÖNEMLİ ve bilerek bu yönde: önce yaptırım, sonra şikayetin kapatılması.
+  İkisi ayrı iki istek ve arada hata olabilir; hangi yönde bozulacağını seçmek
+  zorundayız. Bu sırada yaptırım uygulanır ama şikayet açık kalır — moderatör
+  kuyrukta görür ve kapatır (yaptırım tekrarı da zararsız: aynı kişiye ikinci uyarı).
+  Ters sırada ise şikayet "yaptırım uygulandı" diye kapanır ve yaptırım hiç
+  gerçekleşmez — yani tam olarak bugün düzelttiğimiz hatanın kendisi olurdu.
+
+  ÜÇ SEVİYE, çünkü ölçek "hiçbir şey yapma / kalıcı ban" ikilemine sıkışmamalı:
+  uyarı geri alınabilir ve kayda geçer; süreli askı zaman kazandırır; kalıcı ban
+  cihaz kimliğini de kapsar ve geri alınması en pahalı karardır.
+
+  Gerekçe ZORUNLU (≥10 karakter): denetim izine yazılıyor ve kararı sonradan
+  okuyan kişi (belki başka bir moderatör, belki mahkeme) neye dayandığını
+  görebilmeli. "spam" yazan bir kayıt hiçbir şey anlatmıyor.
+*/
+const YAPTIRIM_TURLERI = [
+  {
+    key: 'Warning',
+    label: 'Uyarı',
+    aciklama: 'Hesap açık kalır, karar kayda geçer. Tekrarında ölçek yükseltilir.',
+  },
+  {
+    key: 'TemporaryBan',
+    label: 'Süreli askı',
+    aciklama: 'Hesap belirtilen süre boyunca giriş yapamaz. Cihaz banı uygulanmaz.',
+  },
+  {
+    key: 'PermanentBan',
+    label: 'Kalıcı ban',
+    aciklama: 'Hesap ve kullanıcının bilinen tüm cihaz kimlikleri (HWID) banlanır.',
+  },
+]
+
+/** Süreli askı için hazır seçenekler. Elle saat yazdırmak yazım hatasına açık. */
+const ASKI_SURELERI = [
+  { saat: 24, label: '1 gün' },
+  { saat: 72, label: '3 gün' },
+  { saat: 168, label: '1 hafta' },
+  { saat: 720, label: '30 gün' },
+]
+
+function YaptirimModali({ hedef, onClose, onUygulandi }) {
+  const [tur, setTur] = useState('Warning')
+  const [saat, setSaat] = useState(72)
+  const [gerekce, setGerekce] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState(null)
+
+  const kapat = () => {
+    setTur('Warning')
+    setSaat(72)
+    setGerekce('')
+    setError(null)
+    onClose()
+  }
+
+  const uygulanabilir = gerekce.trim().length >= 10
+
+  async function uygula() {
+    if (!uygulanabilir) return
+    setBusy(true)
+    setError(null)
+    try {
+      const sebep = gerekce.trim()
+
+      if (tur === 'PermanentBan') {
+        // Ban ayrı uçtan: cihaz kimliklerini de kapsıyor ve yalnızca Admin'e açık.
+        await api.banUser(hedef.reportedUserId, sebep)
+      } else {
+        await api.sanctionUser(
+          hedef.reportedUserId,
+          tur,
+          sebep,
+          tur === 'TemporaryBan' ? saat : null,
+        )
+      }
+
+      // Yaptırım tuttu; şimdi şikayeti kapat. Bu ikinci istek düşerse yaptırım
+      // yine de uygulanmış olur ve şikayet kuyrukta kalır (bkz. yukarıdaki not).
+      await api.resolveReport(hedef.reportId, true, sebep)
+
+      const ad = YAPTIRIM_TURLERI.find((y) => y.key === tur)?.label ?? tur
+      onUygulandi(`${hedef.reportedDisplayName}: ${ad.toLowerCase()} uygulandı, şikayet kapatıldı.`)
+      setTur('Warning')
+      setSaat(72)
+      setGerekce('')
+    } catch (err) {
+      setError(err)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Modal
+      open={hedef !== null}
+      onClose={kapat}
+      title="Yaptırım uygula"
+      footer={
+        <>
+          <Button variant="secondary" onClick={kapat}>
+            Vazgeç
+          </Button>
+          <Button variant="danger" onClick={uygula} loading={busy} disabled={!uygulanabilir}>
+            Uygula ve şikayeti kapat
+          </Button>
+        </>
+      }
+    >
+      {hedef && (
+        <div className="space-y-4">
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+            <p className="text-sm font-semibold text-slate-900">{hedef.reportedDisplayName}</p>
+            <p className="mt-1 text-xs text-slate-600">
+              {REPORT_REASON_LABELS[hedef.reason] ?? hedef.reason}
+              {hedef.reportedUserTotalReports > 1
+                ? ` · bu kişi hakkında ${hedef.reportedUserTotalReports} şikayet`
+                : ''}
+            </p>
+          </div>
+
+          <fieldset>
+            <legend className="text-sm font-medium text-slate-700">Yaptırım</legend>
+            <div className="mt-2 space-y-1.5">
+              {YAPTIRIM_TURLERI.map(({ key, label, aciklama }) => (
+                <label
+                  key={key}
+                  className={`flex cursor-pointer items-start gap-3 rounded-xl border p-3 transition ${
+                    tur === key
+                      ? 'border-brand-500 bg-brand-50'
+                      : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="yaptirim-turu"
+                    value={key}
+                    checked={tur === key}
+                    onChange={() => setTur(key)}
+                    className="mt-0.5 h-4 w-4 shrink-0 accent-brand-600"
+                  />
+                  <span className="min-w-0">
+                    <span className="block text-sm font-semibold text-slate-900">{label}</span>
+                    <span className="mt-0.5 block text-xs leading-relaxed text-slate-600">
+                      {aciklama}
+                    </span>
+                  </span>
+                </label>
+              ))}
+            </div>
+          </fieldset>
+
+          {/* Süre yalnızca süreli askıda: diğer iki seçenekte anlamı yok ve açık
+              bırakılsaydı "uyarıyı 3 gün verdim" gibi yanlış bir zihin modeli kurardı. */}
+          {tur === 'TemporaryBan' && (
+            <Field label="Askı süresi">
+              <select
+                className="input"
+                value={saat}
+                onChange={(e) => setSaat(Number(e.target.value))}
+              >
+                {ASKI_SURELERI.map(({ saat: s, label }) => (
+                  <option key={s} value={s}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          )}
+
+          <Field
+            label="Gerekçe (zorunlu)"
+            hint="Denetim izine yazılır. Kararı sonradan okuyan kişi neye dayandığını görebilmeli."
+          >
+            <textarea
+              className="input h-24 resize-none"
+              value={gerekce}
+              onChange={(e) => setGerekce(e.target.value)}
+              maxLength={500}
+              placeholder="Örn. Sohbette tekrarlayan hakaret; 3 ayrı kullanıcı bildirdi."
+            />
+          </Field>
+
+          <ErrorBox error={error} />
+        </div>
+      )}
+    </Modal>
   )
 }
 

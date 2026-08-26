@@ -501,9 +501,19 @@ function LayoutShell() {
 
           {/* Rıza her zaman geri alınabilir olmalı: tercihi değiştirmenin yolu, vermenin
               yolu kadar erişilebilir olmadan rıza "özgür iradeyle verilmiş" sayılmaz. */}
-          <footer className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-4 px-4 pb-8 pt-2">
+          {/* Yasal metinler kabuğun altbilgisinde de: oturum açtıktan sonra bunlara
+              ulaşmanın başka yolu kalmıyordu (AuthShell'deki bağlantılar yalnızca
+              giriş öncesi ekranlarda). Metni okumak, kabul ettikten sonra da mümkün
+              olmalı. */}
+          <footer className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-4 gap-y-1 px-4 pb-8 pt-2">
             <CookieSettingsLink />
             <RestartTourLink />
+            <NavLink to="/kosullar" className="text-xs text-slate-500 underline hover:text-slate-700">
+              Kullanım koşulları
+            </NavLink>
+            <NavLink to="/gizlilik" className="text-xs text-slate-500 underline hover:text-slate-700">
+              Gizlilik
+            </NavLink>
           </footer>
         </div>
       </div>

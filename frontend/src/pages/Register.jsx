@@ -8,6 +8,8 @@ export default function Register() {
   const navigate = useNavigate()
 
   const [form, setForm] = useState({ email: '', password: '', displayName: '' })
+  const [kosullarKabul, setKosullarKabul] = useState(false)
+  const [yasBeyani, setYasBeyani] = useState(false)
   const [error, setError] = useState(null)
   const [busy, setBusy] = useState(false)
   const [result, setResult] = useState(null)
@@ -105,9 +107,75 @@ export default function Register() {
           />
         </Field>
 
+        {/*
+          ONAY VE YAŞ BEYANI — 2026-08-27'de eklendi.
+
+          Önceden kayıt formunda tek bir onay kutusu YOKTU: kullanıcı hiçbir metni kabul
+          etmeden hesap açıyordu ve "şu kişi şunu kabul etmişti" denebilecek hiçbir kayıt
+          oluşmuyordu. Metinler de yoktu (bkz. /kosullar, /gizlilik).
+
+          İKİ AYRI KUTU, tek kutu değil: biri sözleşmeyi kabul etmek, diğeri yaş beyanı.
+          Tek kutuda birleştirilseydi kullanıcı ikisini de okumadan tek hareketle geçerdi
+          ve hangisine onay verdiği ayrıştırılamazdı.
+
+          BAĞLANTILAR YENİ SEKMEDE (target=_blank): metni okumak için formu terk eden
+          kullanıcı geri döndüğünde doldurduğu alanları kaybederdi.
+
+          ⚠️ SUNUCU BU ONAYI HENÜZ KAYDETMİYOR. RegisterCommand yalnızca e-posta, parola
+          ve ad taşıyor. Onayın kaydı (kabul edilen metin sürümü + zaman damgası) bir
+          sonraki adım; kutu olmadan o kaydın anlamı da olmazdı, o yüzden önce bu.
+        */}
+        <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+          <label className="flex cursor-pointer items-start gap-2.5">
+            <input
+              type="checkbox"
+              checked={kosullarKabul}
+              onChange={(e) => setKosullarKabul(e.target.checked)}
+              className="mt-0.5 h-4 w-4 shrink-0 accent-brand-600"
+            />
+            <span className="text-sm leading-relaxed text-slate-700">
+              <Link
+                to="/kosullar"
+                target="_blank"
+                rel="noopener"
+                className="font-medium text-brand-700 hover:underline"
+              >
+                Kullanım koşullarını
+              </Link>{' '}
+              ve{' '}
+              <Link
+                to="/gizlilik"
+                target="_blank"
+                rel="noopener"
+                className="font-medium text-brand-700 hover:underline"
+              >
+                gizlilik metnini
+              </Link>{' '}
+              okudum, kabul ediyorum.
+            </span>
+          </label>
+
+          <label className="flex cursor-pointer items-start gap-2.5">
+            <input
+              type="checkbox"
+              checked={yasBeyani}
+              onChange={(e) => setYasBeyani(e.target.checked)}
+              className="mt-0.5 h-4 w-4 shrink-0 accent-brand-600"
+            />
+            <span className="text-sm leading-relaxed text-slate-700">
+              18 yaşından büyüğüm ya da hesabımı velimin bilgisi ve onayıyla açıyorum.
+            </span>
+          </label>
+        </div>
+
         <ErrorBox error={error} />
 
-        <Button type="submit" loading={busy} className="w-full">
+        <Button
+          type="submit"
+          loading={busy}
+          disabled={!kosullarKabul || !yasBeyani}
+          className="w-full"
+        >
           Hesap oluştur
         </Button>
       </form>

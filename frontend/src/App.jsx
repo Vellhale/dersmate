@@ -5,6 +5,8 @@ import Login from './pages/Login'
 import Register from './pages/Register'
 import VerifyEmail from './pages/VerifyEmail'
 import SifreSifirla from './pages/SifreSifirla'
+import Kosullar from './pages/Kosullar'
+import Gizlilik from './pages/Gizlilik'
 import Portfolio from './pages/Portfolio'
 import Discover from './pages/Discover'
 import Matches from './pages/Matches'
@@ -44,6 +46,12 @@ export default function App() {
           hatırlamayan kullanıcı, çıkış yapmak zorunda kalmadan bağlantı isteyebilmeli.
           Sunucu tarafı zaten token'a bakıyor, oturuma değil. */}
       <Route path="/sifre-sifirla" element={<SifreSifirla />} />
+
+      {/* Yasal metinler — KABUĞUN DIŞINDA ve oturum GEREKTİRMEZ.
+          Kayıt formundaki onay kutusu bu iki sayfaya bağlanıyor; henüz hesabı olmayan
+          biri okuyamıyorsa "okudum, kabul ediyorum" demesi anlamsız olurdu. */}
+      <Route path="/kosullar" element={<Kosullar />} />
+      <Route path="/gizlilik" element={<Gizlilik />} />
 
       <Route
         element={
