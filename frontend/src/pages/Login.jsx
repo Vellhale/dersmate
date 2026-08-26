@@ -71,7 +71,17 @@ export default function Login() {
         </Button>
       </form>
 
+      {/* Parola sıfırlama bağlantısı FORMUN HEMEN ALTINDA, "Kayıt ol"dan da önce:
+          buraya gelip giremeyen kullanıcının ilk ihtiyacı yeni hesap açmak değil,
+          kendi hesabına dönmek. 2026-08-27'ye kadar üründe hiç sıfırlama yolu yoktu
+          ve parolasını unutan hesabını kalıcı kaybediyordu. */}
       <p className="mt-4 text-center text-sm text-slate-600">
+        <Link to="/sifre-sifirla" className="font-medium text-brand-600 hover:underline">
+          Şifreni mi unuttun?
+        </Link>
+      </p>
+
+      <p className="mt-2 text-center text-sm text-slate-600">
         Hesabın yok mu?{' '}
         <Link to="/kayit" className="font-medium text-brand-600 hover:underline">
           Kayıt ol

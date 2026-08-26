@@ -45,6 +45,38 @@ public sealed class AuthController : ControllerBase
         ResendVerificationRequest request, CancellationToken ct)
         => await _mediator.Send(new ResendVerificationCommand(request.Email), ct);
 
+    public sealed record ForgotPasswordRequest(string Email);
+
+    /// <summary>
+    /// Parola sıfırlama bağlantısı ister.
+    ///
+    /// Yanıt HER DURUMDA 204: e-posta kayıtlı olsun olmasın, doğrulanmış olsun olmasın,
+    /// banlı olsun olmasın. Farklı yanıt vermek bu ucu "bu e-posta kayıtlı mı" sorusunu
+    /// herkese yanıtlayan bir araca çevirirdi (resend-verification ile aynı karar).
+    ///
+    /// Sınıf düzeyindeki sıkı hız sınırı burada da geçerli: sıfırlama e-postası
+    /// bombardımanı, kurbanın gelen kutusunu doldurmanın ucuz bir yolu.
+    /// </summary>
+    [HttpPost("forgot-password")]
+    public async Task<IActionResult> ForgotPassword(ForgotPasswordRequest request, CancellationToken ct)
+    {
+        await _mediator.Send(new ForgotPasswordCommand(request.Email), ct);
+        return NoContent();
+    }
+
+    public sealed record ResetPasswordRequest(string Token, string NewPassword);
+
+    /// <summary>
+    /// Bağlantıdaki token'la yeni parolayı yazar. Token tek kullanımlık ve 1 saat
+    /// geçerli (bkz. ParolaSifirlama).
+    /// </summary>
+    [HttpPost("reset-password")]
+    public async Task<IActionResult> ResetPassword(ResetPasswordRequest request, CancellationToken ct)
+    {
+        await _mediator.Send(new ResetPasswordCommand(request.Token, request.NewPassword), ct);
+        return NoContent();
+    }
+
     public sealed record LoginRequest(string Email, string Password, string? HwidHash);
 
     [HttpPost("login")]
