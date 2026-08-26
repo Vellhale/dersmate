@@ -1,4 +1,4 @@
-# PeerLearn — üretim kapısı ve hız sınırı doğrulaması
+﻿# PeerLearn — üretim kapısı ve hız sınırı doğrulaması
 #
 # NEDEN AYRI BİR BETİK (e2e paketlerinden değil): ikisi de AÇILIŞ davranışını sınıyor —
 # uygulamayı farklı ortam/ayarla yeniden başlatmayı gerektiriyorlar. Çalışan API'ye istek

@@ -1,4 +1,4 @@
-# PeerLearn — Yönetim eliyle puan tanımlama/düzeltme (F3)
+﻿# PeerLearn — Yönetim eliyle puan tanımlama/düzeltme (F3)
 #
 # Kapsam:
 #   • Yetki: yalnızca Admin (moderatör ve normal kullanıcı reddedilir)

@@ -1,4 +1,4 @@
-# İkinci API instance'ı (:5001) — eşzamanlılık testi için.
+﻿# İkinci API instance'ı (:5001) — eşzamanlılık testi için.
 #
 # NEDEN AYRI BETİK: instance ikinci bir launch profili olmadan başlatılıyor
 # (--no-launch-profile), bu durumda ASP.NET ortamı ASPNETCORE_ENVIRONMENT'tan okur ve

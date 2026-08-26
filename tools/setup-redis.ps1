@@ -1,4 +1,4 @@
-# Redis (Memurai) kurulumunu tamamlar ve çok instance'lı testi hazırlar.
+﻿# Redis (Memurai) kurulumunu tamamlar ve çok instance'lı testi hazırlar.
 #
 # NEDEN YÖNETİCİ GEREKİYOR:
 # Memurai MSI'ı bir Windows servisi kaydeder; bu adım yükseltme (UAC) ister.

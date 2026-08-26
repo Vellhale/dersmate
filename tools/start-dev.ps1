@@ -1,4 +1,4 @@
-# Yerel geliştirme ortamını AYRI KONSOLLARDA başlatır (API :5000 + Vite :5173).
+﻿# Yerel geliştirme ortamını AYRI KONSOLLARDA başlatır (API :5000 + Vite :5173).
 #
 # NEDEN AYRI KONSOL — bu betiğin varlık sebebi:
 # Süreçler bu kabuğun konsoluna bağlı başlatılırsa, kabuk kapandığında Windows tüm

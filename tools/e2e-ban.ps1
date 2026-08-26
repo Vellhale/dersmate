@@ -1,4 +1,4 @@
-# PeerLearn — Ban, HWID ban kaçağı ve ekonomi değişmezleri
+﻿# PeerLearn — Ban, HWID ban kaçağı ve ekonomi değişmezleri
 #
 # NEDEN AYRI PAKET: bu bölümler e2e-dispute.ps1 içindeydi. İtiraz (Dispute) tek yönlü
 # şikayete dönüştürülünce o paketin A–D bölümleri karşılıksız kaldı — itiraz AÇILAMIYOR,
@@ -39,6 +39,26 @@
 $ErrorActionPreference = 'Stop'
 $API = 'http://localhost:5000'
 $PSQL = 'C:\Program Files\PostgreSQL\17\bin\psql.exe'
+
+<#
+  psql üç yoldan aranır; ilk bulunan kullanılır:
+    1. Windows kurulumu   — geliştiricinin makinesinde tipik yol.
+    2. PATH üzerinde psql — Linux/macOS ve CI koşucuları (postgresql-client).
+    3. docker compose     — makinede psql yok ama compose yığını ayakta (bkz. Sql).
+
+  Üçüncü yol olmadan bu paket, docs/GELISTIRME-ORTAMI.md nin tarif ettiği Docker
+  kurulumunda hiç koşamıyordu: yalnızca yerel PostgreSQL 17 varsayılıyordu ve betik
+  "psql bulunamadi" ile ortasında düşüyordu. Testin KOŞAMAMASI, başarısız olmasından
+  daha sinsi — özet onu kırmızı değil, hiç görünmemiş sayar.
+#>
+if (-not (Test-Path $PSQL)) {
+    # PS 5.1 UYUMU: null-koşullu operatör PowerShell 7 ile geldi ve 5.1 de SÖZDİZİMİ
+    # hatasıdır — betik hiç başlamaz, yani bu kod hiç çalışmazdı.
+    $psqlCmd = Get-Command psql -ErrorAction SilentlyContinue
+    $bulunan = if ($psqlCmd) { $psqlCmd.Source } else { $null }
+    if ($bulunan) { $PSQL = $bulunan } else { $PSQL = $null }
+}
+$script:ComposeYml = Join-Path (Split-Path $PSScriptRoot -Parent) 'docker-compose.yml'
 $env:PGPASSWORD = 'PeerLearnDev2026'
 
 # 60 dakikalık ders = iki blok x 50 puan. Sabit tek yerde: ödül ölçeği değişirse test
@@ -77,6 +97,12 @@ function InvokeExpectError([scriptblock]$call) {
 }
 
 function Sql($query) {
+    if (-not $PSQL) {
+        # Docker yolu: sorgu STDIN den geçer. -c ile argüman olarak geçirmek,
+        # identity."Users" gibi tırnaklı adlardaki tırnakları kabuğa yedirir.
+        $out = $query | docker compose -f $script:ComposeYml exec -T db psql -U peerlearn -d peerlearn -t -A -v ON_ERROR_STOP=1 2>&1
+        return ($out -join '').Trim()
+    }
     $f = Join-Path $env:TEMP ("pl_" + [Guid]::NewGuid().ToString('N') + ".sql")
     Set-Content -Path $f -Value $query -Encoding UTF8
     $out = & $PSQL -h localhost -U peerlearn -d peerlearn -t -A -v ON_ERROR_STOP=1 -f $f 2>&1
