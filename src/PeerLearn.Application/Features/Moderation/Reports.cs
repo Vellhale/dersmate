@@ -2,6 +2,7 @@ using MediatR;
 using Microsoft.EntityFrameworkCore;
 using PeerLearn.Application.Abstractions;
 using PeerLearn.Application.Common;
+using PeerLearn.Domain.Community;
 using PeerLearn.Domain.Moderation;
 
 namespace PeerLearn.Application.Features.Moderation;
@@ -24,7 +25,11 @@ public sealed record CreateReportCommand(
     Guid? SessionId,
     Guid? ReportedUserId,
     ReportReason Reason,
-    string Description) : IRequest<Guid>;
+    string Description,
+    // Forum içeriği (2026-08-27). İsteğe bağlı parametreler: mevcut iki çağıran
+    // (ders ve kullanıcı şikayeti) DEĞİŞMEDEN çalışmaya devam ediyor.
+    Guid? CommunityPostId = null,
+    Guid? CommunityCommentId = null) : IRequest<Guid>;
 
 public sealed class CreateReportHandler : IRequestHandler<CreateReportCommand, Guid>
 {
@@ -50,6 +55,11 @@ public sealed class CreateReportHandler : IRequestHandler<CreateReportCommand, G
         }
 
         Guid sikayetEdilen;
+
+        // Forum dalında doldurulur; aşağıda sayaç artırımı ve otomatik perdeleme için.
+        var forumIcerikVar = false;
+        CommunityPost? forumGonderi = null;
+        CommunityComment? forumYorum = null;
 
         if (request.SessionId is { } sessionId)
         {
@@ -81,6 +91,55 @@ public sealed class CreateReportHandler : IRequestHandler<CreateReportCommand, G
             {
                 throw new AppException(ErrorCodes.ReportAlreadyExists,
                     "Bu ders için zaten bir şikayet oluşturdun. Yönetim inceliyor.", statusCode: 409);
+            }
+        }
+        else if (request.CommunityPostId is not null || request.CommunityCommentId is not null)
+        {
+            /*
+              FORUM İÇERİĞİ (2026-08-27).
+
+              Şikayet edilen taraf İÇERİKTEN türetiliyor, istemciden alınmıyor — ders
+              dalındaki kararın aynısı ve aynı gerekçeyle: istemciye bırakılsaydı biri,
+              hiç ilgisi olmayan bir kullanıcıyı başkasının gönderisine iliştirebilirdi.
+
+              Sayaç ve otomatik perdeleme aşağıda, şikayet yazıldıktan SONRA — sırası
+              önemli değil çünkü ikisi de aynı SaveChanges'te commit ediliyor, ama
+              okurken "önce şikayet, sonra sonucu" sırası daha anlaşılır.
+            */
+            forumIcerikVar = true;
+
+            if (request.CommunityPostId is { } gonderiId)
+            {
+                forumGonderi = await _db.CommunityPosts.SingleOrDefaultAsync(p => p.Id == gonderiId, ct)
+                    ?? throw new AppException(ErrorCodes.PostNotFound, "Gönderi bulunamadı.", statusCode: 404);
+                sikayetEdilen = forumGonderi.AuthorUserId;
+            }
+            else
+            {
+                forumYorum = await _db.CommunityComments.SingleOrDefaultAsync(c => c.Id == request.CommunityCommentId, ct)
+                    ?? throw new AppException(ErrorCodes.CommentNotFound, "Yorum bulunamadı.", statusCode: 404);
+                sikayetEdilen = forumYorum.AuthorUserId;
+            }
+
+            /*
+              Aynı içeriği aynı kişi bir kez şikayet eder. Bu kapı olmadan tek bir
+              kullanıcı, otomatik perdeleme eşiğini (ForumRules.AutoReviewThreshold)
+              TEK BAŞINA aşıp istediği gönderiyi akıştan düşürebilirdi — yani şikayet
+              mekanizması sansür aracına dönerdi.
+
+              Kullanıcı bazlı daldan farkı: orada "açık şikayet" bakılıyor, burada
+              durumdan bağımsız TÜM şikayetler. Sebep: içerik sabit bir nesne; aynı
+              gönderiyi ikinci kez şikayet etmenin yeni bir bilgisi yok.
+            */
+            var ayniIcerigeSikayetim = await _db.Reports.AsNoTracking().AnyAsync(
+                x => x.ReporterUserId == request.ReporterUserId &&
+                     x.CommunityPostId == request.CommunityPostId &&
+                     x.CommunityCommentId == request.CommunityCommentId, ct);
+
+            if (ayniIcerigeSikayetim)
+            {
+                throw new AppException(ErrorCodes.ReportAlreadyExists,
+                    "Bu içeriği zaten şikayet ettin. Yönetim inceliyor.", statusCode: 409);
             }
         }
         else
@@ -130,6 +189,8 @@ public sealed class CreateReportHandler : IRequestHandler<CreateReportCommand, G
             ReporterUserId = request.ReporterUserId,
             ReportedUserId = sikayetEdilen,
             SessionId = request.SessionId,
+            CommunityPostId = request.CommunityPostId,
+            CommunityCommentId = request.CommunityCommentId,
             Reason = request.Reason,
             Description = aciklama,
             Status = ReportStatus.Open,
@@ -137,6 +198,43 @@ public sealed class CreateReportHandler : IRequestHandler<CreateReportCommand, G
         };
 
         _db.Reports.Add(sikayet);
+
+        /*
+          OTOMATİK PERDELEME — arayüzdeki "Kısa sürede 3 şikayet alan gönderi akışta
+          kapatılır" vaadinin gerçek karşılığı. O metin 2026-08-25'te yazıldığında
+          kodda hiçbir karşılığı yoktu (denetimde "var olmayan koruma vaadi" olarak
+          bulundu); burası o boşluğu kapatıyor.
+
+          İÇERİK SİLİNMİYOR, durumu değişiyor: akışta perdeli görünüyor ve kullanıcı
+          "yine de göster" ile açabiliyor. Sessiz silme moderasyonu görünmez ve
+          tartışılamaz yapardı; ayrıca şikayet kaydı konusu ortadan kalkmış bir
+          şikayete dönüşürdü.
+
+          Zaten Removed olan içeriğin durumu geri alınmıyor: moderatör kararı,
+          otomatik eşikten üstündür.
+        */
+        if (forumIcerikVar)
+        {
+            if (forumGonderi is not null)
+            {
+                forumGonderi.ReportCount += 1;
+                if (forumGonderi.ReportCount >= ForumRules.AutoReviewThreshold &&
+                    forumGonderi.Status == ForumContentStatus.Visible)
+                {
+                    forumGonderi.Status = ForumContentStatus.UnderReview;
+                }
+            }
+            else if (forumYorum is not null)
+            {
+                forumYorum.ReportCount += 1;
+                if (forumYorum.ReportCount >= ForumRules.AutoReviewThreshold &&
+                    forumYorum.Status == ForumContentStatus.Visible)
+                {
+                    forumYorum.Status = ForumContentStatus.UnderReview;
+                }
+            }
+        }
+
         await _db.SaveChangesAsync(ct);
 
         return sikayet.Id;
