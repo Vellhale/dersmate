@@ -209,6 +209,20 @@ public sealed record UserProfileDto(
     /// </summary>
     int? NextLevelAt,
 
+    /// <summary>
+    /// Forumda aldığı TOPLAM yukarı oy (gönderi + yorum) — topluluk rozetlerinin
+    /// dayanağı (100 bronz / 500 gümüş / 1000 altın).
+    ///
+    /// OKUMA ANINDA SAYILIYOR, saklanan bir sayaç yok. Seviye hesabındaki kararla aynı
+    /// gerekçe: saklanan bir toplam, oy geri alındığında ya da içerik kaldırıldığında
+    /// güncellenmeyi unutur ve sessizce şişer. Kullanıcı başına iki toplama sorgusu,
+    /// profil ucunda kabul edilebilir bir maliyet.
+    ///
+    /// KALDIRILMIŞ İÇERİĞİN OYU SAYILMIYOR: moderasyonun kaldırdığı bir gönderinin
+    /// topladığı oy, rozet kazandırmaya devam etseydi kural ihlali ödüllendirilirdi.
+    /// </summary>
+    int CommunityUpvotes,
+
     bool IsSelf,
     TeacherCandidateDto? TeacherCandidate,
     IReadOnlyList<ProfileTopicDto> CanTeach,
@@ -258,6 +272,29 @@ public sealed class GetUserProfileHandler : IRequestHandler<GetUserProfileQuery,
 
         var kendisi = user.Id == request.ViewerUserId;
 
+        /*
+          FORUM OYLARI — topluluk rozetlerinin (100/500/1000) dayanağı.
+
+          İki ayrı toplama çünkü gönderi ve yorum ayrı tablolar. `Sum` boş kümede
+          hata verirdi, bu yüzden `int?` üzerinden toplanıp null 0'a düşürülüyor.
+
+          Yalnızca `Visible`: perdeli (UnderReview) ya da kaldırılmış (Removed) içeriğin
+          oyu rozete girmiyor. Kaldırılan içerikte gerekçe açık — kural ihlali rozet
+          kazandırmamalı. Perdeli içerikte de aynı yönde davranıyoruz: henüz karar
+          verilmemiş bir içeriğin oyunu şimdiden saymak, karar "kaldır" çıkarsa rozeti
+          geri almayı gerektirirdi ve kazanılmış görünen bir rozetin geri alınması,
+          hiç verilmemesinden daha kötü.
+        */
+        var gonderiOylari = await _db.CommunityPosts.AsNoTracking()
+            .Where(p => p.AuthorUserId == user.Id && p.Status == ForumContentStatus.Visible)
+            .SumAsync(p => (int?)p.UpvoteCount, ct) ?? 0;
+
+        var yorumOylari = await _db.CommunityComments.AsNoTracking()
+            .Where(c => c.AuthorUserId == user.Id && c.Status == ForumContentStatus.Visible)
+            .SumAsync(c => (int?)c.UpvoteCount, ct) ?? 0;
+
+        var forumOylari = gonderiOylari + yorumOylari;
+
         var adayKaydi = await _db.TeacherCandidateProfiles.AsNoTracking()
             .SingleOrDefaultAsync(p => p.UserId == user.Id, ct);
 
@@ -301,6 +338,7 @@ public sealed class GetUserProfileHandler : IRequestHandler<GetUserProfileQuery,
             seviye.Level,
             seviye.MinCredits,
             seviye.NextLevelAt,
+            forumOylari,
             IsSelf: kendisi,
             aday,
             portfolio.Where(e => e.Direction == PortfolioDirection.Offer).Select(e =>

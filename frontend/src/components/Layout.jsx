@@ -18,6 +18,7 @@ import {
   KisilerIkonu,
   MesajIkonu,
   KepIkonu,
+  ToplulukIkonu,
   KalkanIkonu,
   CikisIkonu,
   BilgiIkonu,
@@ -63,27 +64,28 @@ const NAV = [
   { to: '/sohbet', label: 'Sohbet', tour: 'chat', Ikon: MesajIkonu },
   { to: '/dersler', label: 'Derslerim', tour: 'sessions', Ikon: KepIkonu },
   /*
-    ⛔ TOPLULUK MENÜDEN ÇIKARILDI (2026-08-27, canlıya çıkış denetimi).
+    TOPLULUK — Derslerim'in hemen altı. Menü bir dersin baştan sona akışını izliyor
+    (keşfet → portföy → eşleşme → sohbet → ders); Topluluk o zincirin sonrası, tekil
+    bir dersin dışında kalan ortak alan.
 
-    Sayfa duruyor (pages/Topluluk.jsx) ve tasarımı bitmiş durumda; ÇIKARILMA SEBEBİ
-    tasarım değil, arkasında sunucu olmaması. Denetim şunları kanıtladı:
+    ─── BİR SÜRE MENÜDEN ÇIKARILMIŞTI (2026-08-27) ────────────────────────────
+    Sayfa 2026-08-25'te sabit veriyle tamamlandı ve canlıya çıkış denetiminde
+    menüden çıkarıldı: tasarımı bitmişti ama ARKASINDA SUNUCU YOKTU. Gönderi, yorum
+    ve oy yalnızca sekmenin belleğindeydi; en tehlikelisi, şikayet formu hiçbir yere
+    gitmediği hâlde kullanıcıya "Şikayetin iletildi" diyordu — öğrencilerin
+    kullandığı bir platformda taciz bildiren kişi bildirdiğini sanıp bekler.
 
-      • Gönderi, yorum ve oy yalnızca sekmenin belleğinde; F5 = her şey silinir.
-      • Şikayet formu hedefi parametre olarak bile almıyor, hiçbir yere gitmiyor —
-        ama kullanıcıya "Şikayetin iletildi, moderasyon inceleyecek" diyor. Öğrencilerin
-        kullandığı bir platformda taciz bildiren kişi bildirdiğini sanıp bekler.
-      • Yan sütundaki "korumalar" (günde 3 gönderi sınırı, bağlantı eşiği, 3 şikayette
-        otomatik inceleme) kodda karşılığı olmayan vaatler.
-      • Örnek içerikteki g7 gönderisi korsan PDF ilanı ve ekranda "7 kişi bildirdi"
-        yazıyor — o şikayetler hiç var olmadı.
-
-    Bu satırı ve App.jsx'teki rotayı geri koymak bölümü yeniden açar. GERİ KOYMADAN
-    ÖNCE: /api/community uçları (gönderi, yorum, oy, şikayet) yazılmış ve şikayet
-    kuyruğu moderasyon paneline bağlanmış olmalı. Ayrıntı Topluluk.jsx'in başında.
-
-    Menüdeki sıra da orada yazılı duruyor: Derslerim'in hemen altı — menü bir dersin
-    baştan sona akışını izliyor, Topluluk o zincirin sonrası.
+    Geri konmasının koşulu şuydu ve dördü de karşılandı (2026-08-27):
+      • /api/community uçları: gönderi, yorum, oy, şikayet
+      • yan sütundaki dört "koruma" vaadinin sunucuda karşılığı (ForumRules)
+      • forum şikayetlerinin moderasyon kuyruğunda İÇERİĞİYLE görünmesi
+      • kaldırılan/perdelenen içeriğe müdahale ucu (ModerateForumContentCommand)
   */
+  /* `tour` çıpası duruyor ama lib/tour.js'te KARŞILIĞI YOK ve bu bilinçli: rehber altı
+     adımda bitiyor ve yedincisini eklemek, kullanıcının ilk açılışta okuduğu akışı
+     uzatmak demek — ayrı bir ürün kararı. Çıpa şimdiden var ki o karar verildiğinde
+     tek satır yetsin. */
+  { to: '/topluluk', label: 'Topluluk', tour: 'community', Ikon: ToplulukIkonu },
 ]
 
 /*

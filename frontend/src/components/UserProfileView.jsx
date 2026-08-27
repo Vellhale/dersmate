@@ -8,6 +8,7 @@ import { CamKart } from './SayfaZemini'
 import { GrafikIkonu, KepIkonu, TakvimIkonu, YildizIkonu } from './Ikonlar'
 import { SubjectBadges } from './SubjectBadges'
 import { UniversiteRozetleri } from './UniversiteRozetleri'
+import { ToplulukRozetleri } from './ToplulukRozetleri'
 import { seviyeEtiketi, seviyeHesapla, seviyeIlerlemeMetni } from '../lib/seviye'
 
 /**
@@ -77,15 +78,17 @@ export function UserProfileView({ userId }) {
       */}
       {p.university && <UniversiteRozetleri userId={userId} />}
 
-      {/* ⛔ TOPLULUK ROZETLERİ GİZLENDİ (2026-08-27) — Topluluk bölümüyle birlikte.
+      {/*
+        TOPLULUK ROZETLERİ — forumda alınan toplam yukarı oy (100/500/1000).
 
-          Bileşen (components/ToplulukRozetleri.jsx) duruyor ve doğru çalışıyor: sayaç
-          yokken kazanılmış rozet uydurmuyor, kademe merdivenini gösteriyor. Ama forum
-          erişilemezken profilde "100 oy → Topluluk Üyesi" merdiveni göstermek, var
-          olmayan bir bölüme davet etmek olurdu.
+        Bir süre gizliydi (2026-08-27): forum erişilemezken profilde "100 oy → Topluluk
+        Üyesi" merdiveni göstermek, var olmayan bir bölüme davet etmek olurdu. Aynı gün
+        forum yayına alındı ve profil ucu `communityUpvotes` döndürmeye başladı.
 
-          Topluluk yayına alındığında bu satır geri gelir; o zamana kadar profil ucunun
-          `communityUpvotes` alanını da döndürmesi gerekiyor (şu an döndürmüyor). */}
+        Sayaç SUNUCUDAN geliyor ve kaldırılmış/perdeli içeriğin oyunu saymıyor — yani
+        kural ihlaliyle toplanan oy rozet kazandırmıyor (bkz. ProfileQueries).
+      */}
+      <ToplulukRozetleri oy={p.communityUpvotes} kendiProfilim={p.isSelf} />
 
       <div className="grid gap-4 lg:grid-cols-2">
         <TopicPanel
