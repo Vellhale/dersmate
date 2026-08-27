@@ -181,3 +181,33 @@ publish klasörü) uygulama sessizce yeni ve BOŞ bir klasör açar — eski kan
 durur ama uç 404 döner.
 
 Yedeği geri yüklemeyi **en az bir kez deneyin**. Denenmemiş yedek, yedek değildir.
+
+## 10. İlk yönetici (⛔ ŞEMA KURULUMUNDAN HEMEN SONRA)
+
+Taze bir veritabanında **hiç kimse yönetici değildir** ve rol atama ucu
+(`PUT api/admin/users/{id}/role`) mevcut bir yöneticiyi şart koşar. Bu adım
+atlanırsa `/admin` paneline kimse giremez: şikayet kuyruğu okunamaz, uyarı /
+askı / ban uygulanamaz. Moderasyon zinciri kodda tamdır ama erişilemez kalır.
+
+```bash
+# 1. Yönetici olacak kişi ÖNCE arayüzden kayıt olur ve e-postasını doğrular.
+# 2. Sonra sunucuda:
+dotnet run --project src/PeerLearn.Api -- --promote-admin eposta@alan-adiniz.com
+```
+
+Komut `--migrate` gibi çalışıp **çıkar**, istek karşılamaz. Kullanıcı yoksa hata
+verir ve hiçbir şey değiştirmez — hesabı bu komut **açmaz**, çünkü parola üretmek
+ve e-posta doğrulamasını atlamak sahipliği kanıtsız kabul etmek olurdu.
+
+Karar `moderation.AdminActionLogs` tablosuna `RoleChanged` olarak yazılır; özet
+bunun bir kurulum adımı olduğunu söyler.
+
+**Neden HTTP ucu değil:** "ilk yöneticiyi aç" ucu ne kadar korunursa korunsun
+kalıcı bir yetki yükseltme yüzeyi bırakır (kurulum bayrağı unutulur, koşul bir
+gün yanlış değerlendirilir). Komut satırı bu yüzeyi hiç açmaz: çalıştırmak için
+zaten sunucuya erişim gerekir ve o erişim varsa veritabanına da doğrudan erişim
+vardır — yani yeni bir ayrıcalık verilmiş olmaz.
+
+⚠️ Komut üretim ortamında çalıştığı için **üretim kapısından geçer**: ortam
+değişkenleri eksikse süreç bu komutta da açılmaz. Bu bilinçli — yanlış
+yapılandırılmış bir kurulumda yönetici açmak, sorunu gizlemekten başka işe yaramaz.
