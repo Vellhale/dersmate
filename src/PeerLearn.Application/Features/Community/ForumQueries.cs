@@ -85,6 +85,16 @@ public sealed record ForumCommentDto(
     ForumAuthorDto Author,
     DateTime CreatedAtUtc,
     int UpvoteCount,
+
+    /// <summary>
+    /// Eksi oy sayısı. GÖNDERİLMEK ZORUNDA, "yorumlar zaten az eksi oy alır" diye
+    /// atlanamaz: arayüz yorum puanını (artı − eksi) diye hesaplıyor ve oy ucu
+    /// (VoteForumContentHandler) her yanıtta İKİ sayacı birden döndürüyor. Alan
+    /// eksik olsaydı istemci ilk çizimde eksiyi bilmeden puan yazar, oy verilince
+    /// sunucudan gelen gerçek sayıyla puan birden sıçrardı.
+    /// </summary>
+    int DownvoteCount,
+
     int MyVote,
     bool UnderReview);
 
@@ -280,6 +290,7 @@ public sealed class GetForumCommentsHandler
                 x.Role is UserRole.Admin or UserRole.Moderator),
             x.c.CreatedAtUtc,
             x.c.UpvoteCount,
+            x.c.DownvoteCount,
             oylarim.TryGetValue(x.c.Id, out var oy) ? oy : 0,
             x.c.Status == ForumContentStatus.UnderReview)).ToList();
     }
