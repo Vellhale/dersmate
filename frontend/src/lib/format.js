@@ -92,11 +92,23 @@ export const DISPUTE_REASON_LABELS = {
  * Şikayet sebepleri. DISPUTE_REASON_LABELS ile aynı değerleri taşıyor ama ayrı duruyor:
  * itiraz geçmişi salt okunur olarak korunuyor, yeni akış şikayet üzerinden gidiyor ve
  * ikisinin metinleri bağımsız değişebilmeli.
+ *
+ * ⚠️ BU TABLO GÖSTERİM İÇİN, FORM İÇİN DEĞİL. Moderasyon kuyruğu her sebebi
+ * yazabilmek zorunda olduğu için tablo TAM; ama hiçbir şikayet formu bu tablonun
+ * tamamını listelemez — ders formunda "Spam" seçeneği, forum formunda "Ders hiç
+ * yapılmadı" anlamsız. Her form kendi alt kümesini kendi dosyasında tutuyor
+ * (Sessions.jsx, Chat.jsx, Topluluk.jsx). Tabloyu doğrudan `Object.entries` ile
+ * bir <select>'e dökmek, sonraki eklenen sebebi sessizce yanlış forma düşürür.
  */
 export const REPORT_REASON_LABELS = {
   SessionNotHeld: 'Ders hiç yapılmadı',
   FakeProof: 'Kanıt sahte / alakasız',
   DurationMismatch: 'Süre anlaşılandan kısa sürdü',
   Abuse: 'Hakaret, taciz veya uygunsuz davranış',
+  // Forum şikayetlerinden gelenler (bkz. Domain/Moderation/Report.cs).
+  Spam: 'Spam veya reklam',
+  Copyright: 'Telif ihlali',
+  PersonalInfo: 'Kişisel bilgi paylaşımı',
+  OffTopic: 'Konu dışı veya trolleme',
   Other: 'Diğer',
 }

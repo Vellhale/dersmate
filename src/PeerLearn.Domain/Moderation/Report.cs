@@ -85,7 +85,37 @@ public enum ReportReason
     /// <summary>Hakaret, taciz, uygunsuz davranış.</summary>
     Abuse = 3,
 
-    Other = 4
+    Other = 4,
+
+    /*
+      ─── FORUMDAN GELEN SEBEPLER (2026-08-27) ──────────────────────────────────
+
+      Dördü de topluluk şikayet formunun seçenekleri. EKLENMELERİNİN SEBEBİ ŞU:
+      onlarsız spam, telif, kişisel bilgi ve trolleme şikayetlerinin hepsi `Other`
+      olarak düşüyordu — yani kuyruktaki sebep sütunu, forum şikayetleri için hiçbir
+      şey söylemiyordu. Moderasyon kuyruğunun işi sıraya sokmak; tek bir "Diğer"
+      yığını sıralanamaz.
+
+      Sebep listesi FORMA GÖRE DEĞİŞİYOR, enum'a göre değil: ders şikayeti formunda
+      "Spam" seçeneği yok, forumda "Ders yapılmadı" yok. Enum ortak, alt küme
+      arayüzde seçiliyor (Chat.jsx'te kurulan kalıp).
+
+      ⚠️ EKLEMEK GÜVENLİ, ÇIKARMAK DEĞİL: enum veritabanında METİN olarak saklanıyor
+      (HasConversion<string>, 30 karakter sınırı). Bir üyeyi verisinden önce silmek,
+      o satırları okunamaz hâle getirir (CLAUDE.md).
+    */
+
+    /// <summary>Satış, reklam, yönlendirme bağlantısı, tekrar eden gönderi.</summary>
+    Spam = 5,
+
+    /// <summary>İzinsiz kitap, PDF, deneme ya da video paylaşımı.</summary>
+    Copyright = 6,
+
+    /// <summary>Telefon, adres, sosyal hesap — kendisinin ya da başkasının.</summary>
+    PersonalInfo = 7,
+
+    /// <summary>Konu dışı içerik ya da tartışmayı bilerek bozan davranış.</summary>
+    OffTopic = 8
 }
 
 public enum ReportStatus

@@ -90,5 +90,15 @@ public enum AdminActionType
     CreditAdjusted = 12,
 
     /// <summary>Tek yönlü şikayet incelendi ve kapatıldı (yaptırım ayrıca kaydedilir).</summary>
-    ReportReviewed = 13
+    ReportReviewed = 13,
+
+    /// <summary>
+    /// Forum içeriği (gönderi/yorum) yönetim kararıyla kaldırıldı ya da geri getirildi.
+    ///
+    /// ŞİKAYETİ KAPATMAKTAN AYRI BİR KAYIT ve ayrı olması gerekiyor: şikayetin
+    /// kapatılması bir İNCELEME kaydı, içeriğin kaldırılması bir MÜDAHALE. İkisi tek
+    /// satıra sıkıştırılsaydı "şikayet kapatıldı" izine bakan biri, içeriğe dokunulup
+    /// dokunulmadığını göremezdi.
+    /// </summary>
+    ForumContentModerated = 14
 }

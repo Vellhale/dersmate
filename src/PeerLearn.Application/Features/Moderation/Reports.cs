@@ -262,7 +262,33 @@ public sealed record ReportListItemDto(
     int ReportedUserTotalReports,
 
     Guid? SessionId,
-    string? TopicName);
+    string? TopicName,
+
+    /*
+      ─── FORUM BAĞLAMI (2026-08-27) ────────────────────────────────────────────
+
+      Bu alanlar olmadan forum şikayetleri kuyruğa DÜŞÜYOR ama incelenemiyordu:
+      moderatör "Telif ihlali — 'bu gönderi izinsiz PDF paylaşıyor'" satırını görüyor,
+      hangi gönderiden söz edildiğini göremiyordu. Şikayet edilen içeriği okuyamayan
+      bir moderatör, ancak şikayet edenin anlatımına inanarak karar verebilir — yani
+      hiç karar veremez.
+
+      METİN KUYRUKLA BİRLİKTE GELİYOR, ayrı bir istekle değil: kuyruk zaten sayfasız
+      ve kısa; içerik başına ikinci bir gidiş gelişin tek sonucu, moderatörün her
+      satır için beklemesi olurdu.
+    */
+    Guid? CommunityPostId,
+    Guid? CommunityCommentId,
+
+    /// <summary>Şikayet edilen içeriğin metni: gönderide "Başlık — gövde", yorumda gövde.</summary>
+    string? ContentExcerpt,
+
+    /// <summary>
+    /// İçeriğin O ANKİ durumu (Visible / UnderReview / Removed) — moderatörün ne
+    /// yapabileceğini bu belirliyor. Şikayetin durumundan bağımsız: kapatılmış bir
+    /// şikayetin içeriği hâlâ perdeli olabilir.
+    /// </summary>
+    string? ContentStatus);
 
 public sealed class GetReportsHandler : IRequestHandler<GetReportsQuery, IReadOnlyList<ReportListItemDto>>
 {
@@ -290,12 +316,39 @@ public sealed class GetReportsHandler : IRequestHandler<GetReportsQuery, IReadOn
                 x.ReporterUserId,
                 x.ReportedUserId,
                 x.SessionId,
+                x.CommunityPostId,
+                x.CommunityCommentId,
                 ReporterAd = _db.Users.Where(u => u.Id == x.ReporterUserId).Select(u => u.DisplayName).First(),
                 ReportedAd = _db.Users.Where(u => u.Id == x.ReportedUserId).Select(u => u.DisplayName).First(),
                 Toplam = _db.Reports.Count(r => r.ReportedUserId == x.ReportedUserId),
                 Konu = _db.LessonSessions
                     .Where(s => s.Id == x.SessionId)
                     .Select(s => _db.Topics.Where(t => t.Id == s.TopicId).Select(t => t.Name).First())
+                    .FirstOrDefault(),
+
+                /*
+                  İçerik metni ve durumu SORGUDA toplanıyor, sonradan tek tek çekilerek
+                  değil: 40 satırlık bir kuyruk 40 ek gidiş gelişe (N+1) dönerdi.
+
+                  İki ayrı alt sorgu çünkü gönderi ile yorum ayrı tablolar. Şikayet
+                  ikisinden yalnızca birini taşıyor (Report.cs'teki değişmez), dolayısıyla
+                  en fazla biri dolu dönüyor.
+                */
+                GonderiMetni = _db.CommunityPosts
+                    .Where(p => p.Id == x.CommunityPostId)
+                    .Select(p => p.Title + " — " + p.Body)
+                    .FirstOrDefault(),
+                GonderiDurumu = _db.CommunityPosts
+                    .Where(p => p.Id == x.CommunityPostId)
+                    .Select(p => (ForumContentStatus?)p.Status)
+                    .FirstOrDefault(),
+                YorumMetni = _db.CommunityComments
+                    .Where(c => c.Id == x.CommunityCommentId)
+                    .Select(c => c.Body)
+                    .FirstOrDefault(),
+                YorumDurumu = _db.CommunityComments
+                    .Where(c => c.Id == x.CommunityCommentId)
+                    .Select(c => (ForumContentStatus?)c.Status)
                     .FirstOrDefault()
             })
             .ToListAsync(ct);
@@ -312,7 +365,11 @@ public sealed class GetReportsHandler : IRequestHandler<GetReportsQuery, IReadOn
             x.ReportedAd,
             x.Toplam,
             x.SessionId,
-            x.Konu)).ToList();
+            x.Konu,
+            x.CommunityPostId,
+            x.CommunityCommentId,
+            x.GonderiMetni ?? x.YorumMetni,
+            (x.GonderiDurumu ?? x.YorumDurumu)?.ToString())).ToList();
     }
 }
 
@@ -366,6 +423,126 @@ public sealed class ResolveReportHandler : IRequestHandler<ResolveReportCommand>
             targetId: sikayet.Id,
             summary: request.ActionTaken ? "Şikayet: yaptırım uygulandı" : "Şikayet: işlem gerekmedi",
             metadata: new { actionTaken = request.ActionTaken, note = sikayet.AdminNote });
+
+        await _db.SaveChangesAsync(ct);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 4) Forum içeriğine müdahale
+// ---------------------------------------------------------------------------
+
+/*
+  İÇERİĞİ KALDIRMA / GERİ GETİRME — moderasyon zincirinin eksik halkasıydı.
+
+  Şikayet mekanizması eşiği geçen içeriği OTOMATİK perdeliyor (CreateReportHandler).
+  Kapatılmayan boşluk şuydu: perdeyi kaldıracak, ya da içeriği gerçekten kaldıracak
+  hiçbir yol yoktu. Sonuç iki yönlü bir sıkışmaydı —
+
+    • Haksız yere üç şikayet alan bir gönderi SONSUZA KADAR perdeli kalıyordu.
+      Moderatör şikayeti "işlem gerekmedi" diye kapatabiliyordu ama içerik perdede
+      kalmaya devam ediyordu, yani "işlem gerekmedi" kararı hiçbir şeyi geri almıyordu.
+    • Kuralı gerçekten ihlal eden bir gönderi ise KALDIRILAMIYORDU: paneldeki tek
+      düğme şikayeti kapatıyordu, içeriğe dokunmuyordu. Yayında kalan içerik yeniden
+      şikayet ediliyor, kuyruk aynı gönderiyle doluyordu.
+
+  ŞİKAYETİ KAPATMAKTAN AYRI BİR İŞLEM ve ayrı kalması gerekiyor: bir şikayet birden
+  çok içeriğe değil tek bir içeriğe bakıyor ama aynı içerik hakkında birden çok
+  şikayet olabilir. İçerik kararını şikayete bağlamak, ikinci şikayeti kapatırken
+  aynı içeriğe ikinci kez müdahale etmek demekti.
+
+  GERİ GETİRME HER ZAMAN `Visible`: perdeli duruma (UnderReview) döndürmek anlamsız,
+  çünkü perde zaten "henüz bakılmadı" demek. Moderatör baktıysa ya görünür ya kaldırılmış.
+  ReportCount SIFIRLANMIYOR — şikayetlerin var olduğu bir olgu; sayacı silmek, aynı
+  içerik yeniden şikayet edildiğinde eşiği yeniden en baştan saydırırdı.
+*/
+public sealed record ModerateForumContentCommand(
+    Guid AdminUserId,
+    Guid? PostId,
+    Guid? CommentId,
+
+    /// <summary>true → kaldır (Removed), false → geri getir (Visible).</summary>
+    bool Remove,
+
+    string Reason) : IRequest;
+
+public sealed class ModerateForumContentHandler : IRequestHandler<ModerateForumContentCommand>
+{
+    private const int MinReasonLength = 10;
+
+    private readonly IAppDbContext _db;
+    private readonly IClock _clock;
+
+    public ModerateForumContentHandler(IAppDbContext db, IClock clock)
+    {
+        _db = db;
+        _clock = clock;
+    }
+
+    public async Task Handle(ModerateForumContentCommand request, CancellationToken ct)
+    {
+        var gerekce = (request.Reason ?? string.Empty).Trim();
+
+        /*
+          GEREKÇE ZORUNLU. Denetim izine "içerik kaldırıldı" yazan ama NEDEN yazmayan
+          bir satır, altı ay sonra bakan biri için kararı tartışılamaz kılar — kaldırma
+          kararı en çok tartışılan moderasyon kararıdır. Yaptırım ucundaki eşikle
+          (SanctionUser) aynı sayı: iki karar da aynı ağırlıkta.
+        */
+        if (gerekce.Length < MinReasonLength)
+        {
+            throw new AppException(ErrorCodes.ValidationFailed,
+                $"Gerekçe en az {MinReasonLength} karakter olmalı.");
+        }
+
+        var hedefSayisi = (request.PostId.HasValue ? 1 : 0) + (request.CommentId.HasValue ? 1 : 0);
+        if (hedefSayisi != 1)
+        {
+            throw new AppException(ErrorCodes.ValidationFailed,
+                "Tam olarak bir içerik belirtilmeli (gönderi ya da yorum).");
+        }
+
+        var yeniDurum = request.Remove ? ForumContentStatus.Removed : ForumContentStatus.Visible;
+
+        var actorRole = await _db.Users.AsNoTracking()
+            .Where(u => u.Id == request.AdminUserId).Select(u => u.Role).SingleAsync(ct);
+
+        string ozet;
+        Guid hedefId;
+        string hedefTuru;
+
+        if (request.PostId is { } gonderiId)
+        {
+            var gonderi = await _db.CommunityPosts.SingleOrDefaultAsync(p => p.Id == gonderiId, ct)
+                ?? throw new AppException(ErrorCodes.PostNotFound, "Gönderi bulunamadı.", statusCode: 404);
+
+            gonderi.Status = yeniDurum;
+            gonderi.ModeratedAtUtc = _clock.UtcNow;
+
+            hedefId = gonderi.Id;
+            hedefTuru = "CommunityPost";
+            ozet = request.Remove ? "Forum gönderisi kaldırıldı" : "Forum gönderisi geri getirildi";
+        }
+        else
+        {
+            var yorum = await _db.CommunityComments.SingleOrDefaultAsync(c => c.Id == request.CommentId, ct)
+                ?? throw new AppException(ErrorCodes.CommentNotFound, "Yorum bulunamadı.", statusCode: 404);
+
+            yorum.Status = yeniDurum;
+            yorum.ModeratedAtUtc = _clock.UtcNow;
+
+            hedefId = yorum.Id;
+            hedefTuru = "CommunityComment";
+            ozet = request.Remove ? "Forum yorumu kaldırıldı" : "Forum yorumu geri getirildi";
+        }
+
+        AdminAudit.Record(
+            _db, request.AdminUserId, actorRole,
+            AdminActionType.ForumContentModerated,
+            targetType: hedefTuru,
+            targetId: hedefId,
+            summary: ozet,
+            metadata: new { removed = request.Remove, reason = gerekce });
 
         await _db.SaveChangesAsync(ct);
     }

@@ -149,6 +149,7 @@ function ReportQueue({ onNotice }) {
   const [busyId, setBusyId] = useState(null)
   const [error, setError] = useState(null)
   const [yaptirimHedefi, setYaptirimHedefi] = useState(null)
+  const [icerikHedefi, setIcerikHedefi] = useState(null)
 
   async function kapat(reportId, actionTaken) {
     setBusyId(reportId)
@@ -198,6 +199,8 @@ function ReportQueue({ onNotice }) {
                 </p>
 
                 <p className="mt-2 whitespace-pre-wrap text-sm text-slate-700">{r.description}</p>
+
+                <SikayetEdilenIcerik rapor={r} />
               </div>
 
               <div className="flex shrink-0 flex-col gap-2">
@@ -214,6 +217,19 @@ function ReportQueue({ onNotice }) {
                 >
                   Yaptırım uygula
                 </Button>
+                {/* İÇERİK KARARI YAPTIRIMDAN AYRI DÜĞME ve ayrı olması gerekiyor:
+                    kuralı ihlal eden gönderiyi kaldırmak, yazarını askıya almakla
+                    aynı şey değil. İlk ihlalde çoğu zaman doğru karar "içeriği
+                    kaldır, kişiye dokunma"dır; tek düğme bu ayrımı imkânsız kılardı. */}
+                {(r.communityPostId || r.communityCommentId) && (
+                  <Button
+                    variant="secondary"
+                    disabled={busyId === r.reportId}
+                    onClick={() => setIcerikHedefi(r)}
+                  >
+                    {r.contentStatus === 'Removed' ? 'İçeriği geri getir' : 'İçerik kararı'}
+                  </Button>
+                )}
                 <Button
                   variant="secondary"
                   loading={busyId === r.reportId}
@@ -232,6 +248,16 @@ function ReportQueue({ onNotice }) {
         onClose={() => setYaptirimHedefi(null)}
         onUygulandi={(mesaj) => {
           setYaptirimHedefi(null)
+          onNotice(mesaj)
+          reports.reload()
+        }}
+      />
+
+      <IcerikKarariModali
+        hedef={icerikHedefi}
+        onClose={() => setIcerikHedefi(null)}
+        onUygulandi={(mesaj) => {
+          setIcerikHedefi(null)
           onNotice(mesaj)
           reports.reload()
         }}
@@ -283,6 +309,160 @@ const ASKI_SURELERI = [
   { saat: 168, label: '1 hafta' },
   { saat: 720, label: '30 gün' },
 ]
+
+/*
+  ─── ŞİKAYET EDİLEN FORUM İÇERİĞİ ──────────────────────────────────────────────
+
+  Bu blok olmadan forum şikayetleri kuyruğa düşüyor ama İNCELENEMİYORDU: moderatör
+  "Telif ihlali — 'izinsiz PDF paylaşıyor'" satırını görüyor, hangi gönderiden söz
+  edildiğini göremiyordu. Şikayet edilen içeriği okuyamayan bir moderatör ancak
+  şikayet edenin anlatımına inanarak karar verebilir — yani karar veremez.
+
+  DURUM ROZETİ metinden önce geliyor: içerik zaten kaldırılmışsa moderatörün metni
+  okumasına gerek yok, karar verilmiş demektir.
+
+  Metin KISALTILMIYOR (line-clamp yok): kuyruğun tamamı taranan bir liste değil,
+  tek tek karar verilen kayıtlar. Kesilmiş bir alıntı, kararın dayanağını gizler.
+*/
+const ICERIK_DURUM_TONU = {
+  Visible: { ton: 'success', label: 'Yayında' },
+  UnderReview: { ton: 'warning', label: 'İncelemede (akışta perdeli)' },
+  Removed: { ton: 'neutral', label: 'Kaldırıldı' },
+}
+
+function SikayetEdilenIcerik({ rapor }) {
+  if (!rapor.communityPostId && !rapor.communityCommentId) return null
+
+  const tur = rapor.communityPostId ? 'Forum gönderisi' : 'Forum yorumu'
+  const durum = ICERIK_DURUM_TONU[rapor.contentStatus]
+
+  return (
+    <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs font-semibold text-slate-700">{tur}</span>
+        {durum && <Badge tone={durum.ton}>{durum.label}</Badge>}
+      </div>
+
+      {rapor.contentExcerpt ? (
+        <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-slate-800">
+          {rapor.contentExcerpt}
+        </p>
+      ) : (
+        /* İçerik veritabanından silinmişse (elle müdahale) alıntı boş gelir. Boş bir
+           kutu göstermek yerine bunu SÖYLEMEK gerekiyor: moderatör metnin
+           yüklenmediğini mi yoksa içeriğin gitmiş olduğunu mu gördüğünü bilmeli. */
+        <p className="mt-2 text-sm italic text-slate-500">
+          İçerik artık veritabanında yok; şikayet kaydı duruyor.
+        </p>
+      )}
+    </div>
+  )
+}
+
+/*
+  İÇERİK KARARI — kaldır ya da geri getir.
+
+  YAPTIRIMDAN AYRI BİR MODAL. İkisini birleştirmek "içeriği kaldır" ile "kişiyi askıya
+  al"ı tek karara bağlardı; oysa ilk ihlalde doğru karar çoğu zaman içeriği kaldırıp
+  kişiye dokunmamaktır.
+
+  ŞİKAYETİ KAPATMIYOR ve bu bilinçli: aynı içerik hakkında birden çok şikayet
+  olabiliyor. İçerik kararı verildikten sonra moderatör her şikayeti ayrı ayrı
+  kapatıyor (ya da yaptırımla birlikte kapanıyor) — kararın kendisi tek, kuyruk
+  kayıtları ayrı.
+*/
+function IcerikKarariModali({ hedef, onClose, onUygulandi }) {
+  const [gerekce, setGerekce] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState(null)
+
+  const kaldirilmis = hedef?.contentStatus === 'Removed'
+  const gonderi = Boolean(hedef?.communityPostId)
+
+  const kapat = () => {
+    setGerekce('')
+    setError(null)
+    onClose()
+  }
+
+  // Sunucu da en az 10 karakter istiyor (ModerateForumContentHandler); istemcideki
+  // kontrolün tek amacı kullanıcıyı yazdıktan sonra 400'e düşürmemek.
+  const uygulanabilir = gerekce.trim().length >= 10
+
+  async function uygula() {
+    if (!uygulanabilir || busy) return
+    setBusy(true)
+    setError(null)
+    try {
+      await api.moderateForumContent({
+        postId: hedef.communityPostId ?? null,
+        commentId: hedef.communityCommentId ?? null,
+        remove: !kaldirilmis,
+        reason: gerekce.trim(),
+      })
+
+      const ad = gonderi ? 'Gönderi' : 'Yorum'
+      onUygulandi(kaldirilmis ? `${ad} geri getirildi.` : `${ad} kaldırıldı.`)
+      setGerekce('')
+    } catch (err) {
+      setError(err)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Modal
+      open={hedef !== null}
+      onClose={kapat}
+      title={kaldirilmis ? 'İçeriği geri getir' : 'İçeriği kaldır'}
+      footer={
+        <>
+          <Button variant="secondary" onClick={kapat} disabled={busy}>
+            Vazgeç
+          </Button>
+          <Button
+            variant={kaldirilmis ? 'primary' : 'danger'}
+            onClick={uygula}
+            loading={busy}
+            disabled={!uygulanabilir || busy}
+          >
+            {kaldirilmis ? 'Geri getir' : 'Kaldır'}
+          </Button>
+        </>
+      }
+    >
+      {hedef && (
+        <div className="space-y-4">
+          <ErrorBox error={error} />
+
+          <SikayetEdilenIcerik rapor={hedef} />
+
+          <p className="rounded-lg bg-slate-50 p-3 text-xs leading-relaxed text-slate-600">
+            {kaldirilmis
+              ? 'İçerik yeniden yayına alınır ve akışta perdesiz görünür. Şikayet sayacı sıfırlanmaz.'
+              : 'İçerik akıştan kaldırılır; yazarı ve okuyanlar bir daha göremez. Şikayet kaydı ve sayacı durur, karar denetim izine yazılır.'}
+            {' '}
+            Bu işlem şikayeti KAPATMAZ — kuyruktaki kaydı ayrıca sonuçlandırman gerekiyor.
+          </p>
+
+          <Field
+            label="Gerekçe (zorunlu)"
+            hint="Denetim izine yazılır. Kaldırma kararı en çok tartışılan karardır; dayanağı görünür olmalı."
+          >
+            <textarea
+              className="input h-24 resize-none"
+              value={gerekce}
+              onChange={(e) => setGerekce(e.target.value)}
+              maxLength={1000}
+              placeholder="Örn. gönderi izinsiz PDF bağlantısı paylaşıyor, 2. kural ihlali."
+            />
+          </Field>
+        </div>
+      )}
+    </Modal>
+  )
+}
 
 function YaptirimModali({ hedef, onClose, onUygulandi }) {
   const [tur, setTur] = useState('Warning')
@@ -1408,6 +1588,14 @@ const ACTION_LABELS = {
   TeacherCandidateRejected: 'Öğretmen adaylığı reddedildi',
   TeacherCandidateReviewReverted: 'Adaylık kararı geri alındı',
   UserSanctioned: 'Yaptırım uygulandı (uyarı/askı)',
+
+  /* Üçü de tabloda EKSİKTİ ve eksiklik sessizdi: `?? row.action` yedeği sayesinde
+     denetim izi patlamıyor, satır İngilizce enum adını gösteriyordu ("CreditAdjusted").
+     Türkçe bir panelde bu, hatadan çok "burası yarım kalmış" izlenimi veriyor.
+     AdminActionType'a üye eklerken buraya da eklemek gerekiyor. */
+  CreditAdjusted: 'Puan düzeltmesi yapıldı',
+  ReportReviewed: 'Şikayet incelendi',
+  ForumContentModerated: 'Forum içeriğine müdahale edildi',
 }
 
 function AuditLogPanel() {
