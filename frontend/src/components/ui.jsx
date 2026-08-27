@@ -17,8 +17,26 @@ export function Button({ variant = 'primary', className = '', loading = false, c
       className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm
                   font-medium transition focus:outline-none focus:ring-2 disabled:cursor-not-allowed
                   disabled:opacity-50 lg:min-h-0 ${VARIANTS[variant]} ${className}`}
-      disabled={loading || props.disabled}
       {...props}
+      /*
+        ⚠️ `disabled` SPREAD'DEN SONRA — 2026-08-27'de düzeltildi, sırası KRİTİK.
+
+        Önce `disabled={loading || props.disabled}` yazıp ARDINDAN `{...props}`
+        yaymak, çağıranın açıkça geçtiği `disabled` değerinin hesaplanmış olanı
+        EZMESİNE yol açıyordu. Yani hem `loading` hem `disabled` geçen her düğme
+        (depoda 19 tane) istek uçuşurken TIKLANABİLİR kalıyordu: `disabled={!hazir}`
+        ve form geçerliyken `disabled` false oluyor, spinner dönerken düğmeye
+        ikinci kez basılabiliyordu.
+
+        Somut sonucu: yönetim panelindeki "Uygula ve şikayeti kapat" iki kez
+        basıldığında aynı kullanıcıya İKİ yaptırım uygulanıyor ve denetim izine iki
+        kayıt düşüyordu. Aynı tuzak avatar yükleme, değerlendirme gönderme ve parola
+        sıfırlamada da vardı.
+
+        Sıra tersine çevrildiği için artık çağıranın `disabled`'ı da hesaba katılıyor
+        (ifadenin içinde `props.disabled` duruyor) ama `loading` bastırılamıyor.
+      */
+      disabled={loading || props.disabled}
     >
       {loading && <Spinner className="h-4 w-4" />}
       {children}
