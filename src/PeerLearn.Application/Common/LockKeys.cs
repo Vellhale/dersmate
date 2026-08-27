@@ -43,4 +43,19 @@ public static class LockKeys
     /// girmez — dolayısıyla iki isteğin birbirini beklemesi için sebep yok.
     /// </remarks>
     public static string Tutor(Guid tutorUserId) => $"lock:tutor:{tutorUserId}";
+
+    /// <summary>
+    /// Forum oyu: İÇERİK bazında (gönderi ya da yorum).
+    ///
+    /// ANAHTAR SORGUNUN GRUPLADIĞI ŞEYİ KAPSAMALI (bu projede bir kez ısırdı — yukarıdaki
+    /// Tutor notu). Oy verme yolu iki şeyi birlikte değiştiriyor: kullanıcının oy satırı
+    /// ve İÇERİĞİN sayaçları. Yarışan taraf farklı kullanıcılar, ortak olan ise içerik —
+    /// yani kilit kullanıcı bazında olsaydı aynı gönderiye oy veren iki kişi birbirini
+    /// hiç görmez, sayaç güncellemeleri birbirini ezerdi.
+    ///
+    /// xmin iyimser kilidi (CommunityPost.Version) bunu zaten yakalar ve ConcurrencyRetry
+    /// yeniden dener; kilit o yeniden denemelerin sayısını düşürüyor. İkisi birlikte:
+    /// kilit süreç içi yarışı, xmin iki instance arasındaki çakışmayı kapatır.
+    /// </summary>
+    public static string ForumContent(Guid contentId) => $"lock:forum:{contentId}";
 }

@@ -103,6 +103,12 @@ public static class ErrorCodes
 
     // Şikayet (tek yönlü). İtirazın yerini aldı; bkz. Domain/Moderation/Report.cs
     public const string ReportNotFound = "REPORT_NOT_FOUND";
+
+    /// <summary>Forum gönderisi bulunamadı (kaldırılmış ya da hiç var olmamış).</summary>
+    public const string PostNotFound = "POST_NOT_FOUND";
+
+    /// <summary>Forum yorumu bulunamadı.</summary>
+    public const string CommentNotFound = "COMMENT_NOT_FOUND";
     public const string ReportAlreadyExists = "REPORT_ALREADY_EXISTS";
     public const string DisputeAlreadyOpen = "DISPUTE_ALREADY_OPEN";
     public const string NotAuthorized = "NOT_AUTHORIZED";
