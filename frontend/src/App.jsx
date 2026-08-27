@@ -12,6 +12,7 @@ import Discover from './pages/Discover'
 import Matches from './pages/Matches'
 import Chat from './pages/Chat'
 import Sessions from './pages/Sessions'
+import Topluluk from './pages/Topluluk'
 import Profile from './pages/Profile'
 import Admin from './pages/Admin'
 import Hakkimizda from './pages/Hakkimizda'
@@ -73,16 +74,12 @@ export default function App() {
         <Route path="/sohbet" element={<Chat />} />
         <Route path="/sohbet/:conversationId" element={<Chat />} />
         <Route path="/dersler" element={<Sessions />} />
-        {/* ⛔ TOPLULUK ROTASI KAPALI (2026-08-27, canlıya çıkış denetimi).
-
-            Rota da menü öğesiyle birlikte kaldırıldı: yalnızca menüden çıkarmak,
+        {/* Topluluk. Rota 2026-08-27'de bir süre kapalıydı (arkasında sunucu yoktu) ve
+            aynı gün uçlar yazılınca geri açıldı — gerekçe Layout.jsx'teki NAV notunda.
+            Kapatılırken menüyle BİRLİKTE kaldırılmıştı: yalnızca menüden çıkarmak,
             adresi bilen ya da eski bir bağlantıya tıklayan kişi için sayfayı açık
-            bırakırdı — ve oradaki asıl tehlike menü değil, hiçbir yere gitmediği hâlde
-            "iletildi" diyen şikayet formu. /topluluk artık aşağıdaki "*" kuralıyla
-            Keşfet'e düşüyor.
-
-            Sayfa dosyası SİLİNMEDİ (pages/Topluluk.jsx); sunucu uçları yazıldığında bu
-            satır ve Layout.jsx'teki menü öğesi geri konur. Gerekçenin tamamı orada. */}
+            bırakırdı. */}
+        <Route path="/topluluk" element={<Topluluk />} />
         {/* CÜZDAN KALDIRILDI: puan artık harcanan bir bakiye değil, profilde görünen bir
             unvan. Eski bağlantılar (yer imi, tur adımı) kırık kalmasın diye yönlendiriliyor;
             işlem geçmişi Derslerim'e taşındı. */}

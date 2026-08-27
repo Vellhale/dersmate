@@ -344,3 +344,104 @@ kırmızıya düştü, sıfır kaçak.
 - **Test kanıtı:** eklenen her testin, ilgili kod bozulduğunda KIRILDIĞI mutasyonla
   gösterilmeli. "Geçiyor" yetmez.
 - Tarayıcı testleri **yeni bir Playwright sekmesinde** yapılmalı.
+
+## Topluluk (forum) — yayına alındı (2026-08-27)
+
+Sekme 2026-08-25'te sabit veriyle `main`'e girmiş, canlıya çıkış denetiminde menüden ve
+rotadan **çıkarılmıştı**: tasarımı bitmişti ama arkasında sunucu yoktu. En tehlikeli
+tarafı şikayet formuydu — hiçbir yere gitmediği hâlde kullanıcıya "Şikayetin iletildi"
+diyordu. Öğrencilerin kullandığı bir platformda taciz bildiren kişi bildirdiğini sanıp
+bekler; bu, hiç olmayan bir şikayet düğmesinden kötüdür.
+
+Aynı gün sunucu tarafı yazıldı ve sekme geri açıldı.
+
+### Ne var
+
+| Katman | Yer |
+|---|---|
+| Şema (`community.Posts/Comments/Votes`) | `Domain/Community/Forum.cs`, göç `20260827120005_ToplulukForumu` |
+| Okuma (akış, yorumlar) | `Application/Features/Community/ForumQueries.cs` |
+| Yazma (gönderi, yorum, oy) | `Application/Features/Community/ForumCommands.cs` |
+| HTTP | `Api/Controllers/CommunityController.cs` (8 uç) |
+| Arayüz | `frontend/src/pages/Topluluk.jsx` |
+
+**Sıralama, tarih penceresi ve etiket filtresi SUNUCUDA.** İstemcide yapılsaydı sayfalama
+anlamsız olurdu: ikinci sayfayı verebilmek için tüm gönderileri indirmek gerekirdi.
+
+**Oy yolu ekonomi kalıbını izliyor** (kilit + transaction + `ConcurrencyRetry`). Kilit
+İÇERİK bazında (`LockKeys.ForumContent`), kullanıcı bazında değil: yarışan taraf farklı
+kullanıcılar, ortak olan içerik. Kullanıcı anahtarıyla aynı gönderiye oy veren iki kişi
+birbirini hiç görmez, sayaçlar birbirini ezerdi.
+
+### Arayüzdeki her vaadin sunucuda karşılığı var
+
+Yan sütundaki "korumalar" bir zamanlar kodda karşılığı olmayan cümlelerdi ve denetimde
+bulundu. Dördü de artık gerçek ve mutasyonla sınandı:
+
+| Ekrandaki cümle | Kod |
+|---|---|
+| Dosya yükleme kapalı | formda alan hiç yok |
+| İlk hafta günde 3 gönderi | `ForumRules.NewAccountDailyPostLimit` (ölçüldü: 4. istek 429) |
+| Bağlantı 3. seviyeden itibaren | `ForumRules.LinkMinLevel` (1. seviye 400, 8. seviye geçti) |
+| 3 şikayet alan gönderi kapatılır | `ForumRules.AutoReviewThreshold` (3. şikayette `UnderReview`) |
+
+Ek koruma: **aynı kişi aynı içeriği bir kez şikayet edebiliyor** (409). Bu kapı olmadan tek
+kullanıcı perdeleme eşiğini tek başına aşıp istediği gönderiyi düşürebilir, yani şikayet
+mekanizması sansür aracına dönerdi.
+
+### Moderasyon zinciri kapalı
+
+Otomatik perdeleme tek başına bir çıkmazdı: perdeyi kaldıracak ya da içeriği gerçekten
+kaldıracak yol yoktu. Haksız yere üç şikayet alan gönderi **sonsuza kadar** perdeli
+kalıyordu; "işlem gerekmedi" kararı bile bunu geri almıyordu.
+
+- `ModerateForumContentCommand` → `POST /api/admin/community/moderate` (kaldır / geri getir)
+- Şikayet kuyruğu artık içeriğin **metnini ve durumunu** taşıyor (`ReportListItemDto`) —
+  öncesinde moderatör neyin şikayet edildiğini göremiyordu.
+- Şikayeti kapatmaktan AYRI: aynı içerik hakkında birden çok şikayet olabiliyor.
+- Gerekçe zorunlu (≥10 karakter) ve denetim izine yazılıyor (`ForumContentModerated`).
+
+`ReportReason`'a dört üye eklendi (`Spam`, `Copyright`, `PersonalInfo`, `OffTopic`).
+Onlarsız forum şikayetlerinin beşte dördü `Other`'a düşüyordu — kuyruktaki sebep sütunu
+sıralanamaz tek bir yığın olurdu. Enum metin olarak saklandığı için **eklemek güvenli,
+çıkarmak değil**.
+
+> ⚠️ `REPORT_REASON_LABELS` (frontend/src/lib/format.js) artık GÖSTERİM tablosu, form
+> kaynağı değil. Her şikayet formu kendi alt kümesini kendi dosyasında tutuyor. Tabloyu
+> doğrudan `Object.entries` ile bir `<select>`e dökmek, sonradan eklenen bir sebebi
+> sessizce yanlış forma düşürür (Sessions.jsx bu yüzden düzeltildi).
+
+### Yönetim rozeti
+
+Ürün sahibi kararı: forumda platformla ilgili sorular sorulacak ve resmi cevabın hangisi
+olduğu ayırt edilebilmeli. Bayrak forum yazarlarında ve Keşfet kartlarında var
+(`ForumAuthorDto.IsStaff`, `OfferCardDto.TutorIsStaff`, `UniversityPeerDto.IsStaff`,
+`MatchSuggestionDto.IsStaff`).
+
+**Sunucudan geliyor, istemci hesaplamıyor.** Rol tarayıcıda türetilseydi sahte bir yönetim
+rozeti üretmek bir satırlık iş olurdu — tam da engellenmek istenen şey. Profil ucu rolü
+hâlâ sızdırmıyor.
+
+> `OfferCardDto` önbelleğe giriyor; alan eklendiği için önbellek öneki **v2 → v3**'e
+> yükseltildi. Şeklini değiştirdiğin her seferde bu sürüm de artmalı, yoksa dağıtımdan
+> sonraki 60 saniye boyunca eski girdiler çözülemez ve uç 500 döner.
+
+### Topluluk rozetleri (100/500/1000)
+
+Profil ucu artık `communityUpvotes` döndürüyor. **Okuma anında sayılıyor**, saklanan sayaç
+yok: saklanan bir toplam, oy geri alındığında ya da içerik kaldırıldığında güncellenmeyi
+unutur ve sessizce şişer.
+
+**Yalnızca `Visible` içeriğin oyu sayılıyor.** Kaldırılan içerikte gerekçe açık — kural
+ihlali rozet kazandırmamalı. Perdeli içerikte de aynı: karar "kaldır" çıkarsa kazanılmış
+görünen bir rozeti geri almak gerekirdi ve o, hiç vermemekten kötüdür.
+
+### Açık kalanlar
+
+- **Gönderi sayfası yok.** Başlık bağlantı değil, yorumlar kartın içinde açılıyor. Ayrı
+  sayfa gelene kadar paylaşılabilir gönderi bağlantısı da yok.
+- **Yorumlarda sayfalama yok** — bir gönderideki yorum sayısı doğal olarak sınırlı
+  olduğu için bilinçli. Gerekirse akıştaki kalıp buraya taşınır.
+- **Yorum düzenleme/silme yok.** Yazar kendi içeriğini kaldıramıyor; yalnızca moderasyon
+  kaldırabiliyor.
+- **Forum bildirimi yok**: gönderine yorum gelince haber verilmiyor.
