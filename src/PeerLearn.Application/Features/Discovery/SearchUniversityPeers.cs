@@ -43,6 +43,14 @@ public sealed record UniversityPeerDto(
     decimal AverageRating,
     int RatingCount,
     int Level,
+
+    /// <summary>
+    /// Yönetici/moderatör işareti — ForumAuthorDto.IsStaff ile aynı bayrak, aynı
+    /// gerekçe: resmi hesabın hangisi olduğu keşif listelerinde de ayırt edilebilmeli.
+    /// Sunucudan geliyor; istemcide türetilseydi sahte rozet üretilebilirdi.
+    /// </summary>
+    bool IsStaff,
+
     DateTime CreatedAtUtc);
 
 public sealed class SearchUniversityPeersHandler
@@ -231,6 +239,7 @@ public sealed class SearchUniversityPeersHandler
                 u.AverageRating,
                 u.RatingCount,
                 u.TotalEarnedCredits,
+                u.Role,
                 u.CreatedAtUtc,
             })
             .ToListAsync(ct);
@@ -248,6 +257,7 @@ public sealed class SearchUniversityPeersHandler
                 r.AverageRating,
                 r.RatingCount,
                 UserLevelRules.Hesapla(r.TotalEarnedCredits).Level,
+                r.Role is UserRole.Admin or UserRole.Moderator,
                 r.CreatedAtUtc))
             .ToList();
 

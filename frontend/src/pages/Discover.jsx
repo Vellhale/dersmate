@@ -15,6 +15,7 @@ import {
 import { PersonLink } from '../components/PersonLink'
 import { CamKart } from '../components/SayfaZemini'
 import { SeviyeRozeti } from '../components/SeviyeRozeti'
+import { YonetimRozeti } from '../components/YonetimRozeti'
 import {
   Badge,
   Button,
@@ -489,6 +490,7 @@ function UniversiteKarti({ kisi, onSohbet }) {
               <PersonLink userId={kisi.userId} className="font-semibold text-brand-700">
                 {kisi.displayName}
               </PersonLink>
+              {kisi.isStaff && <YonetimRozeti kucuk />}
               <SeviyeRozeti kaynak={{ level: kisi.level }} boyut="sm" ton="acik" />
             </div>
 
@@ -634,6 +636,7 @@ function Suggestions({ suggestions, mySeekCount, portfolioLoading, onRequest }) 
                       <PersonLink userId={person.userId} className="font-semibold text-brand-700">
                         {person.displayName}
                       </PersonLink>
+                      {person.isStaff && <YonetimRozeti kucuk />}
                       <SeviyeRozeti kaynak={{ level: person.level }} boyut="sm" ton="acik" />
                     </div>
 
@@ -736,6 +739,10 @@ function SearchResults({ results, onRequest, onClearFilters, onPage }) {
                         >
                           {offer.tutorDisplayName}
                         </PersonLink>
+                        {/* Yönetim rozeti "Yeni" etiketinden ÖNCE: ikisi de aynı satırda
+                            durabiliyor ve hangisinin okunacağı sırayla belirleniyor.
+                            Kim olduğu, ne kadar yeni olduğundan önce gelir. */}
+                        {offer.tutorIsStaff && <YonetimRozeti kucuk />}
                         {offer.tutorRatingCount === 0 && <Badge tone="neutral">Yeni</Badge>}
                       </div>
 
