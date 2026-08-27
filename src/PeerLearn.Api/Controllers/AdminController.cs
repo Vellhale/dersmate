@@ -233,6 +233,30 @@ public sealed class AdminController : ControllerBase
         return NoContent();
     }
 
+    public sealed record ModerateForumContentRequest(
+        Guid? PostId, Guid? CommentId, bool Remove, string Reason);
+
+    /// <summary>
+    /// Forum içeriğini kaldırır ya da geri getirir.
+    ///
+    /// ŞİKAYETİ KAPATMAKTAN AYRI BİR UÇ. Şikayet kapatmak bir inceleme kaydı, içerik
+    /// kararı ise bir müdahale: aynı içerik hakkında birden çok şikayet olabiliyor ve
+    /// ikisi birleştirilseydi ikinci şikayet kapatılırken aynı içeriğe ikinci kez
+    /// dokunulurdu.
+    ///
+    /// Yetki CanModerate (denetleyicinin kendi politikası): perdeyi kaldırmak ve içerik
+    /// kaldırmak moderatörün asıl işi; Admin'e daraltmak moderatörü yalnızca izleyici
+    /// yapardı.
+    /// </summary>
+    [HttpPost("community/moderate")]
+    public async Task<IActionResult> ModerateForumContent(
+        ModerateForumContentRequest request, CancellationToken ct)
+    {
+        await _mediator.Send(new ModerateForumContentCommand(
+            User.GetUserId(), request.PostId, request.CommentId, request.Remove, request.Reason), ct);
+        return NoContent();
+    }
+
     public sealed record CreditAdjustmentRequest(int Amount, string Reason);
 
     /// <summary>

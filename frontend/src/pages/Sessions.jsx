@@ -1704,6 +1704,19 @@ function CompleteModal({ session, onClose, onDone }) {
   )
 }
 
+/*
+  DERS ŞİKAYETİNİN SEBEP ALT KÜMESİ.
+
+  Eskiden bu <select>, REPORT_REASON_LABELS tablosunun tamamını döküyordu. Tablo o
+  gün ders sebeplerinden ibaret olduğu için sorun görünmüyordu; forum şikayetleri
+  eklenince (Spam, Telif, Kişisel bilgi, Konu dışı — 2026-08-27) ders formunda
+  "Spam veya reklam" gibi bağlamsız seçenekler belirecekti. Alt küme artık BURADA
+  yazılı: tabloya sebep eklemek bir daha bu formu sessizce değiştirmiyor.
+
+  Sıra bilinçli: en sık şikayet edilen ilk sırada, "Diğer" en sonda.
+*/
+const DERS_SIKAYET_SEBEPLERI = ['SessionNotHeld', 'FakeProof', 'DurationMismatch', 'Abuse', 'Other']
+
 function ReportModal({ session, onClose, onDone }) {
   const [reason, setReason] = useState('SessionNotHeld')
   const [description, setDescription] = useState('')
@@ -1744,13 +1757,14 @@ function ReportModal({ session, onClose, onDone }) {
           Şikayetin <strong>yalnızca yönetime</strong> gider. Karşı taraf ne şikayeti görür,
           ne bildirim alır, ne de yanıt verebilir.
           {/* "Yönetim gerekli görürse uyarı, askı ya da ban uygular" cümlesi KALDIRILDI
-              (2026-08-27, canlıya çıkış denetimi). Cümle bir söz veriyordu ama arayüz o
-              sözü tutamıyor: yaptırım uçları (sanction / unban / role) backend'de VAR,
-              api.js'te tanımlı DEĞİL — yani moderatör panelden kimseyi uyaramıyor, askıya
-              alamıyor, banlayamıyor. Uçlar bağlandığında cümle geri gelebilir.
+              (2026-08-27, canlıya çıkış denetimi): yaptırım uçları backend'de vardı ama
+              api.js'te tanımlı değildi, yani moderatör panelden kimseyi uyaramıyordu.
 
-              Yerine gelen metin yalnızca KESİN olanı söylüyor: şikayetin incelendiğini.
-              Sonucu hakkında söz vermiyor. */}
+              O eksik aynı gün kapatıldı (api.sanctionUser / unbanUser + Admin.jsx'teki
+              yaptırım modali), yani cümle artık tutulabilir bir söz. Yine de geri
+              KONMADI ve sebebi ayrı: yaptırımın uygulanıp uygulanmayacağı moderatörün
+              kararı, şikayet edene verilebilecek bir söz değil. Aşağıdaki metin
+              yalnızca KESİN olanı söylüyor — şikayetin incelendiğini. */}
           <span className="mt-2 block">
             Dersin akışı değişmez — bu bir itiraz değil, kişi hakkında bildirimdir.
             Şikayetin yönetim tarafından incelenir.
@@ -1759,9 +1773,9 @@ function ReportModal({ session, onClose, onDone }) {
 
         <Field label="Sebep">
           <select className="input" value={reason} onChange={(e) => setReason(e.target.value)}>
-            {Object.entries(REPORT_REASON_LABELS).map(([value, label]) => (
+            {DERS_SIKAYET_SEBEPLERI.map((value) => (
               <option key={value} value={value}>
-                {label}
+                {REPORT_REASON_LABELS[value]}
               </option>
             ))}
           </select>
