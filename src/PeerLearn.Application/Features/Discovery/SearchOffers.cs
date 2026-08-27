@@ -64,6 +64,22 @@ public sealed record OfferCardDto(
     /// </summary>
     string? TutorBio,
 
+    /// <summary>
+    /// YÖNETİCİ/MODERATÖR İŞARETİ (2026-08-27, ürün sahibi kararı).
+    ///
+    /// Forumdaki ForumAuthorDto.IsStaff ile aynı bayrak, aynı gerekçe: kullanıcılar
+    /// platformla ilgili soruyu Keşfet'ten de sorabiliyor ve resmi hesabın hangisi
+    /// olduğu ayırt edilebilmeli. Sıradan bir kullanıcının adına "dersmate Yönetim"
+    /// yazmasıyla gerçek yönetimin ilanı aynı görünürse, kimliğe bürünme bu üründeki
+    /// en ucuz saldırı olur.
+    ///
+    /// SUNUCUDAN GELİYOR, istemci hesaplamıyor — rol tarayıcıda türetilseydi sahte
+    /// rozet üretmek bir satırlık iş olurdu.
+    ///
+    /// ⚠️ Bu alan eklendiği için önbellek öneki v3'e yükseltildi (bkz. BuildCacheKey).
+    /// </summary>
+    bool TutorIsStaff,
+
     decimal TutorAverageRating,
     int TutorRatingCount,
     Guid TopicId,
@@ -278,6 +294,7 @@ public sealed class SearchOffersHandler : IRequestHandler<SearchOffersQuery, Pag
                 x.tutor.Id,
                 x.tutor.DisplayName,
                 x.tutor.Bio,
+                x.tutor.Role == UserRole.Admin || x.tutor.Role == UserRole.Moderator,
                 x.tutor.AverageRating,
                 x.tutor.RatingCount,
                 x.topic.Id,
@@ -399,9 +416,9 @@ public sealed class SearchOffersHandler : IRequestHandler<SearchOffersQuery, Pag
             pageSize.ToString());
 
         var hash = SHA256.HashData(Encoding.UTF8.GetBytes(signature));
-        // v2: DTO'ya TutorBio eklendi. Önek artmazsa dağıtımdan sonraki 60 saniye boyunca
-        // eski şekilli önbellek girdileri yeni DTO'ya çözülemez ve uç o pencerede 500 döner.
-        // DTO'nun şekli her değiştiğinde bu sürüm de artmalı.
-        return "search:offers:v2:" + Convert.ToHexString(hash)[..32].ToLowerInvariant();
+        // v2: DTO'ya TutorBio eklendi. v3: TutorIsStaff eklendi. Önek artmazsa dağıtımdan
+        // sonraki 60 saniye boyunca eski şekilli önbellek girdileri yeni DTO'ya çözülemez
+        // ve uç o pencerede 500 döner. DTO'nun şekli her değiştiğinde bu sürüm de artmalı.
+        return "search:offers:v3:" + Convert.ToHexString(hash)[..32].ToLowerInvariant();
     }
 }

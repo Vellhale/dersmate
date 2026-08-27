@@ -34,6 +34,14 @@ public sealed record MatchSuggestionDto(
     int Level,
     decimal AverageRating,
     int RatingCount,
+
+    /// <summary>
+    /// Yönetici/moderatör işareti — ForumAuthorDto.IsStaff ile aynı bayrak, aynı
+    /// gerekçe: resmi hesabın hangisi olduğu keşif listelerinde de ayırt edilebilmeli.
+    /// Sunucudan geliyor; istemcide türetilseydi sahte rozet üretilebilirdi.
+    /// </summary>
+    bool IsStaff,
+
     bool IsCrossMatch,
     IReadOnlyList<SuggestedTopicDto> TheyCanTeach,
     IReadOnlyList<SuggestedTopicDto> TheyWantToLearn);
@@ -114,6 +122,7 @@ public sealed class GetMatchSuggestionsHandler
                     user.TotalEarnedCredits,
                     user.AverageRating,
                     user.RatingCount,
+                    user.Role,
                     offer.TopicId,
                     TopicName = topic.Name,
                     SubjectName = subject.Name,
@@ -150,7 +159,7 @@ public sealed class GetMatchSuggestionsHandler
         var reciprocalByUser = reciprocal.ToLookup(r => r.UserId);
 
         return candidates
-            .GroupBy(c => new { c.UserId, c.DisplayName, c.Bio, c.TotalEarnedCredits, c.AverageRating, c.RatingCount })
+            .GroupBy(c => new { c.UserId, c.DisplayName, c.Bio, c.TotalEarnedCredits, c.AverageRating, c.RatingCount, c.Role })
             .Select(g => new MatchSuggestionDto(
                 g.Key.UserId,
                 g.Key.DisplayName,
@@ -159,6 +168,7 @@ public sealed class GetMatchSuggestionsHandler
                 UserLevelRules.Hesapla(g.Key.TotalEarnedCredits).Level,
                 g.Key.AverageRating,
                 g.Key.RatingCount,
+                g.Key.Role is UserRole.Admin or UserRole.Moderator,
                 IsCrossMatch: reciprocalByUser[g.Key.UserId].Any(),
                 TheyCanTeach: g
                     .Select(c => new SuggestedTopicDto(
