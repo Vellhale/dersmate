@@ -130,3 +130,156 @@ public sealed class UserSubjectBadgeConfiguration : IEntityTypeConfiguration<Use
             .OnDelete(DeleteBehavior.Cascade);
     }
 }
+
+/*
+  ══════════════════════════════════════════════════════════════════════════════
+  FORUM YAPILANDIRMALARI (2026-08-27).
+
+  Üç tablo da `community` şemasında: rozetlerle aynı modül, aynı sınır.
+  ══════════════════════════════════════════════════════════════════════════════
+*/
+
+public sealed class CommunityPostConfiguration : IEntityTypeConfiguration<CommunityPost>
+{
+    public void Configure(EntityTypeBuilder<CommunityPost> builder)
+    {
+        builder.ToTable("Posts", "community", t =>
+        {
+            // Sayaçlar denormalize; negatif bir sayaç, oy yolunda bir hesap hatasının
+            // sessizce diske yazılması demektir. Son savunma hattı burada.
+            t.HasCheckConstraint("CK_Posts_Counters", "\"UpvoteCount\" >= 0 AND \"DownvoteCount\" >= 0 " +
+                                                      "AND \"CommentCount\" >= 0 AND \"ReportCount\" >= 0");
+        });
+
+        builder.HasKey(x => x.Id);
+
+        // Enum'lar METİN (CLAUDE.md): üye eklemek göç gerektirmesin, kısmi index
+        // filtreleri okunabilir literal'lerle yazılabilsin.
+        builder.Property(x => x.Tag).HasConversion<string>().HasMaxLength(20).IsRequired();
+        builder.Property(x => x.Status).HasConversion<string>().HasMaxLength(20).IsRequired();
+
+        builder.Property(x => x.Title).HasMaxLength(120).IsRequired();
+        builder.Property(x => x.Body).HasMaxLength(2000).IsRequired();
+
+        builder.Property(x => x.Version).IsRowVersion();
+
+        /*
+          AKIŞIN ANA SORGUSU: görünür gönderiler, tarihe göre.
+
+          KISMİ index (HasFilter): akış yalnızca Visible içeriği listeliyor ve
+          kaldırılmış/incelemedeki satırlar zamanla birikiyor. Ama CLAUDE.md'nin
+          uyardığı tuzak burada geçerli: filtreli index, sorgunun WHERE'i o koşulu
+          BİREBİR içermedikçe kullanılmaz. Akış sorgusu bu yüzden
+          `Status == ForumContentStatus.Visible` yazmak ZORUNDA — "Status != Removed"
+          gibi bir yazım index'i sessizce devre dışı bırakır.
+        */
+        builder.HasIndex(x => x.CreatedAtUtc)
+            .HasFilter("\"Status\" = 'Visible'")
+            .HasDatabaseName("IX_Posts_GorunurTarih");
+
+        // Etiket filtresi + tarih: filtre şeridinin sorgusu.
+        builder.HasIndex(x => new { x.Tag, x.CreatedAtUtc })
+            .HasFilter("\"Status\" = 'Visible'")
+            .HasDatabaseName("IX_Posts_GorunurEtiketTarih");
+
+        // Kullanıcının günlük gönderi tavanı sayımı (ForumRules.DailyPostLimit).
+        builder.HasIndex(x => new { x.AuthorUserId, x.CreatedAtUtc });
+
+        // Yazar silinirse gönderileri de gider: kullanıcıya ait türetilmiş içerik.
+        builder.HasOne<User>()
+            .WithMany()
+            .HasForeignKey(x => x.AuthorUserId)
+            .OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
+public sealed class CommunityCommentConfiguration : IEntityTypeConfiguration<CommunityComment>
+{
+    public void Configure(EntityTypeBuilder<CommunityComment> builder)
+    {
+        builder.ToTable("Comments", "community", t =>
+        {
+            t.HasCheckConstraint("CK_Comments_Counters", "\"UpvoteCount\" >= 0 AND \"DownvoteCount\" >= 0 " +
+                                                         "AND \"ReportCount\" >= 0");
+        });
+
+        builder.HasKey(x => x.Id);
+
+        builder.Property(x => x.Status).HasConversion<string>().HasMaxLength(20).IsRequired();
+        builder.Property(x => x.Body).HasMaxLength(1000).IsRequired();
+        builder.Property(x => x.Version).IsRowVersion();
+
+        // Bir gönderinin yorumları, yazılma sırasıyla.
+        builder.HasIndex(x => new { x.PostId, x.CreatedAtUtc })
+            .HasFilter("\"Status\" = 'Visible'")
+            .HasDatabaseName("IX_Comments_GorunurGonderiTarih");
+
+        builder.HasOne<CommunityPost>()
+            .WithMany()
+            .HasForeignKey(x => x.PostId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasOne<User>()
+            .WithMany()
+            .HasForeignKey(x => x.AuthorUserId)
+            .OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
+public sealed class CommunityVoteConfiguration : IEntityTypeConfiguration<CommunityVote>
+{
+    public void Configure(EntityTypeBuilder<CommunityVote> builder)
+    {
+        builder.ToTable("Votes", "community", t =>
+        {
+            // Oy yalnızca +1 ya da -1. Sıfır YAZILMAZ: oyu geri almak satırı silmektir.
+            t.HasCheckConstraint("CK_Votes_Value", "\"Value\" IN (-1, 1)");
+
+            // PostId ve CommentId'den TAM OLARAK biri dolu olmalı. Bu kısıt olmadan
+            // ikisi de NULL olan (hiçbir şeye ait olmayan) ya da ikisi de dolu olan
+            // (iki içeriğe birden sayılan) bir oy satırı yazılabilirdi.
+            t.HasCheckConstraint("CK_Votes_TekHedef",
+                "(\"PostId\" IS NOT NULL AND \"CommentId\" IS NULL) OR " +
+                "(\"PostId\" IS NULL AND \"CommentId\" IS NOT NULL)");
+        });
+
+        builder.HasKey(x => x.Id);
+
+        /*
+          ⚠️ İKİ AYRI KISMİ UNIQUE — tek bir (UserId, PostId, CommentId) UNIQUE'i DEĞİL.
+
+          PostgreSQL'de UNIQUE kısıtında NULL'lar birbirinden AYRI sayılır. Düz bir
+          (UserId, PostId) UNIQUE'i, PostId'si NULL olan yorum oylarını hiç
+          kısıtlamazdı: aynı kullanıcı aynı yoruma sınırsız oy satırı yazabilir ve
+          sayacı istediği kadar şişirebilirdi.
+
+          HasFilter ile her iki hedef türü ayrı ayrı kilitleniyor. Bu, uygulama
+          katmanındaki "önce mevcut oyu ara" kontrolünün yerine geçmiyor; onun
+          kapatamadığı yarışı kapatıyor (CLAUDE.md: kısmi index son savunma hattıdır).
+        */
+        builder.HasIndex(x => new { x.UserId, x.PostId })
+            .IsUnique()
+            .HasFilter("\"PostId\" IS NOT NULL")
+            .HasDatabaseName("UX_Votes_KullaniciGonderi");
+
+        builder.HasIndex(x => new { x.UserId, x.CommentId })
+            .IsUnique()
+            .HasFilter("\"CommentId\" IS NOT NULL")
+            .HasDatabaseName("UX_Votes_KullaniciYorum");
+
+        builder.HasOne<User>()
+            .WithMany()
+            .HasForeignKey(x => x.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasOne<CommunityPost>()
+            .WithMany()
+            .HasForeignKey(x => x.PostId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasOne<CommunityComment>()
+            .WithMany()
+            .HasForeignKey(x => x.CommentId)
+            .OnDelete(DeleteBehavior.Cascade);
+    }
+}
