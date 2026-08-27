@@ -38,6 +38,26 @@ public class Report : BaseEntity
     /// </summary>
     public Guid? SessionId { get; set; }
 
+    /*
+      FORUM İÇERİĞİ — 2026-08-27'de eklendi.
+
+      Forum şikayetleri için AYRI bir tablo açılmadı: üç şikayet türü (ders, sohbet,
+      forum) aynı kuyruğa, aynı yaptırım zincirine ve aynı denetim izine düşmeli.
+      Ayrı tablo, moderatöre bakması gereken ikinci bir yer açardı ve "bu kişi
+      hakkında kaç şikayet var" sorusunun cevabı iki tabloya bölünürdü.
+
+      SessionId gibi bunlar da DÜZ Guid — foreign key YOK. Modüller birbirinin
+      tablosuna doğrudan gitmez (CLAUDE.md); moderation modülü community'nin
+      satırına FK ile bağlanamaz. Bağın gevşek olması ayrıca şunu sağlıyor: içerik
+      bir gün gerçekten silinse bile şikayet kaydı (ve verilen yaptırımın gerekçesi)
+      denetim izinde ayakta kalır.
+
+      ÜÇÜ DE NULL OLABİLİR ve en fazla biri dolu olur.
+    */
+    public Guid? CommunityPostId { get; set; }
+
+    public Guid? CommunityCommentId { get; set; }
+
     public ReportReason Reason { get; set; }
 
     public string Description { get; set; } = null!;

@@ -41,6 +41,11 @@ public interface IAppDbContext
     DbSet<Badge> Badges { get; }
     DbSet<UserBadge> UserBadges { get; }
     DbSet<UserSubjectBadge> UserSubjectBadges { get; }
+
+    // Forum (2026-08-27). Üçü de community şemasında; ayrıntı: Domain/Community/Forum.cs
+    DbSet<CommunityPost> CommunityPosts { get; }
+    DbSet<CommunityComment> CommunityComments { get; }
+    DbSet<CommunityVote> CommunityVotes { get; }
     DbSet<TeacherCandidateProfile> TeacherCandidateProfiles { get; }
 
     DbSet<Wallet> Wallets { get; }

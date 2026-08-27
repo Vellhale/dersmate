@@ -61,6 +61,9 @@ public sealed class PeerLearnDbContext : DbContext, IAppDbContext
     public DbSet<Badge> Badges => Set<Badge>();
     public DbSet<UserBadge> UserBadges => Set<UserBadge>();
     public DbSet<UserSubjectBadge> UserSubjectBadges => Set<UserSubjectBadge>();
+    public DbSet<CommunityPost> CommunityPosts => Set<CommunityPost>();
+    public DbSet<CommunityComment> CommunityComments => Set<CommunityComment>();
+    public DbSet<CommunityVote> CommunityVotes => Set<CommunityVote>();
 
     // Economy (Sıfır Toplamlı Kredi Ekonomisi)
     public DbSet<Wallet> Wallets => Set<Wallet>();
