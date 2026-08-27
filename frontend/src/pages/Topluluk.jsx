@@ -1,8 +1,11 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAuth } from '../state/AuthContext'
 import { Avatar } from '../components/Avatar'
 import { CamKart } from '../components/SayfaZemini'
-import { Button, Field, Modal, Notice } from '../components/ui'
+import { SeviyeRozeti } from '../components/SeviyeRozeti'
+import { YonetimRozeti } from '../components/YonetimRozeti'
+import { Button, ErrorBox, Field, Loading, Modal, Notice, Pagination } from '../components/ui'
+import { api } from '../lib/api'
 import {
   AlevIkonu,
   ArtanIkonu,
@@ -12,7 +15,6 @@ import {
   MesajIkonu,
   OyOkuIkonu,
   SaatIkonu,
-  ToplulukIkonu,
   UyariIkonu,
 } from '../components/Ikonlar'
 
@@ -20,27 +22,23 @@ import {
   ══════════════════════════════════════════════════════════════════════════════
   TOPLULUK — akran forumu.
 
-  ⛔⛔ BU SAYFA HENÜZ SUNUCUYA BAĞLI DEĞİL. ÜRETİME ÇIKMADAN ÖNCE OKU. ⛔⛔
+  Arayüz 2026-08-25'te sabit veriyle yazıldı, 2026-08-27'de sunucuya bağlandı.
+  Yerel çalışan her şey (oy, sıralama, filtre, gönderi ve yorum yazma) yerinde
+  kaldı; değişen tek şey verinin nereden okunup nereye yazıldığı.
 
-  Arayüz tamamlandı ve "Yakında" işaretleri ürün sahibinin kararıyla kaldırıldı
-  (2026-08-25). Ama KALICILIK KATMANI YOK: her şey bu sekmenin belleğinde yaşıyor ve
-  sayfa yenilenince sıfırlanıyor. Ekranda hiçbir uyarı KALMADIĞI için tek kayıt burası.
+  ─── SUNUCU NEYİ YAPIYOR, İSTEMCİ NEYİ ────────────────────────────────────────
+  SIRALAMA, TARİH PENCERESİ VE ETİKET FİLTRESİ SUNUCUDA. İstemcide yapılsaydı
+  sayfalama anlamsız olurdu: ikinci sayfayı verebilmek için tüm gönderileri
+  indirmek gerekirdi. Bu yüzden her filtre değişikliği yeni bir istek.
 
-  Bağlanması gereken dört yer:
+  İSTEMCİDE KALAN TEK HESAP: oyun optimistik gösterimi. Kullanıcı oka bastığı anda
+  sayı değişiyor, sunucu yanıtı gelince gerçek sayaçla düzeltiliyor, hata gelirse
+  eski hâline dönüyor. Oy vermek 200 ms bekleyen bir işlem gibi hissedilmemeli.
 
-    1. GONDERILER / YORUMLAR sabitleri  → GET /api/community/posts, .../comments
-    2. `ekGonderiler` / `ekYorumlar`     → POST uçları (şu an yalnızca state'e ekliyor)
-    3. `oylar` state'i                    → POST .../vote (optimistik güncelleme kalır)
-    4. `sikayetGonder`                    → POST .../report
-
-  ⚠️ 4. MADDE EN RİSKLİSİ. Şikayet formu şu an kullanıcıya "iletildi" diyor ama hiçbir
-  yere gitmiyor. Gerçek kullanıcıların eline bu hâliyle geçerse, kural ihlali bildiren
-  herkes bildirdiğini sanıp beklemede kalır — kimsenin okumadığı bir şikayet kuyruğu,
-  hiç olmayan bir şikayet düğmesinden daha zararlıdır. Uç açılana kadar bu sekme
-  yayına ÇIKMAMALI.
-
-  Yerel çalışan her şey (oy, sıralama, filtre, gönderi ve yorum yazma) sunucu geldiğinde
-  yerinde kalıyor; değişen tek şey verinin nereden okunup nereye yazıldığı.
+  ⚠️ SIRALAMA OY VERİNCE YENİLENMİYOR — bilerek. "En Çok Oy Alanlar" listesinde bir
+  gönderiye oy vermek, o kartı parmağının altından kaydırırdı. Görünen sayı hemen
+  değişiyor (geri bildirim orada), yalnızca SIRA sabit kalıyor; liste ancak filtre
+  değişince ya da yeni gönderi paylaşılınca yeniden çekiliyor.
 
   ─── NEDEN REDDIT DÜZENİ ──────────────────────────────────────────────────────
   İstenen referans /liseliler tarzı bir akış. Oradan alınan üç şey var ve üçü de
@@ -67,15 +65,67 @@ import {
     • Her gönderide ve her yorumda "Şikayet et" — tek tık uzakta, ama sessiz.
     • Şikayet formu SEBEP SORUYOR. Tek düğmelik şikayet, moderatöre "biri bundan
       hoşlanmadı"dan başka bir şey söylemez; sebep, gelen yığını sıraya sokan şeydir.
-    • Eşiği geçen gönderi AKIŞTA KAPALI gelir (bkz. `incelemede`). İçerik silinmiyor,
-      perdeleniyor — "yine de göster" duruyor. Sessiz silme, moderasyonu görünmez ve
-      tartışılamaz yapar.
-    • Kurallar ve sınırlar sağ sütunda YAZILI. Yazılmamış kural, ihlal edildiğinde
-      keyfî görünür.
+    • Eşiği geçen gönderi AKIŞTA KAPALI gelir (sunucuda ForumRules.AutoReviewThreshold
+      = 3). İçerik SİLİNMİYOR, perdeleniyor — "yine de göster" duruyor. Sessiz silme,
+      moderasyonu görünmez ve tartışılamaz yapar.
+    • Kurallar ve sınırlar sağ sütunda YAZILI ve hepsinin sunucuda karşılığı var
+      (ONLEMLER listesindeki her maddenin yanında hangi kural olduğu yazıyor).
     • Gönderi kutusu dosya yükleme SUNMUYOR. Telif ihlalinin bu üründeki en olası
       yolu izinsiz PDF paylaşımı ve en ucuz önlem, o yolu hiç açmamak.
   ══════════════════════════════════════════════════════════════════════════════
 */
+
+/* ─── SUNUCU SÖZLEŞMESİ ────────────────────────────────────────────────────────
+
+   Arayüz Türkçe anahtarlarla çalışıyor ('yeni', 'stres'), sunucu enum adlarıyla
+   ('Newest', 'ExamStress'). Çeviri TEK YERDE, burada: iki tarafın da kendi doğal
+   sözlüğünü kullanabilmesi için. Anahtarları sunucununkilerle değiştirmek arayüzün
+   geri kalanını (etiket renkleri, adlar, testler) İngilizceye çevirmek demekti.   */
+
+const SIRA_ENUM = { yeni: 'Newest', oy: 'Top', tartismali: 'Controversial' }
+const ZAMAN_ENUM = { hepsi: 'All', gun: 'Day', hafta: 'Week', ay: 'Month' }
+const ETIKET_ENUM = {
+  stres: 'ExamStress',
+  soru: 'Question',
+  kaynak: 'Resource',
+  program: 'StudyPlan',
+  motivasyon: 'Motivation',
+  tercih: 'Preference',
+}
+/** Ters yön: sunucudan gelen etiketi arayüz anahtarına çevirir. */
+const ETIKET_ANAHTARI = Object.fromEntries(
+  Object.entries(ETIKET_ENUM).map(([anahtar, enumAdi]) => [enumAdi, anahtar]),
+)
+
+/*
+  ŞİKAYET SEBEBİ → SUNUCU ENUM'U.
+
+  Dördü (Spam, Copyright, PersonalInfo, OffTopic) forum için ReportReason'a EKLENDİ.
+  Öncesinde hepsi `Other`'a düşüyordu ve moderasyon kuyruğundaki sebep sütunu forum
+  şikayetleri için hiçbir şey söylemiyordu — tek bir "Diğer" yığını sıraya sokulamaz.
+*/
+const SEBEP_ENUM = {
+  spam: 'Spam',
+  dil: 'Abuse',
+  telif: 'Copyright',
+  kisisel: 'PersonalInfo',
+  konudisi: 'OffTopic',
+  diger: 'Other',
+}
+
+/*
+  AÇIKLAMA ALT SINIRI — SUNUCUYLA AYNI SAYI (CreateReportHandler.MinDescriptionLength).
+
+  İstemcide daha gevşek bir sınır, kullanıcıya 12 karakter yazdırıp gönderdikten
+  sonra 400 gösterirdi; kontrolün istemcide olmasının tek amacı o gidiş gelişi
+  önlemek.
+
+  ⚠️ AÇIKLAMA HER SEBEPTE ZORUNLU — tasarımın ilk hâlinde yalnızca "Diğer" için
+  zorunluydu. İki sebeple değişti: (a) sunucu ayrım yapmıyor, (b) yazılı bir cümle
+  istemek brigading'i pahalılaştırıyor. Üç şikayet gönderiyi perdeliyor; tek tıkla
+  şikayet, o eşiği örgütlü bir susturma aracına çevirirdi.
+*/
+const EN_AZ_ACIKLAMA = 15
 
 /* ─── SIRALAMA ─────────────────────────────────────────────────────────────── */
 
@@ -108,14 +158,13 @@ const SIRALAMALAR = [
   "az önce buradaydı" diye aradığı bir şeye dönüşür. "En Yeniler + Bugün" da anlamlı
   bir soru: bugün ne konuşuldu?
 
-  `dakika` alanı örnek verinin yaşını taşıyor; gerçek uçta bunun yerine sunucuya
-  `since` parametresi gider ve filtre istemcide değil sorguda uygulanır.
+  Pencere SUNUCUDA uygulanıyor (ForumRange); buradaki liste yalnızca sunum.
 */
 const ZAMAN_ARALIKLARI = [
-  { key: 'hepsi', label: 'Tüm zamanlar', dakika: null },
-  { key: 'gun', label: 'Bugün', dakika: 60 * 24 },
-  { key: 'hafta', label: 'Bu hafta', dakika: 60 * 24 * 7 },
-  { key: 'ay', label: 'Bu ay', dakika: 60 * 24 * 30 },
+  { key: 'hepsi', label: 'Tüm zamanlar' },
+  { key: 'gun', label: 'Bugün' },
+  { key: 'hafta', label: 'Bu hafta' },
+  { key: 'ay', label: 'Bu ay' },
 ]
 
 const ETIKETLER = [
@@ -150,264 +199,9 @@ const ETIKET_TONU = {
 
 const ETIKET_ADI = Object.fromEntries(ETIKETLER.map((e) => [e.key, e.label]))
 
-/* ─── ÖRNEK İÇERİK ─────────────────────────────────────────────────────────────
-   Kişiler kurgusal. `renk` alanı yer tutucu avatarın rengini seçiyor (bkz.
-   YerTutucuAvatar): gerçek Avatar bileşeni userId ile SUNUCUYA gidiyor ve burada
-   var olmayan yedi kişi için yedi başarısız istek atardı.
-
-   `arti` / `eksi` ayrı tutuluyor, tek bir "puan" değil: tartışmalı sıralaması ikisinin
-   ORANINA bakıyor ve fark tek sayıya indirilseydi (184-6 ile 95-89 aynı 95'i verir)
-   o sıralama hesaplanamazdı.                                                        */
-
-const GONDERILER = [
-  {
-    id: 'g1',
-    etiket: 'stres',
-    baslik: 'Deneme netlerim düşünce panik oluyorum, sizde de böyle mi?',
-    ozet:
-      'Son üç denemede matematik netim 28’den 19’a indi. Çalışma temposunu değiştirmedim, konu ' +
-      'eksiğim de yok — ama sınav başlayınca ilk zor soruda kafam duruyor ve gerisi çorba oluyor. ' +
-      'Evde aynı soruyu iki dakikada çözüyorum. Bunu yaşayıp aşan var mı, ne yaptınız?',
-    yazar: 'Elif A.',
-    renk: 2,
-    dakika: 22,
-    arti: 184,
-    eksi: 6,
-  },
-  {
-    id: 'g2',
-    etiket: 'soru',
-    baslik: 'Limitte 0/0 belirsizliğini L’Hospital’sız kaldırmanın kısa yolu var mı?',
-    ozet:
-      'Hocam türev almadan çarpanlara ayırarak da çözülür diyor ama kökler girince ne yapacağımı ' +
-      'şaşırıyorum. Eşleniğiyle genişletme dışında bir yöntem öğrenen var mı? Soruyu ve kendi ' +
-      'çözüm denememi yazdım, nerede tıkandığımı göstermeye çalıştım.',
-    yazar: 'Mert S.',
-    renk: 0,
-    dakika: 64,
-    arti: 96,
-    eksi: 3,
-  },
-  {
-    id: 'g3',
-    etiket: 'kaynak',
-    baslik: 'Fizik soru bankası önerisi — PDF isteyen olmasın, hangisi işe yaradı onu yazın',
-    ozet:
-      'Geçen hafta aynı soruyu soran üç başlık gördüm ve hepsi “linki atar mısın”a döndü. Burada ' +
-      'sadece kitabın adını ve neden işe yaradığını yazalım: hangi konuda kaç soru, çözümleri ' +
-      'anlaşılır mı, seviyesi nasıl. Ben iki bankayı bitirdim, ikisini de karşılaştırdım.',
-    yazar: 'Zeynep K.',
-    renk: 4,
-    dakika: 191,
-    arti: 212,
-    eksi: 11,
-  },
-  {
-    id: 'g4',
-    etiket: 'program',
-    baslik: 'Günde 10 saat çalışmak gerçekten gerekli mi? Kendi programımı paylaşıyorum',
-    ozet:
-      'Altı saat verimli çalışıp geri kalan zamanda dinlenerek geçen yıl istediğim bölüme ' +
-      'girdim. Buradaki “12 saat” paylaşımlarının kimseye iyi geldiğini düşünmüyorum. Programımı ' +
-      'saat saat yazdım; katılmayan varsa tartışalım, ikna olmaya da açığım.',
-    yazar: 'Kaan D.',
-    renk: 3,
-    dakika: 2880,
-    arti: 143,
-    eksi: 118,
-  },
-  {
-    id: 'g5',
-    etiket: 'motivasyon',
-    baslik: 'Bir yıl önce burada “bırakıyorum” diye yazmıştım, dün kaydımı yaptırdım',
-    ozet:
-      'Geçen sene bu aylarda denemelerim çok kötüydü ve gerçekten bırakmayı düşünüyordum. O gün ' +
-      'yazdığım başlığın altına yorum yazan herkese teşekkür ederim. Ne değiştirdiğimi ve neyi ' +
-      'boşuna yaptığımı maddeler hâlinde yazdım — belki birine denk gelir.',
-    yazar: 'Selin Y.',
-    renk: 5,
-    dakika: 7200,
-    arti: 401,
-    eksi: 9,
-  },
-  {
-    id: 'g6',
-    etiket: 'tercih',
-    baslik: 'Sayısaldan eşit ağırlığa geçmek son sınıfta mantıklı mı?',
-    ozet:
-      'Matematiğim iyi, fen dörtlüsünde tıkandım. Tarih ve coğrafyayı sıfırdan çalışmak bu ' +
-      'aşamada kayıp mı olur, yoksa fen netlerimi kovalamaktan daha mı hızlı? İki tarafı da ' +
-      'yaşayan varsa gerçekten duymak istiyorum, çünkü tavsiyeler tam ikiye bölünmüş durumda.',
-    yazar: 'Burak T.',
-    renk: 1,
-    dakika: 17280,
-    arti: 88,
-    eksi: 76,
-  },
-  {
-    /*
-      MODERASYON DURUMU ÖRNEĞİ — akışta kapalı gelir.
-
-      Örnek bilerek TELİF İHLALİ: bu üründe en olası kural dışı paylaşım bu ve
-      arayüzün ona nasıl davrandığını göstermenin en açık yolu, gerçek bir örneğini
-      koymak. Gönderi silinmiş gibi davranılmıyor; kapalı geliyor, sebebi yazıyor ve
-      kullanıcı isterse açabiliyor.
-    */
-    id: 'g7',
-    etiket: 'kaynak',
-    baslik: 'Bütün yayınların PDF’lerini bir klasöre topladım, link yorumlarda',
-    ozet:
-      'Aradığınız her kitabın taranmış hâli klasörde var, isteyene özelden de atarım. Ücretsiz ' +
-      'olsun herkes faydalansın.',
-    yazar: 'Anonim',
-    renk: 0,
-    dakika: 41,
-    arti: 12,
-    eksi: 64,
-    incelemede: true,
-    sikayetSayisi: 7,
-  },
-]
-
-const YORUMLAR = {
-  g1: [
-    {
-      id: 'y1',
-      yazar: 'Kaan D.',
-      renk: 3,
-      dakika: 14,
-      oy: 46,
-      metin:
-        'Bende de aynısıydı. Deneme sonrası nete değil, YANLIŞ SEBEBİNE bakmaya başlayınca ' +
-        'düzeldi: her yanlışın yanına “bilmiyordum / dikkatsizlik / zaman” diye tek kelime ' +
-        'yazdım. Üç denemede panik sorularının hepsinin “zaman” olduğunu gördüm, sorun konu ' +
-        'değil tempoymuş.',
-    },
-    {
-      id: 'y2',
-      yazar: 'Zeynep K.',
-      renk: 4,
-      dakika: 52,
-      oy: 28,
-      metin:
-        'Üç deneme bir eğilim değil, özellikle yayın değiştiyse. Aynı yayının denemesi mi? ' +
-        'Farklıysa netlerin düşmesi senin değil denemenin zorluğuyla ilgili olabilir.',
-    },
-  ],
-  g2: [
-    {
-      id: 'y3',
-      yazar: 'Elif A.',
-      renk: 2,
-      dakika: 31,
-      oy: 19,
-      metin:
-        'Kök varsa eşlenikle genişletme dışında pratik bir yol yok ama çarpanlara ayırmayı ' +
-        'deneme sırasını değiştir: önce ortak parantez, sonra özdeşlik, en son eşlenik. ' +
-        'Çoğu soru ikinci adımda bitiyor.',
-    },
-    {
-      id: 'y4',
-      yazar: 'Burak T.',
-      renk: 1,
-      dakika: 44,
-      oy: 7,
-      metin: 'Çözüm denemeni yazman çok iyi olmuş, hatanın nerede olduğu üçüncü satırda görünüyor.',
-    },
-  ],
-  g3: [
-    {
-      id: 'y5',
-      yazar: 'Mert S.',
-      renk: 0,
-      dakika: 96,
-      oy: 63,
-      metin:
-        'Başlığın kendisi kural gibi olmuş, keşke her kaynak başlığı böyle açılsa. Ben de ' +
-        'bitirdiğim iki bankayı konu konu karşılaştırıp yazayım.',
-    },
-    {
-      id: 'y6',
-      yazar: 'Selin Y.',
-      renk: 5,
-      dakika: 120,
-      oy: 34,
-      metin:
-        'Kitabın zor olması iyi olduğu anlamına gelmiyor. Çözemediğin soru bankası seni ' +
-        'çalıştırmıyor, yalnızca yıpratıyor — seviyeni yazan yorumlara bakın.',
-    },
-  ],
-  g4: [
-    {
-      id: 'y7',
-      yazar: 'Zeynep K.',
-      renk: 4,
-      dakika: 2400,
-      oy: 51,
-      metin:
-        'Altı saat verimliyse on saat de verimli olabilir; ikisi birbirinin alternatifi değil. ' +
-        'Asıl mesele saat değil, o saatin içinde kaç soru çözdüğün.',
-    },
-    {
-      id: 'y8',
-      yazar: 'Elif A.',
-      renk: 2,
-      dakika: 2760,
-      oy: 39,
-      metin:
-        'Katılmıyorum ama programı saat saat paylaştığın için teşekkürler — tartışılacak somut ' +
-        'bir şey olması iyi.',
-    },
-  ],
-  g5: [
-    {
-      id: 'y9',
-      yazar: 'Kaan D.',
-      renk: 3,
-      dakika: 6000,
-      oy: 88,
-      metin: 'Geçen seneki başlığını hatırlıyorum. Tebrikler, gerçekten.',
-    },
-    {
-      id: 'y10',
-      yazar: 'Burak T.',
-      renk: 1,
-      dakika: 6900,
-      oy: 25,
-      metin:
-        '“Neyi boşuna yaptım” kısmı en değerlisi. Herkes ne yaptığını yazıyor, neyi bıraktığını ' +
-        'yazan çok az.',
-    },
-  ],
-  g6: [
-    {
-      id: 'y11',
-      yazar: 'Selin Y.',
-      renk: 5,
-      dakika: 15000,
-      oy: 33,
-      metin:
-        'Ben geçtim ve pişman değilim, ama şunu bilerek geç: tarih ezber değil, kronoloji ' +
-        'kurma işi. Sıfırdan çalışmak dört ay sürüyor, üç değil.',
-    },
-    {
-      id: 'y12',
-      yazar: 'Mert S.',
-      renk: 0,
-      dakika: 16800,
-      oy: 30,
-      metin:
-        'Fen dörtlüsünde tıkanmak genelde fizik kaynaklı oluyor. Geçmeden önce sadece fiziğe ' +
-        'iki hafta ver, karar o zaman daha net olur.',
-    },
-  ],
-  g7: [],
-}
-
 /*
   ŞİKAYET SEBEPLERİ — beş tanesi bu ürünün gerçek risklerine birebir karşılık geliyor,
-  altıncısı ("Diğer") açık uç. Serbest metin ZORUNLU DEĞİL ama "Diğer" seçildiğinde
-  gerekli: sebepsiz bir "diğer", moderatör kuyruğunda okunamayan bir satırdır.
+  altıncısı ("Diğer") açık uç.
 
   Sıra rastgele değil, BEKLENEN SIKLIĞA göre: spam ve dil ihlali her forumda ilk
   ikidir; kullanıcı listenin başında aradığını bulursa formu okumadan geçer.
@@ -444,8 +238,18 @@ const KURALLAR = [
   'Kendinin ya da başkasının telefon, adres ve sosyal hesap bilgisini paylaşma.',
 ]
 
-/* Arayüzde görünen sınırlar. Bir kısmı kuralları ihlal etmeyi ZORLAŞTIRIYOR (dosya
-   yükleme yok), bir kısmı ihlalin MALİYETİNİ düşürüyor (otomatik incelemeye alma). */
+/*
+  Arayüzde görünen sınırlar. Bir kısmı kuralları ihlal etmeyi ZORLAŞTIRIYOR (dosya
+  yükleme yok), bir kısmı ihlalin MALİYETİNİ düşürüyor (otomatik incelemeye alma).
+
+  ⚠️ DÖRDÜNÜN DE SUNUCUDA KARŞILIĞI VAR. Bu liste bir zamanlar kodda karşılığı olmayan
+  vaatler taşıyordu ve canlıya çıkış denetiminde bulundu: kullanıcıya söz veren bir
+  arayüz metni, sözü tutan bir kural olmadan yazılamaz. Karşılıkları:
+    • dosya yükleme yok  → formda alan hiç yok (bkz. GonderiModali)
+    • günde 3 gönderi    → ForumRules.NewAccountDailyPostLimit / NewAccountDays
+    • bağlantı eşiği     → ForumRules.LinkMinLevel (CreateForumPostHandler.BaglantiKapisi)
+    • otomatik inceleme  → ForumRules.AutoReviewThreshold (CreateReportHandler)
+*/
 const ONLEMLER = [
   { baslik: 'Yalnızca metin', metin: 'Dosya yükleme kapalı; izinsiz PDF paylaşımının yolu hiç açılmıyor.' },
   { baslik: 'Yeni hesap sınırı', metin: 'İlk hafta günde en fazla 3 gönderi — spam duvarı.' },
@@ -454,6 +258,32 @@ const ONLEMLER = [
 ]
 
 /* ─── YARDIMCILAR ──────────────────────────────────────────────────────────── */
+
+/**
+ * Sunucudan gelen UTC damgasını milisaniyeye çevirir.
+ *
+ * ⚠️ ZAMAN DİLİMİ EKİ YOKSA 'Z' EKLENİYOR. .NET, DateTime'ı Kind=Utc iken sonunda
+ * 'Z' ile yazıyor; Kind=Unspecified iken YAZMIYOR ve o durumda tarayıcı metni YEREL
+ * saat sanar. Türkiye'de bu üç saatlik bir kayma demek: üç saat önce yazılmış bir
+ * gönderi "şimdi" görünür, bir dakika önce yazılan ise gelecekte kalır. Sütun
+ * timestamptz olduğu için EF Utc döndürüyor, yani bugün ek gereksiz — ama tek bir
+ * DTO'nun Kind'i değiştiğinde hata SESSİZ olur, bu yüzden koruma burada duruyor.
+ */
+function damgayaCevir(metin) {
+  if (!metin) return null
+  const tamDamga = /(?:[zZ]|[+-]\d{2}:?\d{2})$/.test(metin) ? metin : `${metin}Z`
+  const ms = Date.parse(tamDamga)
+  return Number.isNaN(ms) ? null : ms
+}
+
+/** Damganın kaç dakika önce olduğunu verir; okunamayan damga 0 sayılıyor ("şimdi"). */
+function yasDakika(metin) {
+  const ms = damgayaCevir(metin)
+  if (ms === null) return 0
+  // Negatife düşebilir: sunucu saati istemciden birkaç saniye ileriyse. "-1 dk" yerine
+  // "şimdi" göstermek doğru, çünkü fark saat farkı değil senkron gürültüsü.
+  return Math.max(0, Math.round((Date.now() - ms) / 60000))
+}
 
 /** "22 dk" / "3 sa" / "2 g". Forumda mutlak tarih işe yaramıyor: okuyanın sorduğu şey
     "ne zaman yazıldı" değil, "hâlâ taze mi". */
@@ -468,71 +298,30 @@ function zamanKisalt(dakika) {
 }
 
 /**
- * Tartışma puanı — Reddit'in "controversial" ölçüsünün sadeleştirilmiş hâli.
+ * OY UYGULAMA — sunucudaki üç durumun istemci aynası (VoteForumContentHandler).
  *
- * Fark (artı − eksi) DEĞİL, oranla ağırlıklandırılmış TOPLAM kullanılıyor ve sebebi
- * şu: 184/6 ile 95/89 aynı farkı (178 değil ama benzer mantıkla) verebiliyor, oysa
- * biri fikir birliği diğeri kavga. Tartışmalı olan, çok oy alan değil ZIT oy alandır.
+ *   oy yok      → oy ekle
+ *   aynı yön    → GERİ AL (sunucu satırı siler, sayaç düşer)
+ *   ters yön    → çevir (bir taraftan düş, diğerine ekle)
  *
- * Tek yönlü gönderiler (eksi ya da artı sıfır) doğrudan 0 alıyor: bir gönderi kimse
- * karşı çıkmadan tartışmalı olamaz.
+ * Tek fonksiyon çünkü üç durumun sayaç etkisi birbirine bağlı; ayrı ayrı yazılsaydı
+ * biri düzeltilirken diğeri unutulur ve optimistik sayı sunucununkinden kalıcı olarak
+ * ayrışırdı. Yine de bu yalnızca TAHMİN: yanıt gelince sunucunun sayaçları yazılıyor.
  */
-function tartismaPuani({ arti, eksi }) {
-  if (arti === 0 || eksi === 0) return 0
-  const oran = Math.min(arti, eksi) / Math.max(arti, eksi)
-  return (arti + eksi) * oran
-}
+function oyUygula(icerik, yon) {
+  const onceki = icerik.myVote ?? 0
+  const yeni = onceki === yon ? 0 : yon
 
-/**
- * Yer tutucu avatar — ÖRNEK KİŞİLER İÇİN.
- *
- * Gerçek <Avatar> burada kullanılamıyor: o, userId ile sunucuya gidip fotoğraf
- * indiriyor ve bu sayfadaki yedi kişi kurgusal. Kullanılsaydı her sayfa açılışında
- * var olmayan kullanıcılar için başarısız istekler atılırdı.
- *
- * Renk `renk` indeksinden geliyor, isimden türetilmiyor: örnek veri elle yazıldığı
- * için hangi kartın hangi rengi alacağı da elle seçilebiliyor ve akışta yan yana iki
- * aynı renk düşmüyor. Sunucu geldiğinde bu bileşen silinir, yerine <Avatar userId>
- * gelir — düzen değişmez, ikisi de aynı ölçüde bir kare.
- */
-const YER_TUTUCU_RENKLER = [
-  'bg-brand-600',
-  'bg-sky-600',
-  'bg-emerald-600',
-  'bg-amber-600',
-  'bg-rose-600',
-  'bg-violet-600',
-]
+  let arti = icerik.upvoteCount
+  let eksi = icerik.downvoteCount
 
-/* Ölçüler Avatar.jsx'in SIZES tablosuyla aynı ailede (kare + yumuşak köşe); `xs`
-   yalnızca burada var, akış satırındaki yazar adının önünde duruyor. Halka (ring)
-   yalnızca sm ve üstünde: 24px'lik bir karede 2px beyaz halka, harflere ayrılan yeri
-   gözle görülür biçimde yiyor. */
-const YER_TUTUCU_OLCULER = {
-  xs: 'h-6 w-6 rounded-md text-[10px]',
-  sm: 'h-8 w-8 rounded-lg text-xs ring-2 ring-white',
-  md: 'h-10 w-10 rounded-xl text-sm ring-2 ring-white',
-}
+  if (onceki === 1) arti -= 1
+  else if (onceki === -1) eksi -= 1
 
-function YerTutucuAvatar({ ad, renk = 0, boyut = 'md' }) {
-  const olcu = YER_TUTUCU_OLCULER[boyut] ?? YER_TUTUCU_OLCULER.md
-  const basHarfler = ad
-    .split(' ')
-    .filter(Boolean)
-    .map((k) => k[0])
-    .slice(0, 2)
-    .join('')
-    .toLocaleUpperCase('tr-TR')
+  if (yeni === 1) arti += 1
+  else if (yeni === -1) eksi += 1
 
-  return (
-    <div
-      aria-hidden="true"
-      className={`grid shrink-0 place-items-center font-bold text-white
-                  ${olcu} ${YER_TUTUCU_RENKLER[renk % YER_TUTUCU_RENKLER.length]}`}
-    >
-      {basHarfler}
-    </div>
-  )
+  return { ...icerik, upvoteCount: arti, downvoteCount: eksi, myVote: yeni }
 }
 
 function EtiketPili({ etiket, className = '' }) {
@@ -546,6 +335,28 @@ function EtiketPili({ etiket, className = '' }) {
   )
 }
 
+/**
+ * Yazar satırı: avatar + ad + (yönetim rozeti) + seviye.
+ *
+ * Gönderide ve yorumda AYNI bileşen: yazarın nasıl gösterildiği iki yerde ayrı
+ * yazılsaydı, rozet birine eklenip diğerine eklenmeden kalabilirdi.
+ */
+function YazarSatiri({ yazar, boyut = 'xs' }) {
+  return (
+    <span className="flex min-w-0 items-center gap-1.5">
+      <Avatar userId={yazar?.userId} name={yazar?.displayName} size={boyut} />
+      <span className="truncate text-xs font-medium text-slate-700">
+        {yazar?.displayName ?? 'Kullanıcı'}
+      </span>
+      {yazar?.isStaff && <YonetimRozeti kucuk={boyut === 'xs'} />}
+      {/* Seviye yalnızca `level` alanıyla besleniyor; rozet ilerleme verisi olmadan
+          ilerleme iddia etmiyor (bkz. SeviyeRozeti). Puan başkasının verisi ve forum
+          DTO'su onu göndermiyor. */}
+      <SeviyeRozeti kaynak={{ level: yazar?.level }} boyut="sm" ton="acik" className="shrink-0" />
+    </span>
+  )
+}
+
 /* ─── SAYFA ────────────────────────────────────────────────────────────────── */
 
 export default function Topluluk() {
@@ -554,9 +365,12 @@ export default function Topluluk() {
   const [sira, setSira] = useState('yeni')
   const [zaman, setZaman] = useState('hepsi')
   const [etiket, setEtiket] = useState('hepsi')
-  /* Oylar: { [gonderiId]: 1 | -1 }. Kullanıcının kendi oyu, gönderinin sayısından AYRI
-     tutuluyor — sıralama tabandaki sayılara bakıyor (aşağıdaki nota bkz.). */
-  const [oylar, setOylar] = useState({})
+  const [sayfa, setSayfa] = useState(1)
+
+  const [akis, setAkis] = useState(null)
+  const [yukleniyor, setYukleniyor] = useState(true)
+  const [hata, setHata] = useState(null)
+
   const [acikYorum, setAcikYorum] = useState(null)
   const [acilanGizli, setAcilanGizli] = useState([])
   const [sikayetHedefi, setSikayetHedefi] = useState(null)
@@ -564,105 +378,250 @@ export default function Topluluk() {
   const [yaziyor, setYaziyor] = useState(false)
 
   /*
-    KULLANICININ BU OTURUMDA YAZDIKLARI.
+    YORUMLAR GÖNDERİ AÇILINCA ÇEKİLİYOR, akışla birlikte değil.
 
-    Sabit listeyle BİRLEŞTİRİLMİYOR, önüne EKLENİYOR (aşağıda) — sabitler modül
-    seviyesinde ve onları mutasyona uğratmak, sayfadan çıkıp geri gelindiğinde
-    birikmiş bir listeye yol açardı. State sayfa ömrü kadar yaşıyor; sunucu geldiğinde
-    bu iki alan POST yanıtıyla doluyor, düzen değişmiyor.
+    Akışta 20 gönderi var ve hepsinin yorumlarını önden indirmek, kullanıcının
+    açmayacağı 20 istek demek. Açılan gönderinin yorumları burada birikiyor
+    ({ [postId]: { yukleniyor, hata, liste } }) ve gönderi kapanıp yeniden açılınca
+    yeniden istenmiyor — yorum yazınca liste yerinde güncelleniyor.
   */
-  const [ekGonderiler, setEkGonderiler] = useState([])
-  const [ekYorumlar, setEkYorumlar] = useState({})
+  const [yorumlar, setYorumlar] = useState({})
 
   /*
-    SIRALAMA KULLANICININ KENDİ OYUNU HESABA KATMIYOR — bilerek.
+    UÇUŞTAKİ OYLAR. Aynı içeriğe ikinci tık, yanıt gelmeden YOK SAYILIYOR.
 
-    Kattığı anda "En Çok Oy Alanlar" listesinde bir gönderiye oy vermek, o gönderiyi
-    parmağının altından kaydırırdı: kullanıcı bir şeye oy verir, liste yeniden sıralanır
-    ve az önce okuduğu kart başka bir yere gider. Reddit de aynı sebeple sıralamayı
-    anlık oyla yenilemiyor. Görünen sayı hemen değişiyor (geri bildirim orada), yalnızca
-    SIRA sabit kalıyor.
+    Kuyruğa alınsaydı iki isteğin sırası garanti olmazdı: ikinci yanıt önce dönerse
+    ekrandaki sayı sunucudakinden kalıcı olarak ayrışırdı. Ref, state değil — bu
+    bilginin ekranda karşılığı yok ve her tıkta yeniden çizim yapmaya değmez.
   */
-  const akis = useMemo(() => {
-    /* Önce DARALT, sonra sırala. İki eksen bağımsız: tarih ve etiket hangi gönderilerin
-       görüneceğini, sıralama görünenlerin hangi düzende duracağını belirliyor. */
-    const sinir = ZAMAN_ARALIKLARI.find((z) => z.key === zaman)?.dakika ?? null
+  const oyKilidi = useRef(new Set())
 
-    const secili = [...ekGonderiler, ...GONDERILER].filter(
-      (g) =>
-        (etiket === 'hepsi' || g.etiket === etiket) && (sinir === null || g.dakika <= sinir),
+  /* Yeni gönderi paylaşınca akışı yeniden çekmek için: sayaç değişince efekt koşuyor. */
+  const [yenilemeSayaci, setYenilemeSayaci] = useState(0)
+
+  useEffect(() => {
+    /*
+      ESKİ İSTEĞİ İPTAL ET. Filtreler hızlı değiştirildiğinde (üç etikete arka arkaya
+      basmak gibi) yanıtların GELİŞ SIRASI garanti değil: iptal olmasaydı önce
+      gönderilen isteğin geç dönen yanıtı, sonra seçilen filtrenin sonucunu ezerdi ve
+      ekranda seçili olmayan bir filtrenin listesi kalırdı.
+    */
+    const kontrol = new AbortController()
+    let iptalEdildi = false
+
+    setYukleniyor(true)
+    setHata(null)
+
+    api
+      .forumFeed(
+        {
+          sort: SIRA_ENUM[sira],
+          range: ZAMAN_ENUM[zaman],
+          tag: etiket === 'hepsi' ? null : ETIKET_ENUM[etiket],
+          page: sayfa,
+        },
+        kontrol.signal,
+      )
+      .then((sonuc) => {
+        if (iptalEdildi) return
+        setAkis(sonuc)
+        setYukleniyor(false)
+      })
+      .catch((err) => {
+        // AbortError bir hata değil, bizim kararımız: kullanıcıya gösterilmemeli.
+        if (iptalEdildi || err.name === 'AbortError') return
+        setHata(err)
+        setYukleniyor(false)
+      })
+
+    return () => {
+      iptalEdildi = true
+      kontrol.abort()
+    }
+  }, [sira, zaman, etiket, sayfa, yenilemeSayaci])
+
+  const yenile = useCallback(() => setYenilemeSayaci((n) => n + 1), [])
+
+  /* Filtre değişince ilk sayfaya dön: 4. sayfadayken etiket değiştirmek, çoğu zaman
+     sonucu olmayan bir sayfaya düşürürdü ve kullanıcı listeyi boş sanırdı. */
+  const filtreDegistir = (uygula) => {
+    uygula()
+    setSayfa(1)
+    setAcikYorum(null)
+  }
+
+  /* ─── OY ───────────────────────────────────────────────────────────────── */
+
+  const gonderiOyla = async (postId, yon) => {
+    if (oyKilidi.current.has(postId)) return
+    oyKilidi.current.add(postId)
+
+    /*
+      Geri alma için tıklama ÖNCESİ hâli. Snapshot setState'in DIŞINDA alınıyor:
+      güncelleyici fonksiyonun içinde dış bir değişkene yazmak onu saf olmaktan
+      çıkarır ve React güncelleyiciyi (StrictMode'da olduğu gibi) iki kez
+      çağırdığında hangi değerin yakalandığı belirsizleşir.
+    */
+    const oncekiHal = akis?.items.find((g) => g.postId === postId) ?? null
+
+    setAkis((mevcut) =>
+      mevcut
+        ? {
+            ...mevcut,
+            items: mevcut.items.map((g) => (g.postId === postId ? oyUygula(g, yon) : g)),
+          }
+        : mevcut,
     )
 
-    const kopya = [...secili]
-    if (sira === 'yeni') kopya.sort((a, b) => a.dakika - b.dakika)
-    else if (sira === 'oy') kopya.sort((a, b) => b.arti - b.eksi - (a.arti - a.eksi))
-    else kopya.sort((a, b) => tartismaPuani(b) - tartismaPuani(a))
-
-    return kopya
-  }, [sira, zaman, etiket, ekGonderiler])
-
-  const oyVer = (id, yon) => {
-    setOylar((onceki) => {
-      const yeni = { ...onceki }
-      // Aynı yöne ikinci tık oyu GERİ ALIR: oy vermenin geri dönüşü olmalı, yoksa
-      // yanlışlıkla basılan bir ok kalıcı bir karara dönüşür.
-      if (yeni[id] === yon) delete yeni[id]
-      else yeni[id] = yon
-      return yeni
-    })
+    try {
+      const sonuc = await api.voteForumPost(postId, yon)
+      // Sunucunun sayaçları YAZILIYOR: iki kişi aynı anda oy verdiyse optimistik
+      // tahmin eksik kalır ve yalnızca kendi oyumu sayardı.
+      setAkis((mevcut) =>
+        mevcut
+          ? {
+              ...mevcut,
+              items: mevcut.items.map((g) => (g.postId === postId ? { ...g, ...sonuc } : g)),
+            }
+          : mevcut,
+      )
+    } catch (err) {
+      if (oncekiHal) {
+        setAkis((mevcut) =>
+          mevcut
+            ? { ...mevcut, items: mevcut.items.map((g) => (g.postId === postId ? oncekiHal : g)) }
+            : mevcut,
+        )
+      }
+      setHata(err)
+    } finally {
+      oyKilidi.current.delete(postId)
+    }
   }
 
-  const sikayetGonder = () => {
-    setSikayetHedefi(null)
-    setBildirim('Şikayetin iletildi. Moderasyon ekibi inceleyip sonucunu sana bildirecek.')
+  const yorumOyla = async (postId, commentId, yon) => {
+    if (oyKilidi.current.has(commentId)) return
+    oyKilidi.current.add(commentId)
+
+    // Snapshot setState'in dışında (bkz. gonderiOyla'daki not).
+    const oncekiHal = yorumlar[postId]?.liste?.find((y) => y.commentId === commentId) ?? null
+
+    const listeyiDegistir = (donustur) =>
+      setYorumlar((mevcut) => {
+        const durum = mevcut[postId]
+        if (!durum?.liste) return mevcut
+        return { ...mevcut, [postId]: { ...durum, liste: durum.liste.map(donustur) } }
+      })
+
+    listeyiDegistir((y) => (y.commentId === commentId ? oyUygula(y, yon) : y))
+
+    try {
+      const sonuc = await api.voteForumComment(commentId, yon)
+      listeyiDegistir((y) => (y.commentId === commentId ? { ...y, ...sonuc } : y))
+    } catch (err) {
+      if (oncekiHal) listeyiDegistir((y) => (y.commentId === commentId ? oncekiHal : y))
+      setHata(err)
+    } finally {
+      oyKilidi.current.delete(commentId)
+    }
   }
 
-  /*
-    YENİ GÖNDERİ. `dakika: 0` — az önce yazıldı, yani "En Yeniler"de başa geçiyor ve
-    her tarih aralığına giriyor. Kendi oyu 1: kimse kendi gönderisini sıfır oyla
-    görmüyor, yazarın kendi yukarı oyu varsayılan (Reddit'te de öyle).
+  /* ─── YORUMLAR ─────────────────────────────────────────────────────────── */
 
-    id, sayaçtan değil UZUNLUKTAN türetiliyor ve bu yeterli: liste yalnızca büyüyor,
-    silme yok. Sunucu geldiğinde id oradan gelecek.
-  */
-  const gonderiEkle = ({ baslik, etiket: yeniEtiket, ozet }) => {
-    const id = `yerel-${ekGonderiler.length + 1}`
-    setEkGonderiler((l) => [
-      { id, etiket: yeniEtiket, baslik, ozet, yazar: session?.displayName ?? 'Sen', renk: 1, dakika: 0, arti: 1, eksi: 0 },
-      ...l,
-    ])
+  const yorumlariAc = (postId) => {
+    if (acikYorum === postId) {
+      setAcikYorum(null)
+      return
+    }
+
+    setAcikYorum(postId)
+    // Zaten çekildiyse tekrar isteme: kapat-aç, ağ isteği değil bir görünürlük kararı.
+    if (yorumlar[postId]?.liste) return
+
+    setYorumlar((m) => ({ ...m, [postId]: { yukleniyor: true, hata: null, liste: null } }))
+    api
+      .forumComments(postId)
+      .then((liste) =>
+        setYorumlar((m) => ({ ...m, [postId]: { yukleniyor: false, hata: null, liste } })),
+      )
+      .catch((err) =>
+        setYorumlar((m) => ({ ...m, [postId]: { yukleniyor: false, hata: err, liste: null } })),
+      )
+  }
+
+  const yorumEkle = async (postId, metin) => {
+    await api.createForumComment(postId, metin)
+
+    /*
+      YAZILAN YORUM SUNUCUDAN YENİDEN OKUNUYOR, elle listeye eklenmiyor.
+
+      POST yalnızca id döndürüyor; yazarın adı, seviyesi ve yönetim işareti orada yok.
+      Elle kurulsaydı bu üç alan istemcide TAHMİN edilmiş olurdu — özellikle yönetim
+      rozeti, istemcide üretilmemesi gereken tam olarak o bilgi.
+    */
+    const liste = await api.forumComments(postId)
+    setYorumlar((m) => ({ ...m, [postId]: { yukleniyor: false, hata: null, liste } }))
+
+    /*
+      Kartın yorum sayısı GÖRÜNEN listeyle eşitleniyor, +1 ile artırılmıyor.
+
+      Sunucudaki CommentCount kaldırılmış yorumları da sayıyor; liste yalnızca
+      görünenleri getiriyor. "5 yorum" yazan bir kartı açınca dört yorum görmek,
+      kullanıcıya bir şeyin yüklenmediğini düşündürür. Bir sonraki akış çekilişinde
+      sunucunun sayısı geri geliyor — bu düzeltme yalnızca açık duran kart için.
+    */
+    setAkis((mevcut) =>
+      mevcut
+        ? {
+            ...mevcut,
+            items: mevcut.items.map((g) =>
+              g.postId === postId ? { ...g, commentCount: liste.length } : g,
+            ),
+          }
+        : mevcut,
+    )
+  }
+
+  /* ─── GÖNDERİ ──────────────────────────────────────────────────────────── */
+
+  const gonderiEkle = async ({ baslik, etiket: yeniEtiket, ozet }) => {
+    await api.createForumPost(ETIKET_ENUM[yeniEtiket], baslik, ozet)
+
     setYaziyor(false)
-    // Yazdığı şeyi görebilsin: filtreler onu gizliyor olabilir, o yüzden akış
-    // varsayılana dönüyor. Sessizce "kayboldu" görünen bir gönderi, kullanıcıya
-    // paylaşımın başarısız olduğunu düşündürür.
+    /* Yazdığı şeyi görebilsin: filtreler onu gizliyor olabilir, o yüzden akış
+       varsayılana dönüyor. Sessizce "kayboldu" görünen bir gönderi, kullanıcıya
+       paylaşımın başarısız olduğunu düşündürür. */
     setSira('yeni')
     setZaman('hepsi')
     setEtiket('hepsi')
+    setSayfa(1)
     setAcikYorum(null)
+    yenile()
     setBildirim('Gönderin paylaşıldı.')
   }
 
-  const yorumEkle = (gonderiId, metin) => {
-    setEkYorumlar((mevcut) => {
-      const oncekiler = mevcut[gonderiId] ?? []
-      return {
-        ...mevcut,
-        [gonderiId]: [
-          ...oncekiler,
-          {
-            id: `${gonderiId}-yerel-${oncekiler.length + 1}`,
-            yazar: session?.displayName ?? 'Sen',
-            renk: 1,
-            dakika: 0,
-            oy: 1,
-            metin,
-          },
-        ],
-      }
-    })
+  /* ─── ŞİKAYET ──────────────────────────────────────────────────────────── */
+
+  const sikayetGonder = async (sebepAnahtari, aciklama) => {
+    const hedef = sikayetHedefi
+    const sebep = SEBEP_ENUM[sebepAnahtari]
+
+    if (hedef.tur === 'Yorum') await api.reportForumComment(hedef.id, sebep, aciklama)
+    else await api.reportForumPost(hedef.id, sebep, aciklama)
+
+    setSikayetHedefi(null)
+    setBildirim('Şikayetin iletildi. Moderasyon ekibi inceleyip sonucunu değerlendirecek.')
+
+    /*
+      AKIŞ YENİLENİYOR: bu şikayet eşiği (3) geçmiş olabilir ve gönderi artık
+      perdeli. Yenilemeseydik, kullanıcı az önce bildirdiği içeriği hiçbir şey
+      olmamış gibi görmeye devam ederdi.
+    */
+    yenile()
   }
 
   const seciliSiralama = SIRALAMALAR.find((s) => s.key === sira)
+  const gonderiler = akis?.items ?? []
 
   return (
     <div className="space-y-6">
@@ -684,7 +643,7 @@ export default function Topluluk() {
 
       {/*
         İKİ SÜTUN: akış + kurallar. Kurallar sütunu lg altında akışın ALTINA düşüyor
-        (ızgara sırası doğal akış sırası) — mobilde forumun kendisinden önce beş maddelik
+        (ızgara sırası doğal akış sırası) — mobilde forumun kendisinden önce dört maddelik
         bir kural listesi okutmak, kimsenin okumadığı bir duvar üretirdi. Masaüstünde ise
         yan sütun boş alanı dolduruyor ve kurallar akışla aynı anda görünüyor.
       */}
@@ -694,49 +653,76 @@ export default function Topluluk() {
 
           <SiralamaSeridi
             sira={sira}
-            onSira={setSira}
+            onSira={(k) => filtreDegistir(() => setSira(k))}
             zaman={zaman}
-            onZaman={setZaman}
+            onZaman={(k) => filtreDegistir(() => setZaman(k))}
             etiket={etiket}
-            onEtiket={setEtiket}
+            onEtiket={(k) => filtreDegistir(() => setEtiket(k))}
             aciklama={seciliSiralama?.aciklama}
-            sonuc={akis.length}
+            sonuc={akis?.totalCount ?? 0}
+            yukleniyor={yukleniyor}
           />
 
-          {akis.length === 0 ? (
+          {/* Hata akışın ÜSTÜNDE ve liste yerinde kalıyor: oy verirken düşen bir istek,
+              okunmakta olan sayfayı silmemeli. */}
+          <ErrorBox error={hata} onRetry={yenile} />
+
+          {yukleniyor && !akis ? (
+            <CamKart className="py-6">
+              <Loading label="Gönderiler yükleniyor…" />
+            </CamKart>
+          ) : gonderiler.length === 0 ? (
             <CamKart className="py-10 text-center">
               {/* Boş sonuç iki sebepten gelebilir (etiket ya da tarih) ve hangisi
                   olduğunu söylemek yerine ikisini birden gösteriyoruz: yanlış sebebi
-                  tahmin eden bir metin, kullanıcıyı çalışmayan düzeltmeye yollar. */}
-              <p className="text-sm font-semibold text-slate-900">
-                Bu filtrelerle gösterilecek gönderi yok.
-              </p>
-              <p className="mt-1 text-sm text-slate-600">
-                Tarih aralığını genişlet ya da etiketi “Tümü”ne al.
-              </p>
+                  tahmin eden bir metin, kullanıcıyı çalışmayan düzeltmeye yollar.
+                  Hiç gönderi yoksa (filtre de yoksa) metin bunu ayrıca söylüyor. */}
+              {etiket === 'hepsi' && zaman === 'hepsi' ? (
+                <>
+                  <p className="text-sm font-semibold text-slate-900">Burada henüz kimse yazmadı.</p>
+                  <p className="mt-1 text-sm text-slate-600">
+                    İlk gönderiyi sen paylaşabilirsin — bir soru sormak da yeterli.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm font-semibold text-slate-900">
+                    Bu filtrelerle gösterilecek gönderi yok.
+                  </p>
+                  <p className="mt-1 text-sm text-slate-600">
+                    Tarih aralığını genişlet ya da etiketi “Tümü”ne al.
+                  </p>
+                </>
+              )}
             </CamKart>
           ) : (
             <div className="space-y-4">
-              {akis.map((gonderi) => (
+              {gonderiler.map((gonderi) => (
                 <GonderiKarti
-                  key={gonderi.id}
+                  key={gonderi.postId}
                   gonderi={gonderi}
-                  /* Sabit yorumlar + bu oturumda yazılanlar. Birleştirme BURADA, kartın
-                     içinde değil: kart hangi yorumun nereden geldiğini bilmek zorunda
-                     değil, yalnızca listeyi çiziyor. */
-                  yorumlar={[...(YORUMLAR[gonderi.id] ?? []), ...(ekYorumlar[gonderi.id] ?? [])]}
-                  oy={oylar[gonderi.id] ?? 0}
-                  onOy={oyVer}
-                  yorumlarAcik={acikYorum === gonderi.id}
-                  onYorumlar={() =>
-                    setAcikYorum((mevcut) => (mevcut === gonderi.id ? null : gonderi.id))
-                  }
-                  onYorumYaz={(metin) => yorumEkle(gonderi.id, metin)}
-                  gizliAcik={acilanGizli.includes(gonderi.id)}
-                  onGizliAc={() => setAcilanGizli((l) => [...l, gonderi.id])}
+                  benimUserId={session?.userId}
+                  yorumDurumu={yorumlar[gonderi.postId]}
+                  onOy={gonderiOyla}
+                  yorumlarAcik={acikYorum === gonderi.postId}
+                  onYorumlar={() => yorumlariAc(gonderi.postId)}
+                  onYorumYaz={(metin) => yorumEkle(gonderi.postId, metin)}
+                  onYorumOy={(commentId, yon) => yorumOyla(gonderi.postId, commentId, yon)}
+                  gizliAcik={acilanGizli.includes(gonderi.postId)}
+                  onGizliAc={() => setAcilanGizli((l) => [...l, gonderi.postId])}
                   onSikayet={setSikayetHedefi}
                 />
               ))}
+
+              <Pagination
+                page={akis?.page ?? 1}
+                totalPages={akis?.totalPages ?? 1}
+                onChange={(n) => {
+                  setSayfa(n)
+                  setAcikYorum(null)
+                }}
+                disabled={yukleniyor}
+              />
             </div>
           )}
         </div>
@@ -809,26 +795,31 @@ function GonderiKutusu({ session, onAc }) {
   Üç alan: başlık, etiket, metin. Dördüncüsü yok ve olmayacak — dosya eki, bağlantı
   alanı ve anket, hepsi ayrı birer moderasyon yükü açıyor.
 
-  ALT SINIRLAR (başlık 10, metin 20 karakter) BİR KALİTE KAPISI. "yardım" diye açılan
-  tek kelimelik başlıklar bir forumu en hızlı bozan şey; kimseye cevap veremeyecek
-  kadar boş bir gönderi, paylaşılmadan önce durdurulmalı. Sayılar düşük tutuldu: amaç
-  yazmayı zorlaştırmak değil, boş göndermeyi engellemek.
+  ALT SINIRLAR (başlık 10, metin 20 karakter) BİR KALİTE KAPISI ve sunucudaki
+  ForumRules ile aynı sayılar. "yardım" diye açılan tek kelimelik başlıklar bir forumu
+  en hızlı bozan şey; kimseye cevap veremeyecek kadar boş bir gönderi, paylaşılmadan
+  önce durdurulmalı. Sayılar düşük tutuldu: amaç yazmayı zorlaştırmak değil, boş
+  göndermeyi engellemek.
 
   ETİKET ZORUNLU. Etiketsiz gönderilere izin verilseydi çoğu etiketsiz gelirdi (en az
   dirençli yol) ve akıştaki filtre şeridi işe yaramaz hâle gelirdi.
 
-  Kural hatırlatması formun İÇİNDE, yan sütunda değil: kuralı okumanın en anlamlı anı,
-  onu çiğneyebileceğin an.
+  ⚠️ SUNUCU HATASI MODALI KAPATMAZ. Günlük tavan (429) ve bağlantı eşiği (400) gibi
+  reddler ancak POST anında bilinebiliyor; modal kapansaydı kullanıcı yazdığı metni
+  kaybederdi ve neden reddedildiğini de göremezdi.
 */
 function GonderiModali({ open, onClose, onPaylas }) {
   const [baslik, setBaslik] = useState('')
   const [etiket, setEtiket] = useState('')
   const [metin, setMetin] = useState('')
+  const [gonderiliyor, setGonderiliyor] = useState(false)
+  const [hata, setHata] = useState(null)
 
   const temizle = () => {
     setBaslik('')
     setEtiket('')
     setMetin('')
+    setHata(null)
   }
 
   const kapat = () => {
@@ -839,9 +830,18 @@ function GonderiModali({ open, onClose, onPaylas }) {
   const paylasilabilir =
     baslik.trim().length >= 10 && etiket !== '' && metin.trim().length >= 20
 
-  const paylas = () => {
-    onPaylas({ baslik: baslik.trim(), etiket, ozet: metin.trim() })
-    temizle()
+  const paylas = async () => {
+    if (!paylasilabilir || gonderiliyor) return
+    setGonderiliyor(true)
+    setHata(null)
+    try {
+      await onPaylas({ baslik: baslik.trim(), etiket, ozet: metin.trim() })
+      temizle()
+    } catch (err) {
+      setHata(err)
+    } finally {
+      setGonderiliyor(false)
+    }
   }
 
   return (
@@ -852,16 +852,18 @@ function GonderiModali({ open, onClose, onPaylas }) {
       genis
       footer={
         <>
-          <Button variant="secondary" onClick={kapat}>
+          <Button variant="secondary" onClick={kapat} disabled={gonderiliyor}>
             Vazgeç
           </Button>
-          <Button onClick={paylas} disabled={!paylasilabilir}>
+          <Button onClick={paylas} loading={gonderiliyor} disabled={!paylasilabilir || gonderiliyor}>
             Paylaş
           </Button>
         </>
       }
     >
       <div className="space-y-4">
+        <ErrorBox error={hata} />
+
         <Field label="Başlık" hint="Sorunu tek cümlede özetle — akışta önce bu okunuyor.">
           <input
             className="input"
@@ -934,7 +936,7 @@ function GonderiModali({ open, onClose, onPaylas }) {
   göre sıralansın” / “ne konuşulsun”) ve aynı satıra konsalar tek bir denetim gibi
   okunurlardı.
 */
-function SiralamaSeridi({ sira, onSira, zaman, onZaman, etiket, onEtiket, aciklama, sonuc }) {
+function SiralamaSeridi({ sira, onSira, zaman, onZaman, etiket, onEtiket, aciklama, sonuc, yukleniyor }) {
   const zamanAdi = ZAMAN_ARALIKLARI.find((z) => z.key === zaman)?.label
 
   return (
@@ -1003,7 +1005,10 @@ function SiralamaSeridi({ sira, onSira, zaman, onZaman, etiket, onEtiket, acikla
           yanında yazmazsa fark edilmiyor. */}
       <p className="mt-3 text-xs text-slate-600">
         {aciklama} <span className="text-slate-400" aria-hidden="true">·</span> {zamanAdi}{' '}
-        <span className="text-slate-400" aria-hidden="true">·</span> {sonuc} gönderi
+        <span className="text-slate-400" aria-hidden="true">·</span>{' '}
+        {/* Yüklenirken eski sayıyı göstermek yanlış olurdu: filtre değişmiş ama sayı
+            hâlâ önceki filtrenin sonucunu söylüyor olurdu. */}
+        {yukleniyor ? 'yükleniyor…' : `${sonuc} gönderi`}
       </p>
 
       <div className="mt-4 flex flex-wrap gap-2 border-t border-slate-200/70 pt-4">
@@ -1031,16 +1036,20 @@ function SiralamaSeridi({ sira, onSira, zaman, onZaman, etiket, onEtiket, acikla
 
 function GonderiKarti({
   gonderi,
-  yorumlar,
-  oy,
+  benimUserId,
+  yorumDurumu,
   onOy,
   yorumlarAcik,
   onYorumlar,
   onYorumYaz,
+  onYorumOy,
   gizliAcik,
   onGizliAc,
   onSikayet,
 }) {
+  const etiketAnahtari = ETIKET_ANAHTARI[gonderi.tag] ?? gonderi.tag
+  const benimGonderim = gonderi.author?.userId === benimUserId
+
   /*
     İNCELEMEDEKİ GÖNDERİ AKIŞTA KAPALI GELİR.
 
@@ -1049,7 +1058,7 @@ function GonderiKarti({
     var mı" sorusunu cevaplanamaz hâle getirir. Perde ise sebebi yazıyor, sayıyı
     veriyor ve kararı okuyana bırakıyor.
   */
-  if (gonderi.incelemede && !gizliAcik) {
+  if (gonderi.underReview && !gizliAcik) {
     return (
       <CamKart className="border-amber-200/80 bg-amber-50/70 p-4">
         <div className="flex items-start gap-3">
@@ -1057,7 +1066,7 @@ function GonderiKarti({
           <div className="min-w-0">
             <p className="text-sm font-semibold text-slate-900">Bu gönderi incelemede</p>
             <p className="mt-1 text-sm leading-relaxed text-slate-700">
-              {gonderi.sikayetSayisi} kişi topluluk kurallarını ihlal ettiğini bildirdi. Moderasyon
+              {gonderi.reportCount} kişi topluluk kurallarını ihlal ettiğini bildirdi. Moderasyon
               sonuçlanana kadar akışta kapalı tutuluyor.
             </p>
             <div className="mt-3 flex flex-wrap items-center gap-3">
@@ -1069,7 +1078,7 @@ function GonderiKarti({
               >
                 Yine de göster
               </button>
-              <span className="text-xs text-slate-600">Etiket: {ETIKET_ADI[gonderi.etiket]}</span>
+              <span className="text-xs text-slate-600">Etiket: {ETIKET_ADI[etiketAnahtari]}</span>
             </div>
           </div>
         </div>
@@ -1081,17 +1090,22 @@ function GonderiKarti({
     <CamKart className="p-0">
       {/* Perde açıldıysa uyarı kartın ÜSTÜNDE kalıyor: kullanıcı "yine de göster"e
           bastığı anı unutabilir, içeriğin durumu unutulmamalı. */}
-      {gonderi.incelemede && (
+      {gonderi.underReview && (
         <div className="flex items-center gap-2 rounded-t-2xl border-b border-amber-200 bg-amber-50 px-4 py-2">
           <UyariIkonu className="h-4 w-4 shrink-0 text-amber-600" />
           <p className="text-xs font-medium text-amber-900">
-            İncelemede — {gonderi.sikayetSayisi} şikayet aldı, moderasyon sürüyor.
+            İncelemede — {gonderi.reportCount} şikayet aldı, moderasyon sürüyor.
           </p>
         </div>
       )}
 
       <div className="flex gap-3 p-4 sm:gap-4 sm:p-5">
-        <OyRayi puan={gonderi.arti - gonderi.eksi} oy={oy} onOy={(yon) => onOy(gonderi.id, yon)} />
+        <OyRayi
+          arti={gonderi.upvoteCount}
+          eksi={gonderi.downvoteCount}
+          oy={gonderi.myVote}
+          onOy={(yon) => onOy(gonderi.postId, yon)}
+        />
 
         <div className="min-w-0 flex-1">
           {/* ÜST SATIR: etiket + yazar + zaman solda, şikayet sağ üstte. */}
@@ -1104,39 +1118,47 @@ function GonderiKarti({
               nereden olursa olsun düzgün görünmesini sağlıyor.
             */}
             <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-              <EtiketPili etiket={gonderi.etiket} />
-
-              {/* Avatar ile ad TEK bir küme: sarma yaptığında yazarın fotoğrafı bir
-                  satırda, adı diğerinde kalmasın. */}
-              <span className="flex min-w-0 items-center gap-1.5">
-                <YerTutucuAvatar ad={gonderi.yazar} renk={gonderi.renk} boyut="xs" />
-                <span className="truncate text-xs font-medium text-slate-700">{gonderi.yazar}</span>
-              </span>
+              <EtiketPili etiket={etiketAnahtari} />
+              <YazarSatiri yazar={gonderi.author} boyut="xs" />
 
               <span className="flex items-center gap-1.5 text-xs text-slate-600">
                 <span className="text-slate-400" aria-hidden="true">
                   ·
                 </span>
-                {zamanKisalt(gonderi.dakika)}
+                {zamanKisalt(yasDakika(gonderi.createdAtUtc))}
               </span>
             </div>
 
-            <SikayetDugmesi
-              onClick={() =>
-                onSikayet({ tur: 'Gönderi', baslik: gonderi.baslik, yazar: gonderi.yazar })
-              }
-            />
+            {/* KENDİ GÖNDERİNİ ŞİKAYET EDEMEZSİN: sunucu da reddediyor ("Kendini
+                şikayet edemezsin"), ama hatayı göstermektense düğmeyi hiç çizmemek
+                doğru — tıklandığında reddedilen bir düğme, kırık bir düğmedir. */}
+            {!benimGonderim && (
+              <SikayetDugmesi
+                onClick={() =>
+                  onSikayet({
+                    tur: 'Gönderi',
+                    id: gonderi.postId,
+                    baslik: gonderi.title,
+                    yazar: gonderi.author?.displayName,
+                  })
+                }
+              />
+            )}
           </div>
 
           {/* Başlık gönderinin kendisi: kartın tıklanabilir hissi buradan geliyor.
               Şimdilik ayrı bir gönderi sayfası yok, o yüzden bağlantı değil — var
               olmayan bir yere giden bir link, kırık bir vaat olurdu. */}
           <h3 className="mt-2.5 text-[17px] font-bold leading-snug text-slate-900">
-            {gonderi.baslik}
+            {gonderi.title}
           </h3>
 
-          {/* line-clamp-3: akış TARANABİLİR kalmalı. Tam metin gönderi sayfasında. */}
-          <p className="mt-2 line-clamp-3 text-sm leading-relaxed text-slate-600">{gonderi.ozet}</p>
+          {/* line-clamp-3: akış TARANABİLİR kalmalı. Tam metin gönderi sayfasında.
+              whitespace-pre-line: kullanıcı satır arası bıraktıysa o boşluk anlam
+              taşıyor (madde madde yazılmış bir soru, tek paragrafa çökerse okunmaz). */}
+          <p className="mt-2 line-clamp-3 whitespace-pre-line text-sm leading-relaxed text-slate-600">
+            {gonderi.body}
+          </p>
 
           <div className="mt-3.5 flex flex-wrap items-center gap-2">
             <button
@@ -1151,12 +1173,18 @@ function GonderiKarti({
                           }`}
             >
               <MesajIkonu className="h-4 w-4" />
-              {yorumlar.length > 0 ? `${yorumlar.length} yorum` : 'Yorumlar'}
+              {gonderi.commentCount > 0 ? `${gonderi.commentCount} yorum` : 'Yorumlar'}
             </button>
           </div>
 
           {yorumlarAcik && (
-            <YorumListesi yorumlar={yorumlar} onSikayet={onSikayet} onYaz={onYorumYaz} />
+            <YorumListesi
+              durum={yorumDurumu}
+              benimUserId={benimUserId}
+              onSikayet={onSikayet}
+              onYaz={onYorumYaz}
+              onOy={onYorumOy}
+            />
           )}
         </div>
       </div>
@@ -1174,10 +1202,16 @@ function GonderiKarti({
   Renk oyun yönünü söylüyor: yukarı marka mavisi (bu ürünün "evet" rengi), aşağı rose.
   Sayı da oyun rengini alıyor — kullanıcı kendi oyunu, okların hangisinin dolu olduğuna
   bakmadan, tek bir sayıya bakarak görebiliyor.
+
+  ⚠️ SAYI ARTIK OYU AYRICA EKLEMİYOR. Sabit veriyle çalışırken gösterilen değer
+  `puan + oy` idi, çünkü taban sayı kullanıcının kendi oyunu içermiyordu. Sunucudan
+  gelen upvoteCount/downvoteCount İÇERİYOR; toplamayı sürdürmek kendi oyumuzu iki kez
+  saymak olurdu.
 */
-function OyRayi({ puan, oy, onOy }) {
+function OyRayi({ arti, eksi, oy = 0, onOy, kucuk = false }) {
+  const olcu = kucuk ? 'h-9 w-9 lg:h-8 lg:w-8' : 'h-11 w-11 lg:h-9 lg:w-9'
   const ortak =
-    'grid h-11 w-11 place-items-center rounded-lg transition lg:h-9 lg:w-9 ' +
+    `grid ${olcu} place-items-center rounded-lg transition ` +
     'focus:outline-none focus:ring-2 focus:ring-brand-200'
 
   return (
@@ -1199,7 +1233,7 @@ function OyRayi({ puan, oy, onOy }) {
           oy === 1 ? 'text-brand-700' : oy === -1 ? 'text-rose-700' : 'text-slate-800'
         }`}
       >
-        {puan + oy}
+        {arti - eksi}
       </span>
 
       <button
@@ -1257,66 +1291,100 @@ function SikayetDugmesi({ onClick, kucuk = false }) {
 
   Sol kenardaki dikey çizgi (border-l) yorumları gönderiye bağlıyor: girinti tek başına
   "bu yorumlar o gönderiye ait" demiyor, çizgi diyor.
+
+  YORUM OYU ARTIK TIKLANABİLİR. Sabit veriyle çalışırken salt okunurdu ("basıldığında
+  hiçbir şey olmayan bir düğme, hiç olmayan bir düğmeden kötüdür") çünkü uç yoktu.
+  Uç geldi (POST /api/community/comments/{id}/vote) ve satır gönderinin rayıyla aynı
+  bileşene döndü — vaat edilen ile yapılan yeniden aynı şey.
 */
-function YorumListesi({ yorumlar, onSikayet, onYaz }) {
+function YorumListesi({ durum, benimUserId, onSikayet, onYaz, onOy }) {
   const [taslak, setTaslak] = useState('')
+  const [gonderiliyor, setGonderiliyor] = useState(false)
+  const [hata, setHata] = useState(null)
 
-  /* Alt sınır 5 karakter: "+1" ya da "aynen" gibi tek kelimelik onaylar bir tartışmayı
-     ilerletmiyor ama boş bir yorumu göndermeyi engellemek yeterli — gönderi formundaki
-     20 karakterlik eşik burada fazla olurdu, kısa ve isabetli cevaplar meşru. */
-  const gonderilebilir = taslak.trim().length >= 5
+  /* Alt sınır 5 karakter (sunucudaki ForumRules.CommentMinLength ile aynı): "+1" ya da
+     "aynen" gibi tek kelimelik onaylar bir tartışmayı ilerletmiyor ama boş bir yorumu
+     göndermeyi engellemek yeterli — gönderi formundaki 20 karakterlik eşik burada fazla
+     olurdu, kısa ve isabetli cevaplar meşru. */
+  const gonderilebilir = taslak.trim().length >= 5 && !gonderiliyor
 
-  const gonder = (e) => {
+  const gonder = async (e) => {
     e.preventDefault()
     if (!gonderilebilir) return
-    onYaz(taslak.trim())
-    setTaslak('')
+    setGonderiliyor(true)
+    setHata(null)
+    try {
+      await onYaz(taslak.trim())
+      setTaslak('')
+    } catch (err) {
+      // Taslak SİLİNMİYOR: yazdığı yorumu kaybeden kullanıcı yeniden yazmıyor, vazgeçiyor.
+      setHata(err)
+    } finally {
+      setGonderiliyor(false)
+    }
   }
+
+  const liste = durum?.liste
 
   return (
     <div className="mt-4 border-t border-slate-200/70 pt-4">
-      {yorumlar.length === 0 ? (
+      {durum?.yukleniyor ? (
+        <Loading label="Yorumlar yükleniyor…" />
+      ) : durum?.hata ? (
+        <ErrorBox error={durum.hata} />
+      ) : !liste || liste.length === 0 ? (
         <p className="text-sm text-slate-600">Bu gönderide henüz yorum yok.</p>
       ) : (
         <ul className="space-y-4 border-l-2 border-slate-100 pl-3 sm:pl-4">
-          {yorumlar.map((yorum) => (
-            <li key={yorum.id}>
+          {liste.map((yorum) => (
+            <li key={yorum.commentId}>
               <div className="flex items-start gap-2.5">
-                <YerTutucuAvatar ad={yorum.yazar} renk={yorum.renk} boyut="sm" />
+                <OyRayi
+                  kucuk
+                  arti={yorum.upvoteCount}
+                  eksi={yorum.downvoteCount}
+                  oy={yorum.myVote}
+                  onOy={(yon) => onOy(yorum.commentId, yon)}
+                />
 
                 <div className="min-w-0 flex-1">
                   <div className="flex items-start justify-between gap-2">
-                    <p className="min-w-0 text-xs">
-                      <span className="font-semibold text-slate-800">{yorum.yazar}</span>{' '}
-                      <span className="text-slate-400" aria-hidden="true">
-                        ·
-                      </span>{' '}
-                      <span className="text-slate-600">{zamanKisalt(yorum.dakika)}</span>
-                    </p>
+                    <span className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1">
+                      <YazarSatiri yazar={yorum.author} boyut="xs" />
+                      <span className="flex items-center gap-1.5 text-xs text-slate-600">
+                        <span className="text-slate-400" aria-hidden="true">
+                          ·
+                        </span>
+                        {zamanKisalt(yasDakika(yorum.createdAtUtc))}
+                      </span>
+                    </span>
 
                     {/* Yorumun şikayet düğmesi de aynı yerde: sağ üst. Gönderiyle
                         aynı konum, aynı ikon — kullanıcı kuralı bir kez öğreniyor. */}
-                    <SikayetDugmesi
-                      kucuk
-                      onClick={() =>
-                        onSikayet({ tur: 'Yorum', baslik: yorum.metin, yazar: yorum.yazar })
-                      }
-                    />
+                    {yorum.author?.userId !== benimUserId && (
+                      <SikayetDugmesi
+                        kucuk
+                        onClick={() =>
+                          onSikayet({
+                            tur: 'Yorum',
+                            id: yorum.commentId,
+                            baslik: yorum.body,
+                            yazar: yorum.author?.displayName,
+                          })
+                        }
+                      />
+                    )}
                   </div>
 
-                  <p className="mt-1 text-sm leading-relaxed text-slate-700">{yorum.metin}</p>
+                  {yorum.underReview && (
+                    <p className="mt-1 flex items-center gap-1.5 text-xs font-medium text-amber-800">
+                      <UyariIkonu className="h-3.5 w-3.5 shrink-0" />
+                      Bu yorum incelemede.
+                    </p>
+                  )}
 
-                  {/*
-                    Yorum oyu OKUNUR, TIKLANMAZ — ve "oy" kelimesi tam da bunun için
-                    duruyor. Çıplak bir ok + sayı, gönderideki oy rayına benzediği için
-                    tıklanabilir görünüyordu; basıldığında hiçbir şey olmayan bir düğme,
-                    hiç olmayan bir düğmeden kötüdür. Yorum oylaması bu sürümün kapsamı
-                    dışında (istenen oy düğmeleri gönderiler için); geldiğinde bu satır
-                    gönderinin rayıyla aynı bileşene döner.
-                  */}
-                  <p className="mt-1.5 flex items-center gap-1.5 text-xs font-medium text-slate-600">
-                    <OyOkuIkonu className="h-3.5 w-3.5 text-slate-400" />
-                    {yorum.oy} oy
+                  <p className="mt-1 whitespace-pre-line text-sm leading-relaxed text-slate-700">
+                    {yorum.body}
                   </p>
                 </div>
               </div>
@@ -1334,8 +1402,9 @@ function YorumListesi({ yorumlar, onSikayet, onYaz }) {
         basılıyor. Enter'la göndermek YOK — çok satırlı bir alanda Enter satır başıdır.
       */}
       <form onSubmit={gonder} className="mt-4">
+        <ErrorBox error={hata} />
         <textarea
-          className="input h-20 resize-none"
+          className="input mt-2 h-20 resize-none"
           value={taslak}
           onChange={(e) => setTaslak(e.target.value)}
           maxLength={1000}
@@ -1343,7 +1412,12 @@ function YorumListesi({ yorumlar, onSikayet, onYaz }) {
           aria-label="Yorum yaz"
         />
         <div className="mt-2 flex justify-end">
-          <Button type="submit" disabled={!gonderilebilir} className="px-4 py-1.5 text-xs">
+          <Button
+            type="submit"
+            loading={gonderiliyor}
+            disabled={!gonderilebilir}
+            className="px-4 py-1.5 text-xs"
+          >
             Yorumla
           </Button>
         </div>
@@ -1358,18 +1432,20 @@ function KurallarKarti() {
   return (
     <CamKart className="p-5">
       <div className="flex items-center gap-2.5">
-        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-brand-50 text-brand-600 ring-1 ring-inset ring-brand-100">
-          <KalkanIkonu className="h-5 w-5" />
-        </span>
+        <KalkanIkonu className="h-5 w-5 shrink-0 text-brand-600" />
         <h2 className="text-sm font-bold text-slate-900">Topluluk kuralları</h2>
       </div>
 
-      {/* Numaralı liste: kurallara sonradan atıf yapılabilmeli ("2. kural"). Madde
-          işareti bunu yapamaz. */}
-      <ol className="mt-4 space-y-3">
+      <ol className="mt-3 space-y-2.5">
         {KURALLAR.map((kural, i) => (
           <li key={kural} className="flex gap-2.5">
-            <span className="mt-px grid h-5 w-5 shrink-0 place-items-center rounded-md bg-slate-100 text-[11px] font-bold text-slate-700">
+            {/* Numara madde işaretinden daha iyi: kurallar bir moderasyon kararında
+                referans veriliyor ("3. kural"), numarasız bir liste bunu yapamaz. */}
+            <span
+              className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-md bg-slate-100
+                         text-[11px] font-bold text-slate-600"
+              aria-hidden="true"
+            >
               {i + 1}
             </span>
             <span className="text-xs leading-relaxed text-slate-600">{kural}</span>
@@ -1377,9 +1453,9 @@ function KurallarKarti() {
         ))}
       </ol>
 
-      <p className="mt-4 border-t border-slate-200/70 pt-3 text-xs leading-relaxed text-slate-600">
-        Kuralı çiğneyen gönderi kaldırılır. Tekrarlayan hesaplar topluluğa gönderi
-        paylaşamaz — dersler ve sohbet bundan etkilenmez.
+      <p className="mt-4 border-t border-slate-200/70 pt-3 text-xs leading-relaxed text-slate-500">
+        Kuralları ihlal eden içerik moderasyon ekibince kaldırılır; tekrarlayan ihlallerde
+        hesaba yaptırım uygulanır.
       </p>
     </CamKart>
   )
@@ -1389,16 +1465,14 @@ function OnlemlerKarti() {
   return (
     <CamKart className="p-5">
       <div className="flex items-center gap-2.5">
-        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-brand-50 text-brand-600 ring-1 ring-inset ring-brand-100">
-          <ToplulukIkonu className="h-5 w-5" />
-        </span>
-        <h2 className="text-sm font-bold text-slate-900">Burası nasıl korunuyor</h2>
+        <BilgiIkonu className="h-5 w-5 shrink-0 text-slate-500" />
+        <h2 className="text-sm font-bold text-slate-900">Nasıl korunuyor?</h2>
       </div>
 
-      <dl className="mt-4 space-y-3">
+      <dl className="mt-3 space-y-3">
         {ONLEMLER.map(({ baslik, metin }) => (
           <div key={baslik}>
-            <dt className="text-xs font-semibold text-slate-900">{baslik}</dt>
+            <dt className="text-xs font-semibold text-slate-800">{baslik}</dt>
             <dd className="mt-0.5 text-xs leading-relaxed text-slate-600">{metin}</dd>
           </div>
         ))}
@@ -1410,12 +1484,11 @@ function OnlemlerKarti() {
 /* ─── ŞİKAYET MODALI ───────────────────────────────────────────────────────── */
 
 /*
-  SEBEP SORAN ŞİKAYET. Tek düğmelik bir şikayet moderatöre "biri bundan hoşlanmadı"dan
-  başka bir şey söylemez; sebep, gelen yığını sıraya sokan ve otomatik kuralların
-  (ör. telif ihbarlarını öne alma) dayandığı tek veridir.
+  Şikayet formu SEBEP SORUYOR. Tek düğmelik bir şikayet moderatöre "biri bundan
+  hoşlanmadı"dan başka bir şey söylemez; gelen yığını sıraya sokan şey sebeptir.
 
-  Şikayet edilen içerik modalın içinde TEKRAR GÖSTERİLİYOR: kullanıcı listede yanlış
-  satırın bayrağına basmış olabilir ve bunu ancak neyi şikayet ettiğini görürse anlar.
+  Şikayet edilen içeriğin bir parçası formda GÖRÜNÜYOR: yanlış içeriği şikayet etmek,
+  moderatörün zamanını harcayan sessiz bir hata. Kullanıcı neyi bildirdiğini görmeli.
 
   "Anonim" bilgisi yazıyor: şikayet etmenin önündeki en büyük engel, şikayet edilenin
   bunu öğreneceği korkusudur.
@@ -1423,22 +1496,32 @@ function OnlemlerKarti() {
 function SikayetModali({ hedef, onClose, onGonder }) {
   const [sebep, setSebep] = useState(null)
   const [detay, setDetay] = useState('')
+  const [gonderiliyor, setGonderiliyor] = useState(false)
+  const [hata, setHata] = useState(null)
 
   const kapat = () => {
     setSebep(null)
     setDetay('')
+    setHata(null)
     onClose()
   }
 
-  const gonder = () => {
-    setSebep(null)
-    setDetay('')
-    onGonder()
-  }
+  const gonderilebilir = sebep !== null && detay.trim().length >= EN_AZ_ACIKLAMA
 
-  // "Diğer" seçildiyse açıklama zorunlu: sebepsiz bir "diğer", moderatör kuyruğunda
-  // okunamayan bir satırdır.
-  const gonderilebilir = sebep !== null && (sebep !== 'diger' || detay.trim().length >= 10)
+  const gonder = async () => {
+    if (!gonderilebilir || gonderiliyor) return
+    setGonderiliyor(true)
+    setHata(null)
+    try {
+      await onGonder(sebep, detay.trim())
+      setSebep(null)
+      setDetay('')
+    } catch (err) {
+      setHata(err)
+    } finally {
+      setGonderiliyor(false)
+    }
+  }
 
   return (
     <Modal
@@ -1447,10 +1530,15 @@ function SikayetModali({ hedef, onClose, onGonder }) {
       title="Şikayet et"
       footer={
         <>
-          <Button variant="secondary" onClick={kapat}>
+          <Button variant="secondary" onClick={kapat} disabled={gonderiliyor}>
             Vazgeç
           </Button>
-          <Button variant="danger" onClick={gonder} disabled={!gonderilebilir}>
+          <Button
+            variant="danger"
+            onClick={gonder}
+            loading={gonderiliyor}
+            disabled={!gonderilebilir || gonderiliyor}
+          >
             Şikayeti gönder
           </Button>
         </>
@@ -1458,6 +1546,8 @@ function SikayetModali({ hedef, onClose, onGonder }) {
     >
       {hedef && (
         <div className="space-y-4">
+          <ErrorBox error={hata} />
+
           <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
             <p className="text-xs font-semibold text-slate-600">
               {hedef.tur} · {hedef.yazar}
@@ -1497,14 +1587,14 @@ function SikayetModali({ hedef, onClose, onGonder }) {
           </fieldset>
 
           <Field
-            label={sebep === 'diger' ? 'Açıklama (zorunlu)' : 'Açıklama (isteğe bağlı)'}
-            hint="Moderasyon ekibine ne olduğunu birkaç cümleyle anlat."
+            label="Ne oldu?"
+            hint={`En az ${EN_AZ_ACIKLAMA} karakter. Moderatörün elindeki tek anlatım bu olacak.`}
           >
             <textarea
               className="input h-24 resize-none"
               value={detay}
               onChange={(e) => setDetay(e.target.value)}
-              maxLength={500}
+              maxLength={2000}
               placeholder="Örn. gönderi izinsiz PDF bağlantısı paylaşıyor."
             />
           </Field>

@@ -313,6 +313,67 @@ export const api = {
   createReview: (sessionId, payload) =>
     request(`/api/sessions/${sessionId}/review`, { method: 'POST', body: payload }),
 
+  /*
+    ─── TOPLULUK (FORUM) ────────────────────────────────────────────────────────
+
+    Sayfa (pages/Topluluk.jsx) 2026-08-25'te sabit veriyle yazıldı; bu uçlar onun
+    sunucu karşılığı. Sıralama, tarih penceresi ve etiket filtresi SUNUCUDA
+    uygulanıyor — istemcide uygulansaydı sayfalama anlamsız olurdu (ikinci sayfayı
+    verebilmek için tüm gönderileri indirmek gerekirdi).
+
+    sort / range / tag SUNUCU ENUM ADLARI ile gidiyor ("Newest", "Day", "ExamStress").
+    Türkçe arayüz anahtarlarından çeviri Topluluk.jsx'te tek bir tabloda; burada
+    çevrilmiyor ki kablo sözleşmesi tek anlamlı kalsın.
+  */
+  forumFeed: (
+    { sort = 'Newest', range = 'All', tag = null, page = 1, pageSize = 20 } = {},
+    signal,
+  ) => {
+    const q = new URLSearchParams({ sort, range, page: String(page), pageSize: String(pageSize) })
+    // Etiket yoksa parametre HİÇ gönderilmiyor: boş bir `tag=` değeri sunucuda geçersiz
+    // enum olarak bağlanır ve akış 400 dönerdi.
+    if (tag) q.set('tag', tag)
+    return request(`/api/community/posts?${q}`, { signal })
+  },
+
+  createForumPost: (tag, title, body) =>
+    request('/api/community/posts', { method: 'POST', body: { tag, title, body } }),
+
+  forumComments: (postId, signal) => request(`/api/community/posts/${postId}/comments`, { signal }),
+
+  createForumComment: (postId, body) =>
+    request(`/api/community/posts/${postId}/comments`, { method: 'POST', body: { body } }),
+
+  /**
+   * Oy. value yalnızca 1 ya da -1; SIFIR GÖNDERİLMEZ — geri almak, aynı yöne ikinci kez
+   * oy vermektir (sunucu satırı siler). Ayrı bir "oyu kaldır" ucu yok çünkü kullanıcı
+   * için de tek bir jest: aynı oka tekrar basmak.
+   *
+   * Dönen değer sunucunun SON sayaçları: { upvoteCount, downvoteCount, myVote }.
+   * İstemci optimistik gösterip bu yanıtla düzeltiyor.
+   */
+  voteForumPost: (postId, value) =>
+    request(`/api/community/posts/${postId}/vote`, { method: 'POST', body: { value } }),
+  voteForumComment: (commentId, value) =>
+    request(`/api/community/comments/${commentId}/vote`, { method: 'POST', body: { value } }),
+
+  /**
+   * Şikayet aynı moderasyon kuyruğuna düşüyor (moderation.Reports) — ders, sohbet ve
+   * forum şikayetleri moderatör için tek yerde. reason: ReportReason enum adı.
+   * Açıklama sunucuda en az 15 karakter (CreateReportHandler); Topluluk.jsx aynı
+   * sınırı uyguluyor ki kullanıcı yazıp gönderdikten sonra 400 görmesin.
+   */
+  reportForumPost: (postId, reason, description) =>
+    request(`/api/community/posts/${postId}/report`, {
+      method: 'POST',
+      body: { reason, description },
+    }),
+  reportForumComment: (commentId, reason, description) =>
+    request(`/api/community/comments/${commentId}/report`, {
+      method: 'POST',
+      body: { reason, description },
+    }),
+
   // --- Tercihler (çerez rızası / ürün turu) ---
   myPreferences: () => request('/api/preferences'),
   saveCookieConsent: (analytics, functional, consentVersion) =>
@@ -333,6 +394,22 @@ export const api = {
   reports: (onlyOpen = true) => request(`/api/admin/reports?onlyOpen=${onlyOpen}`),
   resolveReport: (reportId, actionTaken, note) =>
     request(`/api/admin/reports/${reportId}/resolve`, { method: 'POST', body: { actionTaken, note } }),
+  /**
+   * Forum içeriğini kaldırır (remove=true) ya da geri getirir (remove=false).
+   *
+   * ŞİKAYETİ KAPATMAKTAN AYRI: resolveReport yalnızca kuyruktaki kaydı kapatıyor,
+   * içeriğe dokunmuyor. Bu uç olmadan üç şikayet alıp otomatik perdelenen bir gönderi
+   * SONSUZA KADAR perdeli kalıyordu — "işlem gerekmedi" kararı bile perdeyi
+   * kaldırmıyordu.
+   *
+   * Gerekçe zorunlu (sunucu en az 10 karakter istiyor) ve denetim izine yazılıyor.
+   */
+  moderateForumContent: ({ postId = null, commentId = null, remove, reason }) =>
+    request('/api/admin/community/moderate', {
+      method: 'POST',
+      body: { postId, commentId, remove, reason },
+    }),
+
   adminSessionProofs: (sessionId) => request(`/api/admin/sessions/${sessionId}/proofs`),
 
   /** Yönetici, katılımcı olmadığı derslerin kanıtını kendi ucundan görür. */

@@ -96,11 +96,28 @@ export function SeviyeRozeti({ kaynak, boyut = 'md', ton = 'koyu', className = '
   const t = TONLAR[ton] ?? TONLAR.koyu
   const b = BOYUTLAR[boyut] ?? BOYUTLAR.md
 
+  /*
+    İLERLEME METNİ YALNIZCA VERİSİ VARSA (2026-08-27).
+
+    seviyeIlerlemeMetni eksik veriyi 0'a düşürüyor ve `nextLevelAt` yoksa "en üst
+    seviye" diyor. Cüzdanda ikisi de dolu olduğu için bu görünmüyordu; forum akışı
+    yazarın YALNIZCA seviyesini gönderiyor (ForumAuthorDto — puan başkasının verisi,
+    sızdırılmıyor) ve o kaynakla tooltip "8. Seviye — 0 puan · en üst seviye" yazardı:
+    iki iddia birden yanlış.
+
+    Ölçüt totalEarnedCredits: ilerleme cümlesinin her iki yarısı da ona dayanıyor.
+    Yoksa rozet seviyeyi söylüyor, ilerleme hakkında hiçbir şey iddia etmiyor.
+  */
+  const ilerlemeVar = Number.isInteger(kaynak?.totalEarnedCredits)
+  const baslik = ilerlemeVar
+    ? `${seviyeEtiketi(seviye)} (${EN_YUKSEK_SEVIYE} üzerinden) — ${seviyeIlerlemeMetni(kaynak)}`
+    : `${seviyeEtiketi(seviye)} (${EN_YUKSEK_SEVIYE} üzerinden)`
+
   return (
     <span
       className={`inline-flex items-center whitespace-nowrap rounded-full font-semibold
                   ${t.kabuk} ${b.kabuk} ${className}`}
-      title={`${seviyeEtiketi(seviye)} (${EN_YUKSEK_SEVIYE} üzerinden) — ${seviyeIlerlemeMetni(kaynak)}`}
+      title={baslik}
     >
       {/*
         RAKAM MADALYONUN OPTİK MERKEZİNDE (2026-08-25) — ölçümle.

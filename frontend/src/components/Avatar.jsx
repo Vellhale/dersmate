@@ -66,6 +66,11 @@ function useAvatarUrl(userId) {
   kaplayıp daha çok yüz gösteriyor. Instagram'dan Slack'e kadar bu ayrım aynı.
 */
 const SIZES = {
+  /* xs yalnızca forum akışındaki yazar satırında: etiket, ad ve zamanın yan yana
+     durduğu 320px'lik bir satırda 32px'lik avatar adın yerini yiyordu. Halka (ring)
+     bu boyutta YOK — 24px'lik bir karede 2px beyaz halka, baş harflere kalan yeri
+     gözle görülür biçimde daraltıyor. */
+  xs: 'h-6 w-6 text-[10px] rounded-md',
   sm: 'h-8 w-8 text-xs rounded-lg',
   md: 'h-12 w-12 text-sm rounded-xl',
   lg: 'h-20 w-20 text-2xl rounded-2xl',
@@ -74,6 +79,7 @@ const SIZES = {
 
 /** Karartma katmanının köşesi. SIZES ile aynı anahtarlar — bkz. Avatar içindeki not. */
 const KOSELER = {
+  xs: 'rounded-md',
   sm: 'rounded-lg',
   md: 'rounded-xl',
   lg: 'rounded-2xl',
