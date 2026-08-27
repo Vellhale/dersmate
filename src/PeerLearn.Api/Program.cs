@@ -174,6 +174,86 @@ if (args.Contains("--migrate"))
     return;
 }
 
+/*
+  İLK YÖNETİCİYİ AÇ: "dotnet run -- --promote-admin eposta@alan.com"
+
+  ⛔ BU ADIM OLMADAN TAZE BİR ÜRETİM VERİTABANINDA MODERASYON ULAŞILAMAZ.
+
+  Yumurta-tavuk: rol atama ucu (PUT api/admin/users/{id}/role) Policies.AdminOnly ile
+  korunuyor, yani yeni bir yönetici ancak MEVCUT bir yönetici tarafından atanabiliyor.
+  DbSeeder yalnızca rozet ve ders kataloğunu tohumluyor, kullanıcı açmıyor. Sonuç: yeni
+  kurulumda hiç kimse Admin değil → /admin paneline kimse giremiyor → şikayet kuyruğu
+  okunamıyor ve yaptırım (uyarı/askı/ban) uygulanamıyor. Yaptırım zinciri kodda tam
+  ama pratikte erişilemez kalıyordu.
+
+  NEDEN HTTP UCU DEĞİL, KOMUT SATIRI: "ilk yöneticiyi aç" ucu, ne kadar korunursa
+  korunsun kalıcı bir yetki yükseltme yüzeyi bırakır (kurulum bayrağı unutulur, koşul
+  bir gün yanlış değerlendirilir). Komut satırı bu yüzeyi hiç açmıyor: çalıştırabilmek
+  için zaten sunucuya erişimin olması gerekiyor ve o erişimin varsa veritabanına da
+  doğrudan erişimin var demektir — yani yeni bir ayrıcalık vermiyor.
+
+  --migrate gibi ÇALIŞIP ÇIKAR, istek karşılamaz. Karar denetim izine yazılıyor;
+  aktör olarak yükseltilen kişinin kendisi kaydediliyor (başka bir aktör yok) ve
+  özet bunun bir kurulum adımı olduğunu açıkça söylüyor.
+*/
+var promoteIndex = Array.IndexOf(args, "--promote-admin");
+if (promoteIndex >= 0)
+{
+    var hedefEposta = promoteIndex + 1 < args.Length ? args[promoteIndex + 1].Trim() : null;
+
+    using var promoteScope = app.Services.CreateScope();
+    var promoteDb = promoteScope.ServiceProvider.GetRequiredService<PeerLearnDbContext>();
+    var promoteLogger = promoteScope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+
+    if (string.IsNullOrWhiteSpace(hedefEposta))
+    {
+        promoteLogger.LogError(
+            "Kullanım: dotnet run --project src/PeerLearn.Api -- --promote-admin eposta@alan.com");
+        Environment.ExitCode = 1;
+        return;
+    }
+
+    var hedef = await promoteDb.Users
+        .SingleOrDefaultAsync(u => u.Email.ToLower() == hedefEposta.ToLower());
+
+    if (hedef is null)
+    {
+        // Kullanıcı ÖNCE kayıt olmalı: burada hesap açmıyoruz. Parola oluşturmak,
+        // doğrulama akışını atlamak ve e-posta sahipliğini kanıtsız kabul etmek demek.
+        promoteLogger.LogError(
+            "Kullanıcı bulunamadı: {Eposta}. Önce arayüzden kayıt olup e-postasını " +
+            "doğrulasın, sonra bu komutu çalıştırın.", hedefEposta);
+        Environment.ExitCode = 1;
+        return;
+    }
+
+    if (hedef.Role == PeerLearn.Domain.Identity.UserRole.Admin)
+    {
+        promoteLogger.LogInformation("{Eposta} zaten Admin. Değişiklik yapılmadı.", hedefEposta);
+        return;
+    }
+
+    var oncekiRol = hedef.Role;
+    hedef.Role = PeerLearn.Domain.Identity.UserRole.Admin;
+
+    promoteDb.AdminActionLogs.Add(new PeerLearn.Domain.Moderation.AdminActionLog
+    {
+        ActorUserId = hedef.Id,
+        ActorRole = PeerLearn.Domain.Identity.UserRole.Admin,
+        Action = PeerLearn.Domain.Moderation.AdminActionType.RoleChanged,
+        TargetType = "User",
+        TargetId = hedef.Id,
+        Summary = $"Kurulum komutuyla Admin yapıldı ({oncekiRol} → Admin). " +
+                  "Sunucuya erişimi olan biri tarafından --promote-admin ile çalıştırıldı.",
+        CreatedAtUtc = DateTime.UtcNow
+    });
+
+    await promoteDb.SaveChangesAsync();
+    promoteLogger.LogWarning(
+        "{Eposta} artık Admin ({OncekiRol} idi). Denetim izine yazıldı.", hedefEposta, oncekiRol);
+    return;
+}
+
 // Geliştirmede şemayı otomatik kur + katalog seed'i (yukarıdaki adımı elle koşmaya gerek kalmasın).
 if (app.Environment.IsDevelopment())
 {
