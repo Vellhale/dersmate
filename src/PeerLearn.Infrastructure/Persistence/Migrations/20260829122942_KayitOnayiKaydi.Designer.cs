@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using PeerLearn.Infrastructure.Persistence;
@@ -11,9 +12,11 @@ using PeerLearn.Infrastructure.Persistence;
 namespace PeerLearn.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(PeerLearnDbContext))]
-    partial class PeerLearnDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260829122942_KayitOnayiKaydi")]
+    partial class KayitOnayiKaydi
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
+import { SOZLESME_SURUMU } from '../lib/yasalMetinler'
 import { Button, ErrorBox, Field, Notice } from '../components/ui'
 import { AuthShell } from './Login'
 
@@ -23,7 +24,22 @@ export default function Register() {
     setBusy(true)
     setError(null)
     try {
-      setResult(await api.register(form))
+      /*
+        ONAY SUNUCUYA GİDİYOR. `kosullarKabul` bir düğme durumu değil, kaydedilecek bir
+        beyan: hangi metin sürümünü gördüğümüzü bildiriyoruz ve sunucu kendi yürürlükteki
+        sürümüyle karşılaştırıp KENDİ değerini yazıyor (bkz. LegalDocuments.cs).
+
+        Sürüm formun state'inde tutulmuyor, gönderim anında sabitten okunuyor: kullanıcı
+        formu açıkken metin güncellenirse, göndermeye çalıştığı sürüm hâlâ gördüğü sürüm
+        olur ve sunucu bunu reddedip "sayfayı yenile" der. Doğru davranış bu.
+      */
+      setResult(
+        await api.register({
+          ...form,
+          termsVersion: kosullarKabul ? SOZLESME_SURUMU : null,
+          ageConfirmed: yasBeyani,
+        }),
+      )
     } catch (err) {
       setError(err)
     } finally {
@@ -121,9 +137,12 @@ export default function Register() {
           BAĞLANTILAR YENİ SEKMEDE (target=_blank): metni okumak için formu terk eden
           kullanıcı geri döndüğünde doldurduğu alanları kaybederdi.
 
-          ⚠️ SUNUCU BU ONAYI HENÜZ KAYDETMİYOR. RegisterCommand yalnızca e-posta, parola
-          ve ad taşıyor. Onayın kaydı (kabul edilen metin sürümü + zaman damgası) bir
-          sonraki adım; kutu olmadan o kaydın anlamı da olmazdı, o yüzden önce bu.
+          ONAY SUNUCUDA KAYITLI (2026-08-29): kabul edilen sözleşme sürümü ve iki ayrı
+          zaman damgası kullanıcı satırına yazılıyor. Kutunun tek başına bir değeri yoktu
+          — onayın değeri kanıtındadır.
+
+          Aşağıdaki `disabled` yalnızca yönlendirme; asıl kapı sunucuda (RegisterHandler).
+          İstemcideki kontrol, uca doğrudan istek atan biri için hiçbir şey ifade etmez.
         */}
         <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
           <label className="flex cursor-pointer items-start gap-2.5">

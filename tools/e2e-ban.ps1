@@ -134,7 +134,7 @@ $script:seq = 0
 function NewUser($prefix, $hwid) {
     $script:seq++
     $email = "$prefix$([DateTimeOffset]::UtcNow.ToUnixTimeSeconds())x$($script:seq)@test.dev"
-    $reg = Api POST '/api/auth/register' @{ email = $email; password = 'Parola12345'; displayName = "$prefix Kullanici" }
+    $reg = Api POST '/api/auth/register' @{ email = $email; password = 'Parola12345'; displayName = "$prefix Kullanici"; termsVersion = '2026-08-27'; ageConfirmed = $true }
     Api POST '/api/auth/verify-email' @{ token = $reg.verificationToken } | Out-Null
     $login = Api POST '/api/auth/login' @{ email = $email; password = 'Parola12345'; hwidHash = $hwid }
     return @{ email = $email; userId = $login.userId; token = $login.accessToken }
@@ -263,7 +263,7 @@ else { Fail "beklenen USER_BANNED, gelen $($bannedClean.code)" }
 
 # Aynı cihazdan YENİ hesap: kayıt olabilir ama giriş HWID banı yüzünden engellenmeli
 $yeniHesap = "kacak$([DateTimeOffset]::UtcNow.ToUnixTimeSeconds())@test.dev"
-$reg2 = Api POST '/api/auth/register' @{ email = $yeniHesap; password = 'Parola12345'; displayName = 'Kacak Deneme' }
+$reg2 = Api POST '/api/auth/register' @{ email = $yeniHesap; password = 'Parola12345'; displayName = 'Kacak Deneme'; termsVersion = '2026-08-27'; ageConfirmed = $true }
 Api POST '/api/auth/verify-email' @{ token = $reg2.verificationToken } | Out-Null
 $evasion = InvokeExpectError { Api POST '/api/auth/login' @{ email = $yeniHesap; password = 'Parola12345'; hwidHash = $banHwid } }
 if ($evasion.code -eq 'DEVICE_BANNED') { OK 'aynı cihazdan açılan yeni hesabın girişi engellendi (ban kaçağı kapalı)' }

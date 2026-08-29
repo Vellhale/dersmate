@@ -1,4 +1,5 @@
 import { Bolum, Maddeler, MetinSayfasi } from './MetinSayfasi'
+import { SOZLESME_TARIHI } from '../lib/yasalMetinler'
 
 /*
   GİZLİLİK POLİTİKASI + KVKK AYDINLATMA METNİ.
@@ -19,7 +20,7 @@ export default function Gizlilik() {
     <MetinSayfasi
       baslik="Gizlilik ve KVKK aydınlatma metni"
       ozet="Hangi verini topluyoruz, neden topluyoruz, ne kadar saklıyoruz ve ne isteyebilirsin."
-      sonGuncelleme="27 Ağustos 2026"
+      sonGuncelleme={SOZLESME_TARIHI}
     >
       <Bolum no="1" baslik="Kısaca">
         <p>

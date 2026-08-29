@@ -69,7 +69,7 @@ Write-Host "API: $Api   koşum: $stamp"
 # ---------------------------------------------------------------------------
 Section 'Hazırlık'
 
-$reg = Send Post '/api/auth/register' @{ email = $email; password = 'Demo12345'; displayName = "Pref $stamp"; hwidHash = $hwid } $null
+$reg = Send Post '/api/auth/register' @{ email = $email; password = 'Demo12345'; displayName = "Pref $stamp"; termsVersion = '2026-08-27'; ageConfirmed = $true; hwidHash = $hwid } $null
 Send Post '/api/auth/verify-email' @{ token = $reg.verificationToken } $null | Out-Null
 $login = Send Post '/api/auth/login' @{ email = $email; password = 'Demo12345'; hwidHash = $hwid } $null
 $token = $login.accessToken
@@ -181,7 +181,7 @@ Section 'F. Yalıtım — tercihler kullanıcıya özel'
 
 $hwid2 = NewHwid
 $email2 = "pref2$stamp@test.dev"
-$reg2 = Send Post '/api/auth/register' @{ email = $email2; password = 'Demo12345'; displayName = "Pref2 $stamp"; hwidHash = $hwid2 } $null
+$reg2 = Send Post '/api/auth/register' @{ email = $email2; password = 'Demo12345'; displayName = "Pref2 $stamp"; termsVersion = '2026-08-27'; ageConfirmed = $true; hwidHash = $hwid2 } $null
 Send Post '/api/auth/verify-email' @{ token = $reg2.verificationToken } $null | Out-Null
 $login2 = Send Post '/api/auth/login' @{ email = $email2; password = 'Demo12345'; hwidHash = $hwid2 } $null
 

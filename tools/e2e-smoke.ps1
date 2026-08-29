@@ -147,8 +147,11 @@ function InvokeExpectError([scriptblock]$call) {
 # ---------------------------------------------------------------- 1. KAYIT + DOĞRULAMA
 Step '1. Kayıt + e-posta doğrulama + hoş geldin kredisi'
 $stamp = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
-$ayse = @{ email = "ayse$stamp@test.dev"; password = 'Parola12345'; displayName = 'Ayşe Yılmaz' }
-$berk = @{ email = "berk$stamp@test.dev"; password = 'Parola12345'; displayName = 'Berk Demir' }
+# termsVersion/ageConfirmed: kayit ucu 2026-08-29'dan beri onaysiz hesap acmiyor ve bu
+# bilincli — test betikleri de gercek bir kullanici gibi onay bildirmek zorunda. Surum
+# sunucudaki LegalDocuments.CurrentVersion ile ayni olmali, aksi halde 409 doner.
+$ayse = @{ email = "ayse$stamp@test.dev"; password = 'Parola12345'; displayName = 'Ayşe Yılmaz'; termsVersion = '2026-08-27'; ageConfirmed = $true }
+$berk = @{ email = "berk$stamp@test.dev"; password = 'Parola12345'; displayName = 'Berk Demir'; termsVersion = '2026-08-27'; ageConfirmed = $true }
 
 $ayseReg = Api POST '/api/auth/register' $ayse
 $berkReg = Api POST '/api/auth/register' $berk
@@ -356,7 +359,7 @@ if ($img.StatusCode -eq 200 -and $ctype -like 'image/*' -and $img.Content.Length
 } else { Fail "kanıt görseli indirilemedi (status=$($img.StatusCode) type=$ctype)" }
 
 # Yetkisiz üçüncü kişi kanıta erişememeli
-$outsider = Api POST '/api/auth/register' @{ email = "cem$stamp@test.dev"; password = 'Parola12345'; displayName = 'Cem Üçüncü' }
+$outsider = Api POST '/api/auth/register' @{ email = "cem$stamp@test.dev"; password = 'Parola12345'; displayName = 'Cem Üçüncü'; termsVersion = '2026-08-27'; ageConfirmed = $true }
 Api POST '/api/auth/verify-email' @{ token = $outsider.verificationToken } | Out-Null
 $cT = (Api POST '/api/auth/login' @{ email = "cem$stamp@test.dev"; password = 'Parola12345'; hwidHash = 'c' * 64 }).accessToken
 $denied = InvokeExpectError { Api GET "/api/sessions/$sessionId/proofs" $null $cT }
