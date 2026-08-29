@@ -13,9 +13,11 @@ using PeerLearn.Api.Hubs;
 using PeerLearn.Api.Middleware;
 using PeerLearn.Api.Startup;
 using PeerLearn.Application;
+using PeerLearn.Application.Abstractions;
 using PeerLearn.Application.Options;
 using PeerLearn.Infrastructure;
 using PeerLearn.Infrastructure.Persistence;
+using PeerLearn.Infrastructure.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -171,6 +173,75 @@ if (args.Contains("--migrate"))
     await migrateDb.Database.MigrateAsync();
     await DbSeeder.SeedAsync(migrateDb);
     migrateLogger.LogInformation("Migration ve katalog tohumlama tamamlandı.");
+    return;
+}
+
+/*
+  SMTP SINAMASI: "dotnet run -- --test-email eposta@alan.com"
+
+  ⛔ BU KOMUT OLMADAN YANLIŞ SMTP AYARI SESSİZ KALIYOR.
+
+  ProductionGuard yalnızca ayarların VARLIĞINI kontrol ediyor, çalıştığını değil.
+  SmtpEmailSender ise gönderim hatasını bilerek yutuyor (kayıt tamamlanmışken e-posta
+  yüzünden isteği düşürmek, kullanıcıyı "hesabın açıldı ama kayıt başarısız" gibi bir
+  çelişkide bırakırdı). İkisi birleşince şu tablo çıkıyor:
+
+    yanlış SMTP → kayıt 200 döner, kullanıcı oluşur, e-posta GİTMEZ
+                → hata yalnızca sunucu günlüğünde
+                → hiç kimse hesabını doğrulayamaz, site "çalışıyor" görünür
+
+  Bu komut o boşluğu kapatıyor: gönderimi YUTMADAN dener ve sonucu ekrana yazar.
+  Dağıtımdan sonra, ilk gerçek kullanıcıdan ÖNCE çalıştırılmalı.
+*/
+var testEmailIndex = Array.IndexOf(args, "--test-email");
+if (testEmailIndex >= 0)
+{
+    var hedef = testEmailIndex + 1 < args.Length ? args[testEmailIndex + 1].Trim() : null;
+
+    using var mailScope = app.Services.CreateScope();
+    var mailLogger = mailScope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+
+    if (string.IsNullOrWhiteSpace(hedef))
+    {
+        mailLogger.LogError("Kullanım: dotnet PeerLearn.Api.dll --test-email eposta@alan.com");
+        Environment.ExitCode = 1;
+        return;
+    }
+
+    var sender = mailScope.ServiceProvider.GetRequiredService<IEmailSender>();
+
+    // Log sağlayıcısı ile "başarılı" demek yanıltıcı olurdu: hiçbir şey gönderilmiyor.
+    if (sender is not SmtpEmailSender smtpSender)
+    {
+        mailLogger.LogError(
+            "Email:Provider 'Smtp' DEĞİL ({Tur}) — hiçbir e-posta gönderilmiyor. " +
+            "Ortam değişkeni: Email__Provider=Smtp", sender.GetType().Name);
+        Environment.ExitCode = 1;
+        return;
+    }
+
+    try
+    {
+        await smtpSender.SendOrThrowAsync(
+            hedef,
+            "dersmate SMTP sınaması",
+            "Bu bir sınama e-postasıdır. Bunu okuyabiliyorsanız SMTP ayarları çalışıyor " +
+            "ve kullanıcılar doğrulama e-postalarını alabilecek.");
+
+        mailLogger.LogInformation(
+            "SMTP ÇALIŞIYOR — sınama e-postası {Hedef} adresine gönderildi. " +
+            "Kutuya (ve spam klasörüne) bakıp ULAŞTIĞINI doğrulayın: sunucunun kabul " +
+            "etmesi, teslim edildiği anlamına gelmez.", hedef);
+    }
+    catch (Exception ex)
+    {
+        mailLogger.LogError(ex,
+            "SMTP ÇALIŞMIYOR — sınama e-postası gönderilemedi. Bu ayarla hiç kimse " +
+            "hesabını doğrulayamaz. Email__Host / Port / Username / Password / " +
+            "FromAddress değerlerini kontrol edin.");
+        Environment.ExitCode = 1;
+    }
+
     return;
 }
 

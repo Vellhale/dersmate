@@ -17,9 +17,31 @@
 
 name: dersmate
 
+# ─────────────────────────────────────────────────────────────────────────────
+# GÜNLÜK DÖNDÜRME — her servise uygulanıyor (aşağıda `<<: *gunluk`).
+#
+# ⛔ BU OLMADAN DİSK SESSİZCE DOLAR. Docker'ın varsayılan json-file sürücüsünde
+# BOYUT SINIRI YOKTUR: konteyner günlükleri sonsuza kadar büyür. API her isteği
+# ve her SQL komutunu yazıyor; birkaç ay sonra 40 GB'lık diski dolduran şey
+# veritabanı değil, günlük dosyası olur.
+#
+# Arıza da tanınması zor biçimde gelir: PostgreSQL yazamaz hâle gelir, uygulama
+# "disk full" yerine anlaşılmaz veritabanı hataları döndürür.
+#
+# 3 × 10 MB = servis başına en fazla 30 MB. Teşhis için son birkaç saat yeterli;
+# daha uzun saklama gerekiyorsa günlükler dışarı aktarılmalı (sunucuda tutulmaz).
+# ─────────────────────────────────────────────────────────────────────────────
+x-gunluk: &gunluk
+  logging:
+    driver: json-file
+    options:
+      max-size: '10m'
+      max-file: '3'
+
 services:
   # ───────────────────────────────────────────────────────────────────────────
   db:
+    <<: *gunluk
     image: postgres:16-alpine
     container_name: dersmate-db
     restart: unless-stopped
@@ -50,6 +72,7 @@ services:
 
   # ───────────────────────────────────────────────────────────────────────────
   cache:
+    <<: *gunluk
     image: redis:7-alpine
     container_name: dersmate-cache
     restart: unless-stopped
@@ -68,6 +91,7 @@ services:
 
   # ───────────────────────────────────────────────────────────────────────────
   api:
+    <<: *gunluk
     build:
       context: .
       dockerfile: Dockerfile
@@ -123,6 +147,7 @@ services:
 
   # ───────────────────────────────────────────────────────────────────────────
   web:
+    <<: *gunluk
     image: nginx:1.27-alpine
     container_name: dersmate-web
     restart: unless-stopped
@@ -152,6 +177,7 @@ services:
   # Let's Encrypt sertifikaları 90 gün geçerli ve yenileme UNUTULURSA site bir gün
   # aniden erişilemez olur — en sık yapılan işletim hatası bu.
   certbot:
+    <<: *gunluk
     image: certbot/certbot:latest
     container_name: dersmate-certbot
     restart: unless-stopped

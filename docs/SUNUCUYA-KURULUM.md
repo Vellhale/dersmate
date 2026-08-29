@@ -132,28 +132,68 @@ Node kurmak zorunda değilsin.
 
 ---
 
-## 6. Yığını başlat
+## 6. Önce ŞEMA, sonra uygulama (⚠️ SIRA ÖNEMLİ)
+
+Kısaltmak için `alias` tanımla — her komutta üç bayrak yazmayasın:
 
 ```bash
-docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build
-docker compose -f docker-compose.prod.yml ps        # hepsi healthy olmalı
-docker compose -f docker-compose.prod.yml logs -f api
+alias dc='docker compose -f docker-compose.prod.yml --env-file .env.production'
 ```
 
-**Açılmazsa panikleme, günlüğü oku.** `ProductionGuard` eksik/güvensiz her ayarı
-numaralı bir listeyle yazıp uygulamayı başlatmıyor — bu bir arıza değil, tasarım:
+**Önce yalnızca veri servisleri**, sonra göç, sonra uygulama:
+
+```bash
+dc up -d db cache                                   # yalnızca PostgreSQL + Redis
+dc run --rm api dotnet PeerLearn.Api.dll --migrate  # şema + katalog tohumlama
+dc up -d --build                                    # tüm yığın
+dc ps                                               # hepsi healthy olmalı
+```
+
+> ### ⛔ Bu sırayı bozarsan kayıt ucu 500 döner
+>
+> Yığını önce tamamen başlatıp **sonra** göç koşarsan uygulama açılır, `/health/ready`
+> yeşil yanar, arayüz sorunsuz görünür — ama **her kayıt denemesi 500 verir**:
+>
+> ```
+> The NpgsqlDbType 'Citext' isn't present in your database.
+> ```
+>
+> Sebebi kodda değil: `citext` eklentisi göçle oluşuyor, ama API o andan **önce**
+> açılmış ve veritabanının tip kataloğunu önbelleğe almış durumda. Bağlantı havuzu
+> eski haritayla çalışmaya devam ediyor.
+>
+> Yanlışlıkla o sıraya düştüysen çare basit: `dc restart api`.
+>
+> (Bu hata yerel doğrulamada gerçekten üretildi ve teşhisi zor: hata mesajı
+> "eklenti yok" diyor, oysa eklenti VAR — eksik olan uygulamanın ondan haberi.)
+
+**Uygulama açılmazsa panikleme, günlüğü oku.** `ProductionGuard` eksik/güvensiz her
+ayarı numaralı bir listeyle yazıp uygulamayı başlatmıyor — bu bir arıza değil, tasarım:
 sessizce güvensiz çalışmaktansa durmak.
+
+> Göç neden ayrı adım: uygulama açılışında kendiliğinden göç koşsaydı, aynı anda
+> başlayan iki instance aynı şemayı yarıştırırdı ve hatalı bir göç fark edilmeden
+> canlıya inerdi.
 
 ---
 
-## 7. Şemayı kur
+## 7. SMTP'yi SINA (⛔ ilk kullanıcıdan önce)
 
 ```bash
-docker compose -f docker-compose.prod.yml exec api dotnet PeerLearn.Api.dll --migrate
+dc run --rm api dotnet PeerLearn.Api.dll --test-email senin@epostan.com
 ```
 
-> Uygulama göçleri **kendiliğinden uygulamıyor**: iki instance aynı anda göç koşarsa
-> yarış çıkar. Göç ayrı ve bilinçli bir adım.
+Bu adım atlanabilir görünüyor; değil. `ProductionGuard` yalnızca SMTP ayarlarının
+**var olduğunu** kontrol ediyor, çalıştığını değil. Gönderim hatası da bilerek
+yutuluyor (kayıt tamamlanmışken e-posta yüzünden isteği düşürmek, kullanıcıyı "hesabın
+açıldı ama kayıt başarısız" çelişkisinde bırakırdı). İkisi birleşince:
+
+> yanlış SMTP → kayıt **200 döner**, kullanıcı oluşur, e-posta gitmez → hata yalnızca
+> günlükte → **hiç kimse hesabını doğrulayamaz** ve site "çalışıyor" görünür.
+
+Komut gönderimi yutmadan deniyor ve açıkça `SMTP ÇALIŞIYOR` ya da `SMTP ÇALIŞMIYOR`
+yazıyor. Gelen kutusunu (ve spam klasörünü) da kontrol et: sunucunun kabul etmesi,
+teslim edildiği anlamına gelmez.
 
 ---
 
@@ -162,7 +202,7 @@ docker compose -f docker-compose.prod.yml exec api dotnet PeerLearn.Api.dll --mi
 Yönetici **arayüzden normal kayıt olur**, e-postasını doğrular, sonra sunucuda:
 
 ```bash
-docker compose -f docker-compose.prod.yml exec api \
+dc exec api \
   dotnet PeerLearn.Api.dll --promote-admin senin@epostan.com
 ```
 
@@ -192,8 +232,7 @@ Sonra **elle** iki şey dene — ikisi de otomatik doğrulanamıyor:
 
 ```bash
 # Veritabanı
-docker compose -f docker-compose.prod.yml exec -T db \
-  pg_dump -U dersmate dersmate | gzip > yedek-$(date +%F).sql.gz
+dc exec -T db pg_dump -U dersmate dersmate | gzip > yedek-$(date +%F).sql.gz
 
 # Kanıt dosyaları — AYRI ve unutulması kolay
 docker run --rm -v dersmate_proof-storage:/veri -v "$PWD:/cikti" alpine \
@@ -201,6 +240,35 @@ docker run --rm -v dersmate_proof-storage:/veri -v "$PWD:/cikti" alpine \
 ```
 
 Bunu bir cron'a bağla ve **geri yüklemeyi bir kez dene**. Denenmemiş yedek, yedek değildir.
+
+---
+
+## Bu kurulum yerelde uçtan uca sınandı (2026-08-29)
+
+Aşağıdakiler `docker-compose.prod.yml` ile gerçek konteynerler ayağa kaldırılarak
+ölçüldü — yazılıp doğrulanmamış adım bırakılmadı:
+
+| Ne | Sonuç |
+|---|---|
+| HTTP → HTTPS | `301` |
+| ACME doğrulama yolu yönlendirmenin önünde | `404` (301 değil) — sertifika yenileme çalışır |
+| Arayüz + SPA geri düşüşü (`/gizlilik`) | `200` |
+| API vekili (`proxy_pass http://api:8080`) | `200` |
+| `/health/ready` (PostgreSQL + Redis) | `Healthy` |
+| Şema kurulumu (`--migrate`) | 31 tablo |
+| Kayıt (onay alanlarıyla, nginx üzerinden) | `200`, onay veritabanında |
+| Onaysız kayıt | `400` |
+| SMTP sınaması (yanlış ayarla) | `SMTP ÇALIŞMIYOR`, **3 sn**'de |
+| Hız sınırı (`AuthPerMinute=10`) | 10 istek geçti, sonraki 4'ü `429` |
+| Sahte `X-Forwarded-For` ile atlatma | **engellendi** — üçü de `429` |
+| Farklı kaynak IP kendi kovası | `401` — IP başına bölümleme çalışıyor |
+| Günlük döndürme | 5 servisin hepsinde `10m × 3` |
+| Konteyner kullanıcısı | `dersmate` (kök değil) |
+
+Son iki satır özellikle önemliydi: `UseForwardedHeaders` ile IP başına hız sınırı
+"ikisi birlikte anlamlı" diye belgelenmişti ama birlikte hiç ölçülmemişti. Artık
+ölçüldü — hem sahtecilik engelleniyor hem de bir kullanıcının sınırı diğerlerini
+kilitlemiyor.
 
 ---
 
@@ -213,3 +281,10 @@ Bunu bir cron'a bağla ve **geri yüklemeyi bir kez dene**. Denenmemiş yedek, y
 - **JWT durumsuz, 2 saat.** Parola değişince açık oturumlar düşmüyor.
 - **Hesap silme ucu yok.** Gizlilik metni e-posta ile talep diyor; talebi elle
   karşılaman gerekiyor.
+- **Günlükte bir Data Protection uyarısı görürsün** — zararsız:
+  `Storing keys in a directory ... may not be persisted outside of the container`.
+  Anahtarlar konteynerle birlikte kayboluyor ama bu uygulama Data Protection'ı hiçbir
+  yerde kullanmıyor: kimlik doğrulama JWT ve token'lar `Jwt__Key` ile imzalanıyor,
+  yani her dağıtımda anahtarların yenilenmesi kimseyi oturumdan düşürmüyor.
+  ⚠️ İleride çerez tabanlı oturum ya da antiforgery eklenirse bu uyarı ZARARSIZ
+  OLMAKTAN ÇIKAR ve anahtarların kalıcı bir hacme alınması gerekir.
