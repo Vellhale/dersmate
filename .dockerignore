@@ -1,0 +1,43 @@
+# Derleme bağlamına GİRMEYECEKLER.
+#
+# Bunlar olmadan `docker build` tüm depoyu (node_modules, bin/, obj/, .git dahil —
+# yüzlerce MB) daemon'a gönderir; hem yavaş hem de katman önbelleğini boşa düşürür:
+# .git her commit'te değişir, yani her derlemede COPY katmanı yeniden hesaplanır.
+
+.git
+.github
+.vs
+.vscode
+
+# Yerel derleme çıktıları. İMAJDA OLMAMALARI ÖNEMLİ: konteyner içinde `dotnet publish`
+# yeniden koşuyor ve dışarıdan gelen bin/obj, farklı bir platformda derlenmiş
+# ikililerle çakışıp "works on my machine" tipi hatalar üretiyor.
+**/bin
+**/obj
+
+# Arayüz API imajına girmiyor (nginx servis ediyor).
+frontend
+
+# Yerel geliştirme ve işletim dosyaları
+docker-compose.yml
+docker-compose.prod.yml
+Dockerfile
+.dockerignore
+tools
+tests
+docs
+*.md
+
+# ⛔ KULLANICI BELGELERİ — kişisel veri. İmaja asla girmemeli.
+proof-storage
+
+# Yerel ortam dosyaları: üretim sırları ortam değişkeniyle veriliyor, imaja gömülmez.
+**/.env
+**/.env.*
+**/appsettings.Development.json
+**/appsettings.Production.json
+
+# Görseller ve ekran görüntüleri
+*.png
+*.jpg
+resimler

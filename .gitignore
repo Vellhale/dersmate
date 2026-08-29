@@ -65,3 +65,14 @@ frontend/dersmate-onizleme.html
 # elle çalıştırılırsa depo köküne dump.rdb yazıyor ve oto-commit hook u onu
 # depoya alıyordu (claude/oturum-2026-08-25 dalında bir kez oldu).
 dump.rdb
+
+# --- ÜRETİM SIRLARI VE İŞLETİM DOSYALARI (2026-08-29) ---
+# ⛔ İÇİNDE JWT ANAHTARI VE VERİTABANI PAROLASI VAR. Depoya girerse anahtarın
+# gizliliği biter ve tarihçeden silmek zordur — bir kez itilmiş sır, sızmış sırdır.
+# Üretmek için: tools/uretim-ayarlari-uret.ps1
+.env.production
+.env.production.*
+
+# Sunucudaki işletim dosyaları: nginx yapılandırması (alan adlarıyla birlikte) ve
+# Let's Encrypt sertifikaları + özel anahtarları. Şablonu tools/ornek-nginx.conf.
+deploy/

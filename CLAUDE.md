@@ -183,6 +183,7 @@ Hepsi bu projede **en az bir kez** ısırdı:
 | Sayfalar, bileşenler, tasarım kararları | `docs/ASAMA-3-FRONTEND.md` |
 | Sıfırdan kurulum | `docs/GELISTIRME-ORTAMI.md` |
 | Üretim ayarları ve kapılar | `docs/URETIME-CIKIS.md` |
+| Sıfırdan sunucuya kurulum (adım adım) | `docs/SUNUCUYA-KURULUM.md` |
 | Açık işler ve **bilinerek kabul edilmiş sınırlar** | `docs/DEVAM-EDILECEK.md` |
 
 Son satır önemli: `DEVAM-EDILECEK.md` içinde "eksik" gibi görünüp aslında **tartışılıp
