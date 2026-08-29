@@ -72,7 +72,7 @@ function NewUser($prefix, $stamp) {
     $script:seq++
     $hwid = (([Guid]::NewGuid().ToString('N')) * 2).Substring(0, 64)
     $email = "$prefix$stamp r$($script:seq)@test.dev" -replace ' ', ''
-    $r = Send Post '/api/auth/register' @{ email = $email; password = 'Demo12345'; displayName = "$prefix K" } $null
+    $r = Send Post '/api/auth/register' @{ email = $email; password = 'Demo12345'; displayName = "$prefix K"; termsVersion = '2026-08-27'; ageConfirmed = $true } $null
     Send Post '/api/auth/verify-email' @{ token = $r.verificationToken } $null | Out-Null
     $l = Send Post '/api/auth/login' @{ email = $email; password = 'Demo12345'; hwidHash = $hwid } $null
     [pscustomobject]@{ Email = $email; Token = $l.accessToken; UserId = $l.userId; Hwid = $hwid }

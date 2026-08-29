@@ -19,11 +19,22 @@ public sealed class AuthController : ControllerBase
 
     public AuthController(IMediator mediator) => _mediator = mediator;
 
-    public sealed record RegisterRequest(string Email, string Password, string DisplayName);
+    /// <param name="TermsVersion">
+    /// Arayüzün gösterdiği sözleşme sürümü. Sunucu bunu KAYDETMİYOR, yalnızca
+    /// yürürlüktekiyle karşılaştırıyor (bkz. Domain/Identity/LegalDocuments.cs).
+    /// </param>
+    public sealed record RegisterRequest(
+        string Email,
+        string Password,
+        string DisplayName,
+        string? TermsVersion,
+        bool AgeConfirmed);
 
     [HttpPost("register")]
     public async Task<RegisterResult> Register(RegisterRequest request, CancellationToken ct)
-        => await _mediator.Send(new RegisterCommand(request.Email, request.Password, request.DisplayName), ct);
+        => await _mediator.Send(new RegisterCommand(
+            request.Email, request.Password, request.DisplayName,
+            request.TermsVersion, request.AgeConfirmed), ct);
 
     public sealed record VerifyEmailRequest(string Token);
 

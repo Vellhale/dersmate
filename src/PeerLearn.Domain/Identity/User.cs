@@ -83,6 +83,36 @@ public class User : BaseEntity
     /// <summary>Yönetim paneline erişebilen roller. Kalıcı ban gibi ağır yetkiler için yetmez.</summary>
     public bool CanModerate => Role is UserRole.Admin or UserRole.Moderator;
 
+    /*
+      ─── KAYIT ONAYININ KAYDI (2026-08-27) ───────────────────────────────────
+
+      Kayıt formu 2026-08-27'de iki onay kutusu kazandı (sözleşme + yaş beyanı) ama
+      SUNUCU HİÇBİR ŞEY SAKLAMIYORDU. Bu, onay hiç sormamaktan daha kötü bir durum:
+      arayüz kullanıcıya "kabul ettin" diyor, ürün sahibi de kullanıcıların kabul
+      ettiğini sanıyor, ama "şu kişi şu metni şu tarihte kabul etti" diyebilecek tek
+      bir satır yok. Onayın değeri KANITINDADIR.
+
+      ÜÇÜ AYRI ALAN, tek bayrak değil:
+        • hangi METİN kabul edildi (sürüm) — metin değiştiğinde eski onay yeni metni
+          kapsamaz; sürüm olmadan bunu söyleyemezsiniz.
+        • NE ZAMAN kabul edildi.
+        • yaş beyanı AYRI bir zaman damgası — sözleşmeyi kabul etmekle "18 yaşından
+          büyüğüm" demek farklı iki beyan ve formda da iki ayrı kutu.
+
+      ⚠️ NULL KALAN SATIRLAR GERİYE DOLDURULMAZ. Onay kutusu eklenmeden önce açılmış
+      hesaplarda bu alanlar boş ve boş kalmalı: uydurulmuş bir onay kaydı, hiç kayıt
+      olmamasından daha zararlıdır (denetimde "kanıtımız var" denir, kanıt sahtedir).
+      O kullanıcılardan onay gerekiyorsa uygulama içi bir yeniden onay akışı gerekir.
+    */
+
+    /// <summary>Kabul edilen sözleşme sürümü (<c>LegalDocuments.CurrentVersion</c>).</summary>
+    public string? TermsVersion { get; set; }
+
+    public DateTime? TermsAcceptedAtUtc { get; set; }
+
+    /// <summary>"18 yaşından büyüğüm ya da velimin onayıyla" beyanının anı.</summary>
+    public DateTime? AgeConfirmedAtUtc { get; set; }
+
     /// <summary>PostgreSQL xmin sistem kolonuna eşlenir (optimistic concurrency token).</summary>
     public uint Version { get; set; }
 

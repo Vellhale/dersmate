@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import { Bolum, Maddeler, MetinSayfasi } from './MetinSayfasi'
+import { SOZLESME_TARIHI } from '../lib/yasalMetinler'
 
 /*
   KULLANIM KOŞULLARI.
@@ -22,7 +23,7 @@ export default function Kosullar() {
     <MetinSayfasi
       baslik="Kullanım koşulları"
       ozet="dersmate'i kullanırken geçerli kurallar ve karşılıklı beklentiler."
-      sonGuncelleme="27 Ağustos 2026"
+      sonGuncelleme={SOZLESME_TARIHI}
     >
       <Bolum no="1" baslik="dersmate nedir">
         <p>

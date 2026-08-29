@@ -53,7 +53,7 @@ function Api {
 
 function Register($email, $name, $hwid) {
     try {
-        $r = Api POST '/api/auth/register' @{ email = $email; password = 'Demo12345'; displayName = $name }
+        $r = Api POST '/api/auth/register' @{ email = $email; password = 'Demo12345'; displayName = $name; termsVersion = '2026-08-27'; ageConfirmed = $true }
         # DOĞRULAMA ŞART: doğrulanmamış hesap her yazma ucundan 403 EMAIL_NOT_VERIFIED alır.
         # Kayıt yanıtı jetonu geliştirme ortamında doğrudan döndürüyor (üretimde e-postayla).
         if ($r.verificationToken) {

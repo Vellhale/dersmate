@@ -82,7 +82,7 @@ function HataKodu($e) { [int]$e.Exception.Response.StatusCode }
 function NewHwid { -join ((1..64) | ForEach-Object { '0123456789abcdef'[(Get-Random -Max 16)] }) }
 function NewUser($prefix, $stamp) {
     $hwid = NewHwid; $email = "$prefix$stamp@test.dev"
-    $r = Send Post '/api/auth/register' @{ email = $email; password = 'Demo12345'; displayName = "$prefix $stamp"; hwidHash = $hwid } $null
+    $r = Send Post '/api/auth/register' @{ email = $email; password = 'Demo12345'; displayName = "$prefix $stamp"; termsVersion = '2026-08-27'; ageConfirmed = $true; hwidHash = $hwid } $null
     Send Post '/api/auth/verify-email' @{ token = $r.verificationToken } $null | Out-Null
     $l = Send Post '/api/auth/login' @{ email = $email; password = 'Demo12345'; hwidHash = $hwid } $null
     [pscustomobject]@{ Email = $email; Token = $l.accessToken; UserId = $l.userId; Hwid = $hwid }
@@ -345,7 +345,7 @@ Section 'D. Doğrulama e-postası yeniden gönderilebilmeli'
 
 # Doğrulanmamış hesap: kayıt olup doğrulama YAPMIYORUZ.
 $bekleyenMail = "fixd$stamp@test.dev"
-$reg = Send Post '/api/auth/register' @{ email = $bekleyenMail; password = 'Demo12345'; displayName = "Fixd $stamp"; hwidHash = (NewHwid) } $null
+$reg = Send Post '/api/auth/register' @{ email = $bekleyenMail; password = 'Demo12345'; displayName = "Fixd $stamp"; termsVersion = '2026-08-27'; ageConfirmed = $true; hwidHash = (NewHwid) } $null
 
 try {
     Send Post '/api/auth/login' @{ email = $bekleyenMail; password = 'Demo12345'; hwidHash = (NewHwid) } $null | Out-Null
@@ -353,7 +353,7 @@ try {
 } catch { OK "doğrulanmamış hesap giriş yapamıyor ($(HataKodu $_))" }
 
 try {
-    Send Post '/api/auth/register' @{ email = $bekleyenMail; password = 'Demo12345'; displayName = 'tekrar'; hwidHash = (NewHwid) } $null | Out-Null
+    Send Post '/api/auth/register' @{ email = $bekleyenMail; password = 'Demo12345'; displayName = 'tekrar'; termsVersion = '2026-08-27'; ageConfirmed = $true; hwidHash = (NewHwid) } $null | Out-Null
     Fail 'aynı e-postayla yeniden kayıt olunabildi'
 } catch { OK "aynı e-postayla yeniden kayıt kapalı ($(HataKodu $_)) — çıkış yolu yalnızca yeniden gönderim" }
 

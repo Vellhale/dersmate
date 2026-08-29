@@ -8,8 +8,22 @@ using PeerLearn.Domain.Identity;
 
 namespace PeerLearn.Application.Features.Identity;
 
-public sealed record RegisterCommand(string Email, string Password, string DisplayName)
-    : IRequest<RegisterResult>;
+/// <param name="TermsVersion">
+/// İstemcinin gösterdiği sözleşme sürümü. KAYDEDİLEN DEĞER BU DEĞİL
+/// (<see cref="LegalDocuments.CurrentVersion"/> kaydediliyor); bu alanın tek işi eşitlik
+/// kontrolü — önbellekten gelen eski bir arayüzün, kullanıcının hiç görmediği metne onay
+/// vermesini engelliyor. Gerekçenin tamamı LegalDocuments'ta.
+/// </param>
+/// <param name="AgeConfirmed">
+/// "18 yaşından büyüğüm ya da velimin onayıyla" beyanı. Sözleşme onayından AYRI: formda
+/// da iki ayrı kutu ve ikisi farklı beyan.
+/// </param>
+public sealed record RegisterCommand(
+    string Email,
+    string Password,
+    string DisplayName,
+    string? TermsVersion = null,
+    bool AgeConfirmed = false) : IRequest<RegisterResult>;
 
 /// <param name="VerificationToken">
 /// Yalnızca Jwt:ExposeVerificationTokenInResponse=true iken dolu (geliştirme kolaylığı);
@@ -27,9 +41,11 @@ public sealed class RegisterHandler : IRequestHandler<RegisterCommand, RegisterR
     private readonly IEmailSender _email;
     private readonly JwtOptions _jwtOptions;
     private readonly EmailOptions _emailOptions;
+    private readonly IClock _clock;
 
     public RegisterHandler(IAppDbContext db, IPasswordHasher hasher, ITokenService tokens,
-        IEmailSender email, IOptions<JwtOptions> jwtOptions, IOptions<EmailOptions> emailOptions)
+        IEmailSender email, IOptions<JwtOptions> jwtOptions, IOptions<EmailOptions> emailOptions,
+        IClock clock)
     {
         _db = db;
         _hasher = hasher;
@@ -37,6 +53,7 @@ public sealed class RegisterHandler : IRequestHandler<RegisterCommand, RegisterR
         _email = email;
         _jwtOptions = jwtOptions.Value;
         _emailOptions = emailOptions.Value;
+        _clock = clock;
     }
 
     public async Task<RegisterResult> Handle(RegisterCommand request, CancellationToken ct)
@@ -52,6 +69,38 @@ public sealed class RegisterHandler : IRequestHandler<RegisterCommand, RegisterR
             throw new AppException(ErrorCodes.InvalidCredentials, "Şifre en az 8 karakter olmalı.");
         }
 
+        /*
+          ONAY KAPISI — sunucuda, istemcideki `disabled` düğmesine ek olarak.
+
+          Arayüzde iki kutu işaretlenmeden "Hesap oluştur" basılamıyor, ama o kontrol
+          yalnızca kullanıcıyı yönlendirmek için: uca doğrudan istek atan biri onaysız
+          hesap açabilirdi ve o hesapların onay kaydı sessizce boş kalırdı — tam da bu
+          değişikliğin kapatmaya çalıştığı boşluk.
+
+          SÜRÜM EŞİTLİĞİ: istemci hangi metni gösterdiyse onu bildiriyor; farklıysa kayıt
+          durduruluyor. Kullanıcının önbelleğindeki eski arayüz eski metni gösterip onay
+          almış olabilir — o onayı yürürlükteki metne saymak, kanıt değeri olmayan bir
+          kayıt üretirdi. Hata mesajı ne yapılacağını söylüyor (sayfayı yenile).
+        */
+        if (!request.AgeConfirmed)
+        {
+            throw new AppException(ErrorCodes.ValidationFailed,
+                "Yaş beyanı olmadan hesap açılamaz.");
+        }
+
+        if (string.IsNullOrWhiteSpace(request.TermsVersion))
+        {
+            throw new AppException(ErrorCodes.ValidationFailed,
+                "Kullanım koşulları ve gizlilik metni kabul edilmeden hesap açılamaz.");
+        }
+
+        if (request.TermsVersion != LegalDocuments.CurrentVersion)
+        {
+            throw new AppException(ErrorCodes.ValidationFailed,
+                "Kullanım koşulları güncellendi. Sayfayı yenileyip yeni metni okuduktan " +
+                "sonra tekrar dene.", statusCode: 409);
+        }
+
         // citext kolonu sayesinde karşılaştırma büyük/küçük harf duyarsızdır.
         var exists = await _db.Users.AnyAsync(u => u.Email == email, ct);
         if (exists)
@@ -59,11 +108,19 @@ public sealed class RegisterHandler : IRequestHandler<RegisterCommand, RegisterR
             throw new AppException(ErrorCodes.EmailTaken, "Bu e-posta zaten kayıtlı.", statusCode: 409);
         }
 
+        var simdi = _clock.UtcNow;
+
         var user = new User
         {
             Email = email,
             DisplayName = request.DisplayName.Trim(),
-            PasswordHash = _hasher.Hash(request.Password)
+            PasswordHash = _hasher.Hash(request.Password),
+
+            // İstemcinin gönderdiği dizge DEĞİL, sunucunun yürürlükteki sabiti yazılıyor:
+            // yukarıda eşitliği doğrulandı, kaydın kaynağı sunucu olmalı.
+            TermsVersion = LegalDocuments.CurrentVersion,
+            TermsAcceptedAtUtc = simdi,
+            AgeConfirmedAtUtc = simdi
         };
 
         _db.Users.Add(user);

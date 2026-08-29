@@ -43,6 +43,11 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
         // kısmi index milyonlarca satırlık tabloda birkaç satıra iner.
         builder.HasIndex(x => x.Role).HasFilter("\"Role\" <> 'Student'");
 
+        /* Sürüm bir TARİH DİZGESİ ("2026-08-27"), tarih tipi değil: yasal metnin kimliği
+           bu ve gelecekte "2027-01-15-b" gibi bir düzeltme sürümü gerekebilir. 20 karakter
+           o pay için. */
+        builder.Property(x => x.TermsVersion).HasMaxLength(20);
+
         builder.Property(x => x.Bio).HasMaxLength(1000);
         builder.Property(x => x.AvatarUrl).HasMaxLength(500);
         builder.Property(x => x.AverageRating).HasPrecision(3, 2);
