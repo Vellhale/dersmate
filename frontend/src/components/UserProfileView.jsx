@@ -9,6 +9,7 @@ import { GrafikIkonu, KepIkonu, TakvimIkonu, YildizIkonu } from './Ikonlar'
 import { SubjectBadges } from './SubjectBadges'
 import { UniversiteRozetleri } from './UniversiteRozetleri'
 import { ToplulukRozetleri } from './ToplulukRozetleri'
+import { YonetimRozeti } from './YonetimRozeti'
 import { seviyeEtiketi, seviyeHesapla, seviyeIlerlemeMetni } from '../lib/seviye'
 
 /**
@@ -187,9 +188,21 @@ function ProfileHeader({ profile }) {
             Dar ekranda 3xl'de kalıyor; 4xl uzun adlarda 112px avatarın altında üç
             satıra sarıyordu.
           */}
-          <h1 className="text-center text-3xl font-bold leading-tight tracking-tight text-slate-900 sm:text-left sm:text-4xl">
-            {profile.displayName}
-          </h1>
+          {/*
+            YÖNETİM ROZETİ ADIN YANINDA, altında değil: forumda rozetli bir yorum
+            görüp adına tıklayan kullanıcının doğrulamak istediği şey tam olarak bu ve
+            aradığı yerde bulmalı. Aşağı kaydırma gerektiren bir rozet, doğrulama
+            adımını başarısız kılar.
+
+            Dar ekranda ad ortalı olduğu için rozet de ortalanıyor (justify-center);
+            sm üstünde ikisi de sola yaslanıyor.
+          */}
+          <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-2 sm:justify-start">
+            <h1 className="text-center text-3xl font-bold leading-tight tracking-tight text-slate-900 sm:text-left sm:text-4xl">
+              {profile.displayName}
+            </h1>
+            {profile.isStaff && <YonetimRozeti />}
+          </div>
 
           {/* OKUL SATIRI: adın hemen altında ve marka renginde değil nötr — kimlik
               bilgisi, vurgu değil. Biri boşsa ayraç da düşüyor.

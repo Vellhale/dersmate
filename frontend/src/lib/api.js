@@ -46,6 +46,35 @@ export function getToken() {
 /** 401 alındığında oturumu düşürmek için App katmanı bunu dinler. */
 export const AUTH_EXPIRED_EVENT = 'peerlearn:auth-expired'
 
+/**
+ * Sunucu GÖVDESİZ bir hata döndürdüğünde gösterilecek metin.
+ *
+ * ⚠️ 403 BURADA ÖZEL OLARAK ELE ALINIYOR ve sebebi ölçüldü: ASP.NET'in yetki
+ * politikası (RequireRole) reddettiğinde **gövdesi tamamen boş** bir 403 dönüyor —
+ * AppException gibi Türkçe bir `detail` yok. Eski yedek metin "Beklenmeyen hata
+ * (HTTP 403)" idi ve kullanıcıya hiçbir şey anlatmıyordu: yetkisinin olmadığını mı,
+ * bir arıza mı olduğunu, ne yapması gerektiğini bilemiyordu.
+ *
+ * İki gerçek durum bu yanıtı üretiyor ve metin ikisini de karşılıyor:
+ *   • Moderatör, yalnızca Admin'e açık bir işlemi denedi (doğru davranış).
+ *   • Rolü giriş yaptıktan SONRA değişti. JWT durumsuz ve 2 saat geçerli; panelin
+ *     kapısı da localStorage'daki `isAdmin` değerine bakıyor. İkisi de eski kalıyor,
+ *     yani panel açılıyor ama her istek reddediliyor. Çare çıkış/giriş.
+ */
+function varsayilanHataMetni(status) {
+  if (status === 403) {
+    return (
+      'Bu işlem için yetkin yok. Yetkilerin yakın zamanda değiştiyse ' +
+      'çıkış yapıp tekrar giriş yapman gerekebilir.'
+    )
+  }
+
+  if (status === 404) return 'Aradığın kayıt bulunamadı.'
+  if (status >= 500) return 'Sunucuda bir hata oluştu. Biraz sonra tekrar dene.'
+
+  return `Beklenmeyen hata (HTTP ${status}).`
+}
+
 async function request(path, { method = 'GET', body, formData, signal, headers: extra } = {}) {
   const headers = { ...extra }
   const token = getToken()
@@ -95,7 +124,7 @@ async function request(path, { method = 'GET', body, formData, signal, headers: 
     // Kod arayüzde gösterilmiyor (bkz. ErrorBox); teşhis için konsolda kalıyor.
     if (data?.title) console.warn(`[api] ${method} ${path} → ${response.status} ${data.title}`)
     throw new ApiError(
-      data?.detail ?? `Beklenmeyen hata (HTTP ${response.status}).`,
+      data?.detail ?? varsayilanHataMetni(response.status),
       data?.title ?? 'UNKNOWN',
       response.status,
     )

@@ -223,6 +223,29 @@ public sealed record UserProfileDto(
     /// </summary>
     int CommunityUpvotes,
 
+    /// <summary>
+    /// Yönetici/moderatör işareti — forum ve Keşfet'tekiyle AYNI bayrak.
+    /// </summary>
+    /// <remarks>
+    /// PROFİLE 2026-08-29'DA EKLENDİ ve ilk kararın düzeltilmesidir. Bayrak önce
+    /// bilerek yalnızca forum ve Keşfet'te vardı; gerekçe "rozetin işi resmi cevabı
+    /// ayırt etmek, kişi listelemek değil" idi. O gerekçe DOĞRULAMA YOLUNU atlıyordu:
+    ///
+    ///   kullanıcı forumda "Yönetim" rozetli bir yorum görür
+    ///     → adına tıklar (şüphelendiğinde atılacak ilk adım)
+    ///     → profilde hiçbir işaret yok
+    ///
+    /// Yani rozetin kendisini doğrulamanın yolu kapalıydı. Ters yönde de boşluk
+    /// vardı: adını "dersmate Yönetim" yapan biri için de profil sessiz kalıyordu,
+    /// yani sahteciliği ÇÜRÜTECEK bir yer yoktu. Profili otoriter yapmak ikisini
+    /// birden kapatıyor.
+    ///
+    /// SIZDIRILAN TEK ŞEY "yönetimde mi" — hangi rol (Admin/Moderator) olduğu
+    /// sızdırılmıyor. İkisini ayırt etmek dışarıdan hiç kimsenin işine yaramıyor
+    /// ama saldırgana kimi hedefleyeceğini söylerdi.
+    /// </remarks>
+    bool IsStaff,
+
     bool IsSelf,
     TeacherCandidateDto? TeacherCandidate,
     IReadOnlyList<ProfileTopicDto> CanTeach,
@@ -339,6 +362,7 @@ public sealed class GetUserProfileHandler : IRequestHandler<GetUserProfileQuery,
             seviye.MinCredits,
             seviye.NextLevelAt,
             forumOylari,
+            user.Role is UserRole.Admin or UserRole.Moderator,
             IsSelf: kendisi,
             aday,
             portfolio.Where(e => e.Direction == PortfolioDirection.Offer).Select(e =>
