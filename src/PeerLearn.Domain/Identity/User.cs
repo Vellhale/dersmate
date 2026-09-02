@@ -124,6 +124,36 @@ public class User : BaseEntity
     /// </remarks>
     public int CommunityRewardedCredits { get; set; }
 
+    /*
+      ─── E-POSTA DOĞRULAMA KODU (2026-09-02) ─────────────────────────────────
+
+      Bağlantılı doğrulamanın yerini aldı (gerekçe: EmailVerificationRules).
+      Kullanıcı başına AYNI ANDA TEK kod: yeni kod istemek eskisini geçersiz kılıyor.
+      Ayrı bir tablo yerine kolon seçilmesinin sebebi de bu — "en son gönderilen kod"
+      dışında saklanacak bir geçmiş yok.
+
+      Doğrulama tamamlanınca üçü de temizleniyor: kullanılmış bir kodun satırda
+      durmasının hiçbir faydası yok, riski var.
+    */
+
+    /// <summary>SHA-256(userId + ":" + kod), hex. Ham kod hiçbir yerde saklanmıyor.</summary>
+    public string? EmailVerificationCodeHash { get; set; }
+
+    public DateTime? EmailVerificationCodeExpiresAtUtc { get; set; }
+
+    /// <summary>Kodun gönderildiği an — yeniden gönderim bekleme süresi için.</summary>
+    public DateTime? EmailVerificationCodeSentAtUtc { get; set; }
+
+    /// <summary>
+    /// Bu kod için yapılan YANLIŞ deneme sayısı; yeni kodla sıfırlanır.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ KODU KIRILAMAZ KILAN ASIL ŞEY BU SAYAÇ. Altı hane 1.000.000 olasılık demek ve
+    /// hız sınırı tek başına yetmez: saldırgan IP değiştirerek onu aşar. Deneme sayacı
+    /// hesap bazında olduğu için IP değiştirmek işe yaramıyor.
+    /// </remarks>
+    public int EmailVerificationAttempts { get; set; }
+
     /// <summary>Kabul edilen sözleşme sürümü (<c>LegalDocuments.CurrentVersion</c>).</summary>
     public string? TermsVersion { get; set; }
 

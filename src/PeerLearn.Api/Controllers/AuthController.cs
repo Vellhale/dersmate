@@ -36,11 +36,20 @@ public sealed class AuthController : ControllerBase
             request.Email, request.Password, request.DisplayName,
             request.TermsVersion, request.AgeConfirmed), ct);
 
-    public sealed record VerifyEmailRequest(string Token);
+    public sealed record VerifyEmailRequest(string Email, string Code);
 
+    /// <summary>
+    /// E-postayı doğrular. Bağlantı yerine 6 haneli KOD (2026-09-02).
+    /// </summary>
+    /// <remarks>
+    /// E-POSTA DA İSTENİYOR, kod tek başına değil: altı hane kullanıcıya özgü değil ve
+    /// aynı anda yüzlerce hesapta aynı kod olabilir. Kod tek başına kabul edilseydi,
+    /// rastgele kod deneyen biri er ya da geç BİRİNİN hesabını doğrulardı — kimin
+    /// olduğunu bilmeden ama yine de doğrulamış olurdu.
+    /// </remarks>
     [HttpPost("verify-email")]
     public async Task<VerifyEmailResult> VerifyEmail(VerifyEmailRequest request, CancellationToken ct)
-        => await _mediator.Send(new VerifyEmailCommand(request.Token), ct);
+        => await _mediator.Send(new VerifyEmailCommand(request.Email, request.Code), ct);
 
     public sealed record ResendVerificationRequest(string Email);
 

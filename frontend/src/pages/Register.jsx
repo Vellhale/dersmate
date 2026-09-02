@@ -52,30 +52,37 @@ export default function Register() {
       <AuthShell title="Kayıt alındı" subtitle="Son adım: e-postanı doğrula.">
         <div className="space-y-4">
           <Notice tone="info">
-            Doğrulama bağlantısı <strong>{form.email}</strong> adresine gönderildi. Doğrulamayı
-            tamamlayınca hesabın <strong>etkinleşir</strong> ve eşleşme isteği gönderebilirsin.
+            <strong>6 haneli doğrulama kodu</strong> <strong>{form.email}</strong> adresine
+            gönderildi. Kodu girince hesabın <strong>etkinleşir</strong> ve eşleşme isteği
+            gönderebilirsin.
           </Notice>
 
-          {result.verificationToken ? (
-            <>
-              <p className="text-sm text-slate-600">
-                Geliştirme ortamında token doğrudan burada gösterilir (gerçek kurulumda yalnızca
-                e-postaya gider):
-              </p>
-              <Button
-                className="w-full"
-                onClick={() => navigate(`/dogrula?token=${encodeURIComponent(result.verificationToken)}`)}
-              >
-                E-postamı şimdi doğrula
-              </Button>
-            </>
-          ) : (
-            <p className="text-sm text-slate-600">
-              E-postandaki doğrulama token'ını{' '}
-              <Link to="/dogrula" className="font-medium text-brand-600 hover:underline">
-                doğrulama sayfasına
-              </Link>{' '}
-              yapıştır.
+          {/*
+            ADRES BAĞLANTIYA GÖMÜLÜYOR (?email=): doğrulama sayfası kodun yanında e-posta
+            da istiyor (6 hane kullanıcıya özgü değil) ve kullanıcıyı az önce yazdığı
+            adresi ikinci kez yazdırmak, hiçbir şey kazandırmayan bir sürtünme olurdu.
+
+            Geliştirmede kod da gömülüyor; üretimde `verificationToken` boş gelir ve
+            yalnızca adres taşınır.
+          */}
+          <Button
+            className="w-full"
+            onClick={() =>
+              navigate(
+                `/dogrula?email=${encodeURIComponent(form.email)}` +
+                  (result.verificationToken
+                    ? `&kod=${encodeURIComponent(result.verificationToken)}`
+                    : ''),
+              )
+            }
+          >
+            Kodu gir ve doğrula
+          </Button>
+
+          {result.verificationToken && (
+            <p className="text-center text-sm text-slate-600">
+              Geliştirme ortamında kod doğrudan taşınır (gerçek kurulumda yalnızca e-postaya
+              gider): <span className="font-mono font-semibold">{result.verificationToken}</span>
             </p>
           )}
 

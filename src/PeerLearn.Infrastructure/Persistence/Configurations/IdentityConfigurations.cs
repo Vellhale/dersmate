@@ -46,6 +46,10 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
         /* Sürüm bir TARİH DİZGESİ ("2026-08-27"), tarih tipi değil: yasal metnin kimliği
            bu ve gelecekte "2027-01-15-b" gibi bir düzeltme sürümü gerekebilir. 20 karakter
            o pay için. */
+        /* SHA-256 hex = tam 64 karakter. Sabit uzunluk olduğu için sınır da tam:
+           daha genişi, yanlışlıkla ham kodun yazılmasını fark ettirmezdi. */
+        builder.Property(x => x.EmailVerificationCodeHash).HasMaxLength(64);
+
         builder.Property(x => x.TermsVersion).HasMaxLength(20);
 
         builder.Property(x => x.Bio).HasMaxLength(1000);

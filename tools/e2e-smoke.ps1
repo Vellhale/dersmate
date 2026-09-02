@@ -157,12 +157,12 @@ $ayseReg = Api POST '/api/auth/register' $ayse
 $berkReg = Api POST '/api/auth/register' $berk
 OK "iki kullanıcı kaydedildi"
 
-$v1 = Api POST '/api/auth/verify-email' @{ token = $ayseReg.verificationToken }
-$v2 = Api POST '/api/auth/verify-email' @{ token = $berkReg.verificationToken }
+$v1 = Api POST '/api/auth/verify-email' @{ email = $ayse.email; code = $ayseReg.verificationToken }
+$v2 = Api POST '/api/auth/verify-email' @{ email = $berk.email; code = $berkReg.verificationToken }
 if ($v1.welcomeCreditGranted -and $v2.welcomeCreditGranted) { OK 'hoş geldin kredisi verildi' } else { Fail 'hoş geldin kredisi verilmedi' }
 
 # Tek seferlik guard: aynı token'la ikinci doğrulama kredi ÜRETMEMELİ
-$v1again = Api POST '/api/auth/verify-email' @{ token = $ayseReg.verificationToken }
+$v1again = Api POST '/api/auth/verify-email' @{ email = $ayse.email; code = $ayseReg.verificationToken }
 if (-not $v1again.welcomeCreditGranted) { OK 'ikinci doğrulama kredi üretmedi (tek seferlik guard)' } else { Fail 'İKİNCİ KEZ KREDİ ÜRETİLDİ' }
 
 # ---------------------------------------------------------------- 2. GİRİŞ
@@ -360,7 +360,7 @@ if ($img.StatusCode -eq 200 -and $ctype -like 'image/*' -and $img.Content.Length
 
 # Yetkisiz üçüncü kişi kanıta erişememeli
 $outsider = Api POST '/api/auth/register' @{ email = "cem$stamp@test.dev"; password = 'Parola12345'; displayName = 'Cem Üçüncü'; termsVersion = '2026-08-27'; ageConfirmed = $true }
-Api POST '/api/auth/verify-email' @{ token = $outsider.verificationToken } | Out-Null
+Api POST '/api/auth/verify-email' @{ email = "cem$stamp@test.dev"; code = $outsider.verificationToken } | Out-Null
 $cT = (Api POST '/api/auth/login' @{ email = "cem$stamp@test.dev"; password = 'Parola12345'; hwidHash = 'c' * 64 }).accessToken
 $denied = InvokeExpectError { Api GET "/api/sessions/$sessionId/proofs" $null $cT }
 if ($denied.code -eq 'NOT_SESSION_PARTICIPANT') { OK 'üçüncü kişinin kanıt erişimi reddedildi' }

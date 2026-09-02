@@ -83,7 +83,7 @@ function NewHwid { -join ((1..64) | ForEach-Object { '0123456789abcdef'[(Get-Ran
 function NewUser($prefix, $stamp) {
     $hwid = NewHwid; $email = "$prefix$stamp@test.dev"
     $r = Send Post '/api/auth/register' @{ email = $email; password = 'Demo12345'; displayName = "$prefix $stamp"; termsVersion = '2026-08-27'; ageConfirmed = $true; hwidHash = $hwid } $null
-    Send Post '/api/auth/verify-email' @{ token = $r.verificationToken } $null | Out-Null
+    Send Post '/api/auth/verify-email' @{ email = $email; code = $r.verificationToken } $null | Out-Null
     $l = Send Post '/api/auth/login' @{ email = $email; password = 'Demo12345'; hwidHash = $hwid } $null
     [pscustomobject]@{ Email = $email; Token = $l.accessToken; UserId = $l.userId; Hwid = $hwid }
 }
@@ -357,10 +357,24 @@ try {
     Fail 'aynı e-postayla yeniden kayıt olunabildi'
 } catch { OK "aynı e-postayla yeniden kayıt kapalı ($(HataKodu $_)) — çıkış yolu yalnızca yeniden gönderim" }
 
-$yeniden = Send Post '/api/auth/resend-verification' @{ email = $bekleyenMail } $null
-if ($yeniden.verificationToken) { OK 'yeni doğrulama token''ı üretildi' } else { Fail 'token dönmedi' }
+# ⚠️ BEKLEME SÜRESİ ÖNCE SINANIYOR (2026-09-02'de eklendi).
+#
+# Sunucu aynı adrese dakikada birden fazla doğrulama postası göndermiyor (mail bombing
+# koruması) ve bunu SESSİZCE yapıyor — hata değil, boş yanıt. Kayıt az önce yapıldığı
+# için ilk istek bu beklemeye takılıyor ve bu DOĞRU davranış; test onu da doğruluyor.
+$hemen = Send Post '/api/auth/resend-verification' @{ email = $bekleyenMail } $null
+if (-not $hemen.verificationToken) { OK 'bekleme suresi icindeki ikinci istek yeni kod URETMIYOR (mail bombing korumasi)' }
+else { Fail 'bekleme suresi calismiyor: kayittan hemen sonra yeni kod uretildi' }
 
-$dogrula = Send Post '/api/auth/verify-email' @{ token = $yeniden.verificationToken } $null
+# Gerçek kullanıcı bir dakika bekler; test damgayı geriye alıyor (Start-Sleep 60 ile
+# paketi bir dakika uzatmanın hiçbir kazancı yok — sınanan şey süre değil, süre
+# dolduğunda yeni kodun üretilmesi).
+Sql "UPDATE identity.""Users"" SET ""EmailVerificationCodeSentAtUtc"" = now() - interval '5 minutes' WHERE ""Email"" = '$bekleyenMail';" | Out-Null
+
+$yeniden = Send Post '/api/auth/resend-verification' @{ email = $bekleyenMail } $null
+if ($yeniden.verificationToken) { OK 'bekleme dolunca yeni dogrulama kodu uretildi' } else { Fail 'kod donmedi' }
+
+$dogrula = Send Post '/api/auth/verify-email' @{ email = $bekleyenMail; code = $yeniden.verificationToken } $null
 if ($dogrula.welcomeCreditGranted) { OK 'yeni token ile doğrulandı ve hoş geldin kredisi verildi' }
 else { Fail 'yeni token ile doğrulanamadı' }
 
