@@ -160,6 +160,59 @@ public class CommunityVote : BaseEntity
 /// var olmayan korumalar vaat ediyordu ve denetimde bulgu olarak çıktı. Değerler artık
 /// burada ve gerçekten uygulanıyor. Kutudaki metni değiştirirken buraya da bak.
 /// </summary>
+/// <summary>
+/// Topluluk katkısının PUANA dönüşme kuralı (ürün sahibi kararı, 2026-08-29).
+/// </summary>
+/// <remarks>
+/// NEDEN VAR: puan kazanmanın tek yolu ders anlatmaktı. Foruma gelip hiç ders
+/// vermeyen kullanıcının seviyesi hep 1'de kalıyordu — katkı veriyor ama karşılığı yok.
+///
+/// ─── NEDEN KUR BU KADAR PAHALI ──────────────────────────────────────────────
+/// İlk öneri 100 oy = 50 puan idi (ders başına 50 ile aynı) ve reddedildi: oy vermek
+/// BEDAVA, ders anlatmak pahalı (gerçek zaman + karşı tarafın onayı + günlük tavan).
+/// İki farklı maliyetteki eylemi aynı kura bağlarsan ucuz olan kazanır ve oy, para
+/// basma makinesine döner.
+///
+/// Çare "frenlemek" (seviye kapısı, günlük tavan) DEĞİL, kuru pahalılaştırmak oldu —
+/// gerekçe ürün tarafında: topluluğa gelen dürüst kullanıcıyı kapıda durdurmak, ona
+/// puan yolu açmamakla aynı şey. Kur pahalıysa dürüst kullanıcı yavaş ama kesin
+/// ilerler; kasmak isteyen ise aynı puan için orantısız iş yapmak zorunda kalır.
+///
+/// Ölçek (kıyas için 60 dk ders = 100 puan):
+///   300 net oy   →  100 puan   ≈ bir ders
+///   1.800 net oy →  600 puan   ≈ 5. seviye
+///   30.000 net oy → 10.000 puan ≈ 10. seviye (ders yoluyla 200 ders)
+///
+/// ⚠️ ASIL DUVAR BU ORAN DEĞİL, E-POSTA DOĞRULAMASI. Her hesap her içeriğe bir kez oy
+/// verebildiği için 300 oy ~10 sahte hesap × 30 gönderi demek. O 10 hesabı DOĞRULANMIŞ
+/// e-postayla açmak, 300 tık atmaktan çok daha pahalı. Doğrulama zayıflarsa bu kur da
+/// yeniden gözden geçirilmeli.
+///
+/// NET OY (artı − eksi) sayılıyor, ham artı değil: 300 artı / 400 eksi alan bir gönderi
+/// topluluğun DEĞERSİZ bulduğu bir katkıdır ve puan üretmemeli. Ham sayıyla trolleme
+/// kârlı bir strateji olurdu.
+/// </remarks>
+public static class CommunityRewardRules
+{
+    /// <summary>Bir ödül için gereken NET oy (artı − eksi, görünür içerikte).</summary>
+    public const int NetUpvotesPerReward = 300;
+
+    /// <summary>Eşik aşıldığında basılan puan.</summary>
+    public const int CreditsPerReward = 100;
+
+    /// <summary>
+    /// Verilen net oya karşılık BUGÜNE KADAR hak edilen toplam puan.
+    /// </summary>
+    /// <remarks>
+    /// Tam bölme bilinçli: eşiğin altındaki artık oylar bir sonraki ödüle SAYILMAYA
+    /// devam ediyor (kaybolmuyor), yalnızca henüz ödenmiyor.
+    ///
+    /// Negatif net oy 0 sayılıyor — eksi oya boğulmuş bir kullanıcının borcu olmaz.
+    /// </remarks>
+    public static int HakEdilenToplam(int netOy)
+        => Math.Max(0, netOy) / NetUpvotesPerReward * CreditsPerReward;
+}
+
 public static class ForumRules
 {
     /// <summary>Bu kadar açık şikayet alan içerik akışta otomatik perdelenir.</summary>

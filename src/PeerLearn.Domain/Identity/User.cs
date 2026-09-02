@@ -105,6 +105,25 @@ public class User : BaseEntity
       O kullanıcılardan onay gerekiyorsa uygulama içi bir yeniden onay akışı gerekir.
     */
 
+    /// <summary>
+    /// Topluluk katkısı için BUGÜNE KADAR ödenmiş toplam puan.
+    /// </summary>
+    /// <remarks>
+    /// ÇİFT ÖDEMEYİ ENGELLEYEN ALAN. Ödül işi periyodik koşuyor ve her koşumda
+    /// kullanıcının güncel net oyundan hak ettiği toplamı hesaplıyor; bu alanda yazan
+    /// tutarı düşüp FARKI basıyor. Alan olmasaydı her koşum aynı oyları yeniden
+    /// ödüllendirir ve puan sınırsız üretilirdi.
+    ///
+    /// "Ödenmiş oy sayısı" değil "ödenmiş PUAN" tutuluyor: kur değişirse (300:100)
+    /// geçmiş ödemeler yeniden yorumlanmaz — ödenen ödenmiştir.
+    ///
+    /// ⚠️ GERİ ALMA YOK. İçerik sonradan kaldırılırsa net oy düşer ama ödenen puan
+    /// geri alınmaz; kullanıcı yalnızca bir sonraki eşiğe daha uzak düşer. Basılmış
+    /// puanı geri almak seviye düşürür ve zaten harcanmış bir itibarı iptal ederdi;
+    /// moderasyonun bedeli GELECEKTEKİ kazanca yansıyor, geçmişe değil.
+    /// </remarks>
+    public int CommunityRewardedCredits { get; set; }
+
     /// <summary>Kabul edilen sözleşme sürümü (<c>LegalDocuments.CurrentVersion</c>).</summary>
     public string? TermsVersion { get; set; }
 

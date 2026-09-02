@@ -164,6 +164,23 @@ public sealed class AdminController : ControllerBase
         => await _mediator.Send(new ExpireCreditsCommand(), ct);
 
     /// <summary>
+    /// Topluluk ödülünü ŞİMDİ çalıştırır (net oy → puan). Normalde 15 dakikada bir.
+    /// </summary>
+    /// <remarks>
+    /// PUAN BASAN BİR İŞİ ELLE TETİKLEMEK neden güvenli: komut idempotent. Hak edilen
+    /// TOPLAMDAN ödenmiş tutarı düşüp farkı basıyor, yani arka arkaya on kez
+    /// çalıştırmak da tek kez çalıştırmakla aynı sonucu veriyor (test bunu ayrıca
+    /// doğruluyor). Bu özellik olmasaydı uç hiç açılmazdı.
+    ///
+    /// Yalnızca ADMIN: moderatöre kapalı. İş defterе yazıyor ve depo bakımıyla aynı
+    /// ağırlıkta bir işlem.
+    /// </remarks>
+    [Authorize(Policy = Policies.AdminOnly)]
+    [HttpPost("jobs/community-rewards")]
+    public async Task<GrantCommunityRewardsResult> RunCommunityRewards(CancellationToken ct)
+        => await _mediator.Send(new GrantCommunityRewardsCommand(), ct);
+
+    /// <summary>
     /// Depo bakımını ŞİMDİ çalıştırır: saklama süresi dolan kanıt görselleri + artık dosyalar.
     /// Normalde günde bir koşar; burada elle tetiklenebilmesi hem operasyon (disk doldu) hem de
     /// test edilebilirlik içindir. Silme yaptığı için yalnızca ADMIN — moderatöre kapalı.

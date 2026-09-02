@@ -189,17 +189,26 @@ if ($negatif -eq 0) { OK 'hiçbir cüzdanda negatif bakiye yok' } else { Fail "n
 $bozukLot = SqlInt 'SELECT COUNT(*) FROM economy."CreditLots" WHERE "RemainingAmount" < 0 OR "RemainingAmount" > "InitialAmount";'
 if ($bozukLot -eq 0) { OK 'hiçbir lotta negatif/aşırı kalan yok' } else { Fail "bozuk lot: $bozukLot" }
 
-# Sayaç ile ders kazancı eşitliği bozulmamalı (düzeltmeler sayaca hiç dokunmadığı için).
+# Sayac ile BASIM toplami esitligi bozulmamali (duzeltmeler sayaca hic dokunmadigi icin).
+#
+# ⚠️ DEGISMEZ GENISLEDI (2026-08-29), ZAYIFLAMADI. Eskiden yalnizca LessonEarning
+# sayiliyordu; topluluk katkisi da unvan sayacina girdigi icin (CommunityReward) toplama
+# eklendi. AdminAdjustment BILEREK DISARIDA: yonetim eliyle unvan dagitilamaz, testin
+# asil sinadigi sey de bu.
+#
+# Yeni bir basim turu eklenirse buraya da eklenmeli — aksi halde bu denetim gercek bir
+# sapmayi degil, kendi eksik sorgusunu bulur.
 $sayacSapma = SqlInt @'
 SELECT COUNT(*) FROM (
   SELECT u."Id" FROM identity."Users" u
   LEFT JOIN economy."Wallets" w ON w."UserId" = u."Id"
-  LEFT JOIN economy."CreditTransactions" t ON t."WalletId" = w."Id" AND t."Type" = 'LessonEarning'
+  LEFT JOIN economy."CreditTransactions" t ON t."WalletId" = w."Id"
+       AND t."Type" IN ('LessonEarning', 'CommunityReward')
   GROUP BY u."Id", u."TotalEarnedCredits"
   HAVING u."TotalEarnedCredits" <> COALESCE(SUM(t."Amount"),0)) z;
 '@
-if ($sayacSapma -eq 0) { OK 'TotalEarnedCredits = SUM(LessonEarning) — düzeltmeler eşitliği bozmadı' }
-else { Fail "sapan kullanıcı: $sayacSapma" }
+if ($sayacSapma -eq 0) { OK 'TotalEarnedCredits = SUM(LessonEarning + CommunityReward) — duzeltmeler esitligi bozmadi' }
+else { Fail "sapan kullanici: $sayacSapma" }
 
 Section 'F. Denetim izi'
 

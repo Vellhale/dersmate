@@ -49,6 +49,68 @@ public sealed class CreditExpiryJob : BackgroundService
 }
 
 /// <summary>
+/// Topluluk katkısını puana çevirir (net oy → kredi). 15 dakikada bir.
+/// </summary>
+/// <remarks>
+/// SIKLIK VADE SÜPÜRMESİYLE AYNI ve bilinçli: puan bir bakiye değil bir unvan, yani
+/// 15 dakikalık gecikmenin kullanıcıya hiçbir maliyeti yok. Daha sık koşmak, her turda
+/// tüm kullanıcıları tarayan bir sorguyu karşılıksız tekrarlamak olurdu.
+///
+/// NEDEN OY ANINDA DEĞİL: iki kilit (içerik + yazarın cüzdanı) ve en sık yolun en
+/// pahalı yola bağlanması. Gerekçenin tamamı GrantCommunityRewardsHandler'da.
+/// </remarks>
+public sealed class CommunityRewardJob : BackgroundService
+{
+    private static readonly TimeSpan Interval = TimeSpan.FromMinutes(15);
+
+    /// <summary>
+    /// İlk tur açılıştan 2 dakika sonra: uygulama başlarken (migration, ısınma) tüm
+    /// kullanıcıları tarayan bir sorgu eklemek açılışı gereksiz yere ağırlaştırırdı.
+    /// </summary>
+    private static readonly TimeSpan InitialDelay = TimeSpan.FromMinutes(2);
+
+    private readonly IServiceScopeFactory _scopeFactory;
+    private readonly ILogger<CommunityRewardJob> _logger;
+
+    public CommunityRewardJob(IServiceScopeFactory scopeFactory, ILogger<CommunityRewardJob> logger)
+    {
+        _scopeFactory = scopeFactory;
+        _logger = logger;
+    }
+
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        try
+        {
+            await Task.Delay(InitialDelay, stoppingToken);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+
+        using var timer = new PeriodicTimer(Interval);
+        do
+        {
+            try
+            {
+                using var scope = _scopeFactory.CreateScope();
+                var mediator = scope.ServiceProvider.GetRequiredService<IMediator>();
+                await mediator.Send(new GrantCommunityRewardsCommand(), stoppingToken);
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                break;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Topluluk ödülü turu başarısız; sonraki turda tekrar denenecek.");
+            }
+        } while (await timer.WaitForNextTickAsync(stoppingToken));
+    }
+}
+
+/// <summary>
 /// Depo bakımı: saklama süresi dolan kanıt görselleri + artık dosyalar. Günde bir.
 /// </summary>
 /// <remarks>
