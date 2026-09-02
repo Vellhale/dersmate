@@ -3,6 +3,7 @@ using Microsoft.Extensions.Options;
 using PeerLearn.Application.Abstractions;
 using PeerLearn.Application.Common;
 using PeerLearn.Application.Options;
+using PeerLearn.Domain.Community;
 using PeerLearn.Domain.Economy;
 using PeerLearn.Domain.Identity;
 using PeerLearn.Domain.Scheduling;
@@ -189,6 +190,67 @@ public sealed class CreditLedgerService
         tutor.TotalEarnedCredits += amount;
 
         return amount;
+    }
+
+    /// <summary>
+    /// TOPLULUK ÖDÜLÜ: forumda alınan net oyun puana dönüşmesi.
+    /// Çağıran, cüzdan kilidini almış ve transaction açmış olmalıdır (sınıf sözleşmesi).
+    /// </summary>
+    /// <param name="netOy">Kullanıcının görünür içeriğindeki güncel net oy (artı − eksi).</param>
+    /// <returns>Bu çağrıda basılan puan; hak ediş artmadıysa 0.</returns>
+    /// <remarks>
+    /// FARK BASILIR, TOPLAM DEĞİL. İş periyodik koşuyor ve her koşumda güncel net oydan
+    /// hak edilen TOPLAMI hesaplıyor; kullanıcıya bugüne kadar ödenen tutarı düşüp
+    /// yalnızca farkı basıyor. Bu olmadan her koşum aynı oyları yeniden ödüllendirir ve
+    /// puan sınırsız üretilirdi — idempotanslık burada bir iyileştirme değil, şart.
+    ///
+    /// FARK NEGATİF OLABİLİR ve o durumda HİÇBİR ŞEY YAPILMAZ: içerik kaldırılınca net
+    /// oy düşer ama basılmış puan geri alınmaz (bkz. User.CommunityRewardedCredits).
+    /// Negatif hareket yazmak seviye düşürür ve zaten yaşanmış bir itibarı iptal ederdi;
+    /// moderasyonun bedeli gelecekteki kazanca yansıyor, geçmişe değil.
+    /// </remarks>
+    public async Task<int> MintCommunityRewardAsync(User user, Wallet wallet, int netOy, CancellationToken ct)
+    {
+        var hakEdilen = CommunityRewardRules.HakEdilenToplam(netOy);
+        var fark = hakEdilen - user.CommunityRewardedCredits;
+
+        // 0 tutarlı lot/hareket YAZILMAZ: CK_CreditLots_InitialAmount > 0 ve
+        // CK_CreditTransactions_Amount <> 0 kısıtları zaten reddederdi.
+        if (fark <= 0)
+        {
+            return 0;
+        }
+
+        var now = _clock.UtcNow;
+
+        wallet.AvailableBalance += fark;
+        wallet.UpdatedAtUtc = now;
+
+        _db.CreditLots.Add(new CreditLot
+        {
+            WalletId = wallet.Id,
+            InitialAmount = fark,
+            RemainingAmount = fark,
+            Source = CreditLotSource.CommunityReward,
+            EarnedAtUtc = now,
+
+            // Ders kazancı gibi SÜRESİZ: katkının karşılığı yanmaz.
+            ExpiresAtUtc = null
+        });
+
+        _db.CreditTransactions.Add(new CreditTransaction
+        {
+            WalletId = wallet.Id,
+            Amount = fark,
+            Type = CreditTransactionType.CommunityReward,
+            BalanceAfter = wallet.AvailableBalance
+        });
+
+        user.CommunityRewardedCredits = hakEdilen;
+        user.TotalEarnedCredits += fark;
+
+        await Task.CompletedTask;
+        return fark;
     }
 
     /// <summary>

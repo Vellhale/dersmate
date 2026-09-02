@@ -223,6 +223,12 @@ public sealed record UserProfileDto(
     /// </summary>
     int CommunityUpvotes,
 
+    /// <summary>Görünür forum gönderisi sayısı.</summary>
+    int CommunityPostCount,
+
+    /// <summary>Görünür forum yorumu sayısı.</summary>
+    int CommunityCommentCount,
+
     /// <summary>
     /// Yönetici/moderatör işareti — forum ve Keşfet'tekiyle AYNI bayrak.
     /// </summary>
@@ -308,15 +314,36 @@ public sealed class GetUserProfileHandler : IRequestHandler<GetUserProfileQuery,
           geri almayı gerektirirdi ve kazanılmış görünen bir rozetin geri alınması,
           hiç verilmemesinden daha kötü.
         */
-        var gonderiOylari = await _db.CommunityPosts.AsNoTracking()
+        /*
+          ⚠️ NET OY (artı − eksi), ham artı DEĞİL — 2026-08-29'da değişti.
+
+          Bu sayı artık yalnızca rozet eşiğini değil PUANI da belirliyor
+          (CommunityRewardRules: 300 net oy → 100 puan). Ham artıyla sayılsaydı
+          300 artı / 400 eksi alan bir gönderi — yani topluluğun değersiz bulduğu bir
+          katkı — puan üretirdi ve trolleme kârlı bir strateji olurdu.
+
+          Ödül işi (GrantCommunityRewardsHandler) BİREBİR aynı hesabı yapıyor. İkisi
+          ayrışırsa profilde görünen sayı ile ödenen puan tutmaz; hesabı değiştiren
+          ikisini birden değiştirmeli.
+        */
+        var gonderiler = await _db.CommunityPosts.AsNoTracking()
             .Where(p => p.AuthorUserId == user.Id && p.Status == ForumContentStatus.Visible)
-            .SumAsync(p => (int?)p.UpvoteCount, ct) ?? 0;
+            .Select(p => new { p.UpvoteCount, p.DownvoteCount })
+            .ToListAsync(ct);
 
-        var yorumOylari = await _db.CommunityComments.AsNoTracking()
+        var yorumlar = await _db.CommunityComments.AsNoTracking()
             .Where(c => c.AuthorUserId == user.Id && c.Status == ForumContentStatus.Visible)
-            .SumAsync(c => (int?)c.UpvoteCount, ct) ?? 0;
+            .Select(c => new { c.UpvoteCount, c.DownvoteCount })
+            .ToListAsync(ct);
 
-        var forumOylari = gonderiOylari + yorumOylari;
+        var gonderiSayisi = gonderiler.Count;
+        var yorumSayisi = yorumlar.Count;
+
+        // Negatif toplam 0'a çekiliyor: eksi oya boğulmuş kullanıcıya "−40 oy" yazmak,
+        // profili bir ceza tahtasına çevirirdi. Ödül hesabı da aynı tabanı kullanıyor.
+        var forumOylari = Math.Max(0,
+            gonderiler.Sum(x => x.UpvoteCount - x.DownvoteCount) +
+            yorumlar.Sum(x => x.UpvoteCount - x.DownvoteCount));
 
         var adayKaydi = await _db.TeacherCandidateProfiles.AsNoTracking()
             .SingleOrDefaultAsync(p => p.UserId == user.Id, ct);
@@ -362,6 +389,8 @@ public sealed class GetUserProfileHandler : IRequestHandler<GetUserProfileQuery,
             seviye.MinCredits,
             seviye.NextLevelAt,
             forumOylari,
+            gonderiSayisi,
+            yorumSayisi,
             user.Role is UserRole.Admin or UserRole.Moderator,
             IsSelf: kendisi,
             aday,

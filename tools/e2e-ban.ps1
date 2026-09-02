@@ -297,16 +297,18 @@ if ($ciftBasim -eq '0') { OK 'hiçbir ders için ikinci basım yok' } else { Fai
 
 # Unvan sayacı defterle tutmalı: sayaç basımdan bağımsız artarsa unvanlar hak edilmeden
 # yükselir, geri kalırsa hak edilmiş unvan görünmez olur. İkisi de sessiz hatadır.
+# ⚠️ DEGISMEZ GENISLEDI (2026-08-29): topluluk katkisi da unvan sayacina giriyor.
+# AdminAdjustment disarida — yonetim eliyle unvan dagitilamaz.
 $sayacSorgu = @"
 SELECT COUNT(*) FROM identity."Users" u
 WHERE u."TotalEarnedCredits" <> (
     SELECT COALESCE(SUM(t."Amount"), 0)
     FROM economy."CreditTransactions" t
     JOIN economy."Wallets" w ON w."Id" = t."WalletId"
-    WHERE w."UserId" = u."Id" AND t."Type" = 'LessonEarning');
+    WHERE w."UserId" = u."Id" AND t."Type" IN ('LessonEarning', 'CommunityReward'));
 "@
 $sayacFark = Sql $sayacSorgu
-if ($sayacFark -eq '0') { OK 'TotalEarnedCredits = defterdeki LessonEarning toplamı' }
+if ($sayacFark -eq '0') { OK 'TotalEarnedCredits = defterdeki LessonEarning + CommunityReward toplami' }
 else { Fail "$sayacFark kullanıcıda unvan sayacı defterle tutmuyor" }
 
 $lotCheck = Sql "SELECT COUNT(*) FROM economy.""Wallets"" w WHERE w.""AvailableBalance"" <> (SELECT COALESCE(SUM(l.""RemainingAmount""),0) FROM economy.""CreditLots"" l WHERE l.""WalletId"" = w.""Id"");"

@@ -100,6 +100,7 @@ public static class DependencyInjection
         services.AddHostedService<CreditExpiryJob>();
         services.AddHostedService<SessionSweepJob>();
         services.AddHostedService<StorageCleanupJob>();
+        services.AddHostedService<CommunityRewardJob>();
 
         return services;
     }

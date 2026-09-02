@@ -89,7 +89,12 @@ export function UserProfileView({ userId }) {
         Sayaç SUNUCUDAN geliyor ve kaldırılmış/perdeli içeriğin oyunu saymıyor — yani
         kural ihlaliyle toplanan oy rozet kazandırmıyor (bkz. ProfileQueries).
       */}
-      <ToplulukRozetleri oy={p.communityUpvotes} kendiProfilim={p.isSelf} />
+      <ToplulukRozetleri
+        oy={p.communityUpvotes}
+        kendiProfilim={p.isSelf}
+        gonderiSayisi={p.communityPostCount}
+        yorumSayisi={p.communityCommentCount}
+      />
 
       <div className="grid gap-4 lg:grid-cols-2">
         <TopicPanel

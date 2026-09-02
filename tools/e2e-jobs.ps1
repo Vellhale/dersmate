@@ -414,10 +414,16 @@ if ($defter -eq '0') { OK 'cüzdan toplamı = defter toplamı (ledgerBalanced)' 
 $lotCheck = Sql "SELECT COUNT(*) FROM economy.""Wallets"" w WHERE w.""AvailableBalance"" <> (SELECT COALESCE(SUM(l.""RemainingAmount""),0) FROM economy.""CreditLots"" l WHERE l.""WalletId"" = w.""Id"");"
 if ($lotCheck -eq '0') { OK 'cüzdan bakiyesi = lot toplamı' } else { Fail "$lotCheck cüzdanda tutarsızlık" }
 
-# Unvan sayacının kaynağı defter olmalı: sayaç, o kullanıcının LessonEarning toplamına
-# eşit. Basımın iki yolu var (onay ve itiraz kararı) ve biri sayacı atlarsa buradan görülür.
-$sayacCheck = Sql "SELECT COUNT(*) FROM identity.""Users"" u WHERE u.""TotalEarnedCredits"" <> COALESCE((SELECT SUM(t.""Amount"") FROM economy.""CreditTransactions"" t JOIN economy.""Wallets"" w ON w.""Id"" = t.""WalletId"" WHERE w.""UserId"" = u.""Id"" AND t.""Type"" = 'LessonEarning'), 0);"
-if ($sayacCheck -eq '0') { OK 'TotalEarnedCredits = defterdeki LessonEarning toplamı' } else { Fail "$sayacCheck kullanıcıda sayaç/defter uyuşmazlığı" }
+# Unvan sayacinin kaynagi defter olmali: sayac, o kullanicinin BASIM toplamina esit.
+# Basimin yollari var (ders onayi, itiraz karari, topluluk odulu) ve biri sayaci
+# atlarsa buradan gorulur.
+#
+# ⚠️ DEGISMEZ GENISLEDI (2026-08-29), ZAYIFLAMADI. Topluluk katkisi da unvan sayacina
+# giriyor (CommunityReward). Bu satir guncellenmeden once tam olarak bu test kirmizi
+# yandi ve DOGRU davranisti: sayacta CommunityReward vardi, sorgunun toplaminda yoktu.
+# AdminAdjustment BILEREK DISARIDA — yonetim eliyle unvan dagitilamaz.
+$sayacCheck = Sql "SELECT COUNT(*) FROM identity.""Users"" u WHERE u.""TotalEarnedCredits"" <> COALESCE((SELECT SUM(t.""Amount"") FROM economy.""CreditTransactions"" t JOIN economy.""Wallets"" w ON w.""Id"" = t.""WalletId"" WHERE w.""UserId"" = u.""Id"" AND t.""Type"" IN ('LessonEarning','CommunityReward')), 0);"
+if ($sayacCheck -eq '0') { OK 'TotalEarnedCredits = defterdeki LessonEarning + CommunityReward toplami' } else { Fail "$sayacCheck kullanicida sayac/defter uyusmazligi" }
 
 # Escrow'un gerçekten bittiğinin kanıtı: ne aktif hold var, ne bloke bakiye.
 $aktifHold = Sql "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='economy' AND table_name='CreditHolds';"

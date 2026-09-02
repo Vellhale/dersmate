@@ -786,8 +786,14 @@ if ($badAmount -eq '0') { OK 'her yeni basım süre ölçeğine uygun (30 dk = 5
 $volMint = Sql "SELECT COUNT(*) FROM economy.""CreditTransactions"" t JOIN scheduling.""LessonSessions"" s ON s.""Id"" = t.""RelatedSessionId"" WHERE s.""IsVolunteer"" = TRUE AND t.""Type"" = 'LessonEarning';"
 if ($volMint -eq '0') { OK 'gönüllü derslerin hiçbiri puan basmadı' } else { Fail "$volMint gönüllü derste basım var" }
 
-# Değişmez 3: birikimli sayaç, o kullanıcıya basılan puanların gerisinde kalamaz.
-$earnDrift = Sql "SELECT COUNT(*) FROM identity.""Users"" u WHERE u.""TotalEarnedCredits"" < (SELECT COALESCE(SUM(t.""Amount""),0) FROM economy.""CreditTransactions"" t JOIN economy.""Wallets"" w ON w.""Id"" = t.""WalletId"" WHERE w.""UserId"" = u.""Id"" AND t.""Type"" = 'LessonEarning');"
+# Degismez 3: birikimli sayac, o kullaniciya basilan puanlarin gerisinde kalamaz.
+#
+# ⚠️ TOPLULUK ODULU DE TOPLAMA EKLENDI (2026-08-29). Bu satir guncellenmeseydi test
+# KIRMIZI YANMAZDI ama SESSIZCE ZAYIFLARDI: karsilastirma "<" oldugu icin sayaca
+# CommunityReward eklenmesi farki hep pozitif yapar ve kosul asla saglanmaz — yani
+# ders basimindaki gercek bir geri kalma da yakalanamaz hale gelirdi.
+# Yanlis nedenle gecen bir test, kirmizi yanan testten daha tehlikelidir.
+$earnDrift = Sql "SELECT COUNT(*) FROM identity.""Users"" u WHERE u.""TotalEarnedCredits"" < (SELECT COALESCE(SUM(t.""Amount""),0) FROM economy.""CreditTransactions"" t JOIN economy.""Wallets"" w ON w.""Id"" = t.""WalletId"" WHERE w.""UserId"" = u.""Id"" AND t.""Type"" IN ('LessonEarning','CommunityReward'));"
 if ($earnDrift -eq '0') { OK 'TotalEarnedCredits basılan puanların gerisinde değil' } else { Fail "$earnDrift kullanıcıda sayaç geride kalmış" }
 
 $negEarned = Sql "SELECT COUNT(*) FROM identity.""Users"" WHERE ""TotalEarnedCredits"" < 0;"
