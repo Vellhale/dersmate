@@ -30,7 +30,7 @@ function Api {
 function Register($email, $name, $hwid) {
     try {
         $r = Api POST '/api/auth/register' @{ email = $email; password = 'Demo12345'; displayName = $name; termsVersion = '2026-08-27'; ageConfirmed = $true }
-        Api POST '/api/auth/verify-email' @{ token = $r.verificationToken } | Out-Null
+        Api POST '/api/auth/verify-email' @{ email = $email; code = $r.verificationToken } | Out-Null
     } catch { }
     return (Api POST '/api/auth/login' @{ email = $email; password = 'Demo12345'; hwidHash = $hwid })
 }

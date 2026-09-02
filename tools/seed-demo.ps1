@@ -17,7 +17,7 @@ function Api {
 function Register($email, $name, $hwid) {
     try {
         $r = Api POST '/api/auth/register' @{ email = $email; password = 'Demo12345'; displayName = $name; termsVersion = '2026-08-27'; ageConfirmed = $true }
-        Api POST '/api/auth/verify-email' @{ token = $r.verificationToken } | Out-Null
+        Api POST '/api/auth/verify-email' @{ email = $email; code = $r.verificationToken } | Out-Null
         Write-Host "kaydedildi: $email"
     } catch { Write-Host "zaten var: $email" }
     # Token + userId birlikte dönmeli: isimle eşleştirme, testlerden kalan aynı adlı

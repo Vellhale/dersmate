@@ -123,17 +123,26 @@ public sealed class RegisterHandler : IRequestHandler<RegisterCommand, RegisterR
             AgeConfirmedAtUtc = simdi
         };
 
+        /*
+          KOD, KULLANICI KAYDEDİLMEDEN ÖNCE ÜRETİLİYOR ki tek SaveChanges yetsin.
+          İki ayrı yazma olsaydı (önce kullanıcı, sonra kod) araya düşen bir hata,
+          kodu olmayan ve hiçbir zaman doğrulanamayacak bir hesap bırakırdı.
+        */
+        var code = EmailVerificationRules.GenerateCode();
+
+        user.EmailVerificationCodeHash = EmailVerificationRules.HashCode(user.Id, code);
+        user.EmailVerificationCodeExpiresAtUtc =
+            simdi.AddMinutes(EmailVerificationRules.ValidityMinutes);
+        user.EmailVerificationCodeSentAtUtc = simdi;
+
         _db.Users.Add(user);
         await _db.SaveChangesAsync(ct); // Unique index eşzamanlı kayıtta son savunmadır.
 
-        var token = _tokens.CreatePurposeToken(user.Id, EmailVerifyPurpose,
-            TimeSpan.FromHours(_jwtOptions.EmailVerifyTokenHours));
-
         await _email.SendAsync(email, DogrulamaEpostasi.Konu(yenidenGonderim: false),
-            DogrulamaEpostasi.Govde(token, _emailOptions.PublicWebUrl), ct);
+            DogrulamaEpostasi.Govde(code), ct);
 
         return new RegisterResult(
             user.Id,
-            _jwtOptions.ExposeVerificationTokenInResponse ? token : string.Empty);
+            _jwtOptions.ExposeVerificationTokenInResponse ? code : string.Empty);
     }
 }

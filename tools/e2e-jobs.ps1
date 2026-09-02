@@ -120,7 +120,7 @@ function NewUser($prefix) {
     $email = "$prefix$([DateTimeOffset]::UtcNow.ToUnixTimeSeconds())j$($script:seq)@test.dev"
     $hwid = (([Guid]::NewGuid().ToString('N')) * 2).Substring(0, 64)
     $reg = Api POST '/api/auth/register' @{ email = $email; password = 'Parola12345'; displayName = "$prefix Kullanici"; termsVersion = '2026-08-27'; ageConfirmed = $true }
-    Api POST '/api/auth/verify-email' @{ token = $reg.verificationToken } | Out-Null
+    Api POST '/api/auth/verify-email' @{ email = $email; code = $reg.verificationToken } | Out-Null
     $login = Api POST '/api/auth/login' @{ email = $email; password = 'Parola12345'; hwidHash = $hwid }
     return @{ email = $email; userId = $login.userId; token = $login.accessToken }
 }

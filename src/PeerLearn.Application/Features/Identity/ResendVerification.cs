@@ -34,19 +34,17 @@ public sealed class ResendVerificationHandler
     : IRequestHandler<ResendVerificationCommand, ResendVerificationResult>
 {
     private readonly IAppDbContext _db;
-    private readonly ITokenService _tokens;
     private readonly IEmailSender _email;
     private readonly JwtOptions _jwtOptions;
-    private readonly EmailOptions _emailOptions;
+    private readonly IClock _clock;
 
-    public ResendVerificationHandler(IAppDbContext db, ITokenService tokens,
-        IEmailSender email, IOptions<JwtOptions> jwtOptions, IOptions<EmailOptions> emailOptions)
+    public ResendVerificationHandler(IAppDbContext db, IEmailSender email,
+        IOptions<JwtOptions> jwtOptions, IClock clock)
     {
         _db = db;
-        _tokens = tokens;
         _email = email;
         _jwtOptions = jwtOptions.Value;
-        _emailOptions = emailOptions.Value;
+        _clock = clock;
     }
 
     public async Task<ResendVerificationResult> Handle(
@@ -69,13 +67,50 @@ public sealed class ResendVerificationHandler
             return new ResendVerificationResult(string.Empty);
         }
 
-        var token = _tokens.CreatePurposeToken(user.Id, RegisterHandler.EmailVerifyPurpose,
-            TimeSpan.FromHours(_jwtOptions.EmailVerifyTokenHours));
+        var simdi = _clock.UtcNow;
+
+        /*
+          HESAP BAŞINA BEKLEME SÜRESİ — hız sınırından AYRI bir koruma.
+
+          Hız sınırı IP başına (RateLimit:AuthPerMinute) ve saldırgan IP değiştirerek
+          onu aşabilir. Bu bekleme ise HEDEF HESABA bakıyor: kimden gelirse gelsin, bir
+          adrese dakikada birden fazla doğrulama postası gitmiyor. Kapattığı saldırı
+          "mail bombing": birinin gelen kutusunu doldurup adresi kullanılamaz hâle
+          getirmek.
+
+          SESSİZCE GEÇİLİYOR, hata DEĞİL: "biraz bekle" demek, o adresin kayıtlı
+          olduğunu söylerdi — bu ucun tüm tasarımı varlık sızdırmamak üzerine kurulu
+          (yukarıdaki nota bkz.). Kullanıcı için de sonuç aynı: yeni posta gelmiyor,
+          elindeki kod hâlâ geçerli.
+        */
+        if (user.EmailVerificationCodeSentAtUtc is { } sonGonderim &&
+            (simdi - sonGonderim).TotalSeconds < EmailVerificationRules.ResendCooldownSeconds)
+        {
+            return new ResendVerificationResult(string.Empty);
+        }
+
+        /*
+          YENİ KOD ESKİSİNİ GEÇERSİZ KILIYOR ve deneme sayacı sıfırlanıyor.
+
+          Sayacın sıfırlanması bir zafiyet değil: yeni kod da 1.000.000 olasılıktan
+          rastgele seçiliyor, yani saldırgan "yeni kod iste, 5 dene" döngüsüyle hiçbir
+          ilerleme kaydetmiyor — her turda baştan başlıyor. Sıfırlanmasaydı, kodunu
+          yanlış girip yenisini isteyen DÜRÜST kullanıcı kilitli kalırdı.
+        */
+        var kod = EmailVerificationRules.GenerateCode();
+
+        user.EmailVerificationCodeHash = EmailVerificationRules.HashCode(user.Id, kod);
+        user.EmailVerificationCodeExpiresAtUtc =
+            simdi.AddMinutes(EmailVerificationRules.ValidityMinutes);
+        user.EmailVerificationCodeSentAtUtc = simdi;
+        user.EmailVerificationAttempts = 0;
+
+        await _db.SaveChangesAsync(ct);
 
         await _email.SendAsync(user.Email, DogrulamaEpostasi.Konu(yenidenGonderim: true),
-            DogrulamaEpostasi.Govde(token, _emailOptions.PublicWebUrl), ct);
+            DogrulamaEpostasi.Govde(kod), ct);
 
         return new ResendVerificationResult(
-            _jwtOptions.ExposeVerificationTokenInResponse ? token : string.Empty);
+            _jwtOptions.ExposeVerificationTokenInResponse ? kod : string.Empty);
     }
 }

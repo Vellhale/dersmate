@@ -189,7 +189,7 @@ function NewUser($prefix) {
     $email = "$prefix$([DateTimeOffset]::UtcNow.ToUnixTimeSeconds())c$($script:seq)@test.dev"
     $hwid = (([Guid]::NewGuid().ToString('N')) * 2).Substring(0, 64)
     $reg = Api POST '/api/auth/register' @{ email = $email; password = 'Parola12345'; displayName = "$prefix K"; termsVersion = '2026-08-27'; ageConfirmed = $true }
-    Api POST '/api/auth/verify-email' @{ token = $reg.verificationToken } | Out-Null
+    Api POST '/api/auth/verify-email' @{ email = $email; code = $reg.verificationToken } | Out-Null
     $login = Api POST '/api/auth/login' @{ email = $email; password = 'Parola12345'; hwidHash = $hwid }
     return @{ email = $email; userId = $login.userId; token = $login.accessToken; regToken = $reg.verificationToken }
 }
@@ -489,7 +489,7 @@ $bases = SplitBases 6
 $reqs = @()
 for ($i = 0; $i -lt 6; $i++) {
     $reqs += @{ method = 'POST'; path = '/api/auth/verify-email'; base = $bases[$i]
-                body = @{ token = $fresh.regToken } }
+                body = @{ email = $fresh.email; code = $fresh.regToken } }
 }
 $r3 = ParallelFire $reqs
 Info (Summarize $r3)
@@ -507,7 +507,7 @@ $vReg = Api POST '/api/auth/register' @{ email = $vEmail; password = 'Parola1234
 $bases = SplitBases 6
 $reqs = @()
 for ($i = 0; $i -lt 6; $i++) {
-    $reqs += @{ method = 'POST'; path = '/api/auth/verify-email'; base = $bases[$i]; body = @{ token = $vReg.verificationToken } }
+    $reqs += @{ method = 'POST'; path = '/api/auth/verify-email'; base = $bases[$i]; body = @{ email = $vEmail; code = $vReg.verificationToken } }
 }
 $r3b = ParallelFire $reqs
 Info (Summarize $r3b)

@@ -175,9 +175,17 @@ function fetchAvatar(userId) {
 export const api = {
   // --- Kimlik ---
   register: (payload) => request('/api/auth/register', { method: 'POST', body: payload }),
-  verifyEmail: (token) => request('/api/auth/verify-email', { method: 'POST', body: { token } }),
+  /**
+   * E-postayı 6 haneli KODLA doğrular (bağlantı yerine — 2026-09-02).
+   *
+   * E-POSTA DA GÖNDERİLİYOR: 6 hane kullanıcıya özgü değil, aynı anda yüzlerce hesapta
+   * aynı kod olabilir. Kod tek başına kabul edilseydi rastgele kod deneyen biri er ya
+   * da geç BİRİNİN hesabını doğrulardı.
+   */
+  verifyEmail: (email, code) =>
+    request('/api/auth/verify-email', { method: 'POST', body: { email, code } }),
 
-  /** Doğrulama bağlantısını yeniden gönderir. Yanıt, adres kayıtlı olsun olmasın aynıdır. */
+  /** Yeni doğrulama kodu gönderir. Yanıt, adres kayıtlı olsun olmasın aynıdır. */
   resendVerification: (email) =>
     request('/api/auth/resend-verification', { method: 'POST', body: { email } }),
   login: (payload) => request('/api/auth/login', { method: 'POST', body: payload }),

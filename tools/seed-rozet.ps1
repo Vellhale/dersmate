@@ -57,7 +57,7 @@ function Register($email, $name, $hwid) {
         # DOĞRULAMA ŞART: doğrulanmamış hesap her yazma ucundan 403 EMAIL_NOT_VERIFIED alır.
         # Kayıt yanıtı jetonu geliştirme ortamında doğrudan döndürüyor (üretimde e-postayla).
         if ($r.verificationToken) {
-            Api POST '/api/auth/verify-email' @{ token = $r.verificationToken } | Out-Null
+            Api POST '/api/auth/verify-email' @{ email = $email; code = $r.verificationToken } | Out-Null
         }
         if ($r.accessToken) { return $r }
     } catch { }
@@ -68,7 +68,7 @@ function Register($email, $name, $hwid) {
     try {
         $yeni = Api POST '/api/auth/resend-verification' @{ email = $email }
         if ($yeni.verificationToken) {
-            Api POST '/api/auth/verify-email' @{ token = $yeni.verificationToken } | Out-Null
+            Api POST '/api/auth/verify-email' @{ email = $email; code = $yeni.verificationToken } | Out-Null
         }
     } catch { }
 
