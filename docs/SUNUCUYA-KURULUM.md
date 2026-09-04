@@ -341,8 +341,12 @@ Cron'a bağla — bu adım atlanırsa geriye tek seferlik, elle alınmış ve un
 kalır:
 
 ```bash
-15 3 * * * /opt/dersmate/tools/yedek-al.sh >> /var/log/dersmate-yedek.log 2>&1
+15 3 * * * /KURULUM-YOLUN/tools/yedek-al.sh >> /var/log/dersmate-yedek.log 2>&1
 ```
+
+> **Yolu tahmin etme, `pwd` ile bak.** Bu kılavuz bir dönem örnek olarak `/opt/dersmate`
+> yazıyordu ve gerçek kurulum `/root/dersmate`'teydi; komut `cd: No such file or directory`
+> verdi ve zaman kaybettirdi. Depo nereye klonlandıysa cron satırı orayı göstermeli.
 
 ⚠️ **Elle `pg_dump ... | gzip > dosya` YAZMAYIN.** Kabuk, borunun SON komutunun çıkış kodunu
 döndürür: `pg_dump` başarısız olsa bile `gzip` boş girdiden geçerli bir `.gz` üretip 0 ile
@@ -355,6 +359,74 @@ Elle yazılan bir ad, sessizce yanlış veritabanını yedeklemenin en kolay yol
 
 **Geri yüklemeyi bir kez dene.** Denenmemiş yedek, yedek değildir — betik bitiminde geri
 yükleme komutlarını da yazdırıyor.
+
+### Sunucu dışına şifreli kopya (⛔ yedeğin asıl anlamı burada)
+
+Şimdiye kadarki her şey yedeği **sunucunun kendisinde** üretti. Sunucu kaybolursa
+(disk arızası, sağlayıcı hesabının kapanması, fidye yazılımı) yedek de kaybolur — yani
+elinde yedek değil, kopya vardı. `tools/yedek-gonder.sh` bunu kapatıyor.
+
+Yedeklerde **kişisel veri** var: e-posta adresleri, parola özetleri, HWID'ler ve
+öğrencilerin yüklediği kimlik/öğrenci belgeleri. Bu yüzden bulut kopyası **şifreli**
+olmak zorunda; betik hedefin `crypt` olduğunu doğrulamadan yükleme yapmıyor.
+
+**1. rclone kur ve bulut hesabını tanımla** (örnek: Google Drive):
+
+```bash
+apt install -y rclone
+rclone config     # n → ad: dersmate-drive → tür: drive → yetkilendir
+```
+
+**2. Şifreli katmanı ekle.** Bu, düz uzağı sarmalayan ikinci bir uzak:
+
+```bash
+rclone config     # n → ad: dersmate-sifreli → tür: crypt
+                  # remote: dersmate-drive:dersmate-yedek
+                  # filename_encryption: standard
+                  # parola: KENDİN ÜRET (rclone'un ürettiği rastgele parolayı da kullanabilirsin)
+```
+
+> ### ⛔ PAROLAYI KAYBEDERSEN YEDEKLER KURTARILAMAZ
+>
+> Şifrelemenin amacı tam olarak bu: parola olmadan kimse çözemez, sen de dahil.
+> Üç kural, üçü de zorunlu:
+>
+> - **Parolayı sunucuda saklama.** Sunucu kaybolduğunda yedeğe ihtiyacın olacak; parola
+>   sunucudaysa o da gitmiş olur. Parola yöneticisine koy.
+> - **En az iki kişide bulunsun.** Tek kişideyse, o kişiye ulaşılamadığı gün bütün
+>   yedekler ölü veridir.
+> - **Kurulumdan sonra geri yüklemeyi dene.** Denenmemiş bir şifreli yedek, iki kat
+>   denenmemiş yedektir.
+
+**3. İlk gönderimi elle çalıştır ve çıktıyı oku:**
+
+```bash
+./tools/yedek-gonder.sh
+```
+
+**4. Cron'a bağla — `&&` ile, `;` ile değil:**
+
+```bash
+15 3 * * * /KURULUM-YOLUN/tools/yedek-al.sh && /KURULUM-YOLUN/tools/yedek-gonder.sh >> /var/log/dersmate-yedek.log 2>&1
+```
+
+`&&` bilinçli: yedek alma başarısızsa (0 girdili kanıt arşivi, şüpheli küçük döküm)
+gönderim hiç çalışmamalı.
+
+#### Betiğin kapattığı üç sessiz arıza
+
+| durum | eskiden | şimdi |
+|---|---|---|
+| Hedef `crypt` değil | kimlik belgeleri **şifresiz** yüklenirdi | `exit 1`, gönderim yok |
+| `copy` çalıştı ama hiçbir şey gitmedi | cron "başarılı" der, bulut sessizce eskir | `exit 1`, **budama da çalışmaz** |
+| Uzakta saklama yok | silinen hesapların belgeleri bulutta **süresiz** kalırdı | `UZAK_SAKLAMA_GUN` (varsayılan 30) |
+
+#### `copy`, `sync` değil
+
+`sync` uzağı yerele birebir yansıtır: yereldeki bir silme (fidye yazılımı, yanlış komut,
+0 girdili yedek) ilk gece uzağa da yayılır ve tek yedeğini kaybedersin — yedeğin varlık
+sebebi tam olarak bu senaryodur. `copy` yalnızca ekler; saklama ayrı ve **yaşa göre**
+yapılır, "yerelde yok" ölçütüne göre değil.
 
 ---
 
@@ -394,8 +466,10 @@ kilitlemiyor.
 - **Göç geri alma korumaları var.** Forum ve kayıt onayı göçleri, veri varken geri
   alınmayı reddediyor (`RAISE EXCEPTION`). Bu kasıtlı: o veriler geri getirilemez.
 - **JWT durumsuz, 2 saat.** Parola değişince açık oturumlar düşmüyor.
-- **Hesap silme ucu yok.** Gizlilik metni e-posta ile talep diyor; talebi elle
-  karşılaman gerekiyor.
+- ~~**Hesap silme ucu yok.**~~ **ARTIK VAR** (2026-09-05'te güncellendi). `POST /api/profile/delete`
+  ve arayüzde "Hesabımı sil" ekranı hem web'de hem mobilde çalışıyor. Bu satır bir dönem
+  yanlış kalmıştı ve aynı yanlış gizlilik metnine de sızmıştı: kullanıcıya, yapabildiği
+  bir şeyi yapamadığı söyleniyordu.
 - **Günlükte bir Data Protection uyarısı görürsün** — zararsız:
   `Storing keys in a directory ... may not be persisted outside of the container`.
   Anahtarlar konteynerle birlikte kayboluyor ama bu uygulama Data Protection'ı hiçbir
