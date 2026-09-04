@@ -161,7 +161,7 @@ function fetchAvatar(userId) {
     return avatarCache.get(userId)
   }
 
-  const pending = fetch(`${API_BASE}/api/users/${userId}/avatar`, {
+  const pending = fetch(`${API_BASE}/api/v1/users/${userId}/avatar`, {
     headers: { Authorization: `Bearer ${getToken()}` },
   })
     .then((response) => (response.ok ? response.blob() : null))
@@ -174,7 +174,7 @@ function fetchAvatar(userId) {
 
 export const api = {
   // --- Kimlik ---
-  register: (payload) => request('/api/auth/register', { method: 'POST', body: payload }),
+  register: (payload) => request('/api/v1/auth/register', { method: 'POST', body: payload }),
   /**
    * E-postayı 6 haneli KODLA doğrular (bağlantı yerine — 2026-09-02).
    *
@@ -183,25 +183,25 @@ export const api = {
    * da geç BİRİNİN hesabını doğrulardı.
    */
   verifyEmail: (email, code) =>
-    request('/api/auth/verify-email', { method: 'POST', body: { email, code } }),
+    request('/api/v1/auth/verify-email', { method: 'POST', body: { email, code } }),
 
   /** Yeni doğrulama kodu gönderir. Yanıt, adres kayıtlı olsun olmasın aynıdır. */
   resendVerification: (email) =>
-    request('/api/auth/resend-verification', { method: 'POST', body: { email } }),
-  login: (payload) => request('/api/auth/login', { method: 'POST', body: payload }),
+    request('/api/v1/auth/resend-verification', { method: 'POST', body: { email } }),
+  login: (payload) => request('/api/v1/auth/login', { method: 'POST', body: payload }),
 
   /** Parola sıfırlama bağlantısı ister. Yanıt, adres kayıtlı olsun olmasın AYNI (204) —
       farklı yanıt vermek "bu e-posta kayıtlı mı" sorusunu herkese yanıtlardı. */
   forgotPassword: (email) =>
-    request('/api/auth/forgot-password', { method: 'POST', body: { email } }),
+    request('/api/v1/auth/forgot-password', { method: 'POST', body: { email } }),
 
   /** Bağlantıdaki token'la yeni parolayı yazar. Token tek kullanımlık, 1 saat geçerli. */
   resetPassword: (token, newPassword) =>
-    request('/api/auth/reset-password', { method: 'POST', body: { token, newPassword } }),
+    request('/api/v1/auth/reset-password', { method: 'POST', body: { token, newPassword } }),
 
   // --- Katalog ---
-  topics: () => request('/api/catalog/topics'),
-  categories: () => request('/api/catalog/categories'),
+  topics: () => request('/api/v1/catalog/topics'),
+  categories: () => request('/api/v1/catalog/categories'),
 
   /** Gelişmiş arama (Modül 1). Boş/null filtreler sorgu dizesine hiç eklenmez. */
   searchOffers: (filters) => {
@@ -210,7 +210,7 @@ export const api = {
       if (value === null || value === undefined || value === '') continue
       params.set(key, String(value))
     }
-    return request(`/api/discovery/offers?${params.toString()}`)
+    return request(`/api/v1/discovery/offers?${params.toString()}`)
   },
 
   /** Üniversite ağı araması. searchOffers ile aynı kural: boş/null filtreler sorguya eklenmez. */
@@ -222,30 +222,30 @@ export const api = {
       if (value === null || value === undefined || value === '') continue
       params.set(key, String(value))
     }
-    return request(`/api/discovery/users?${params.toString()}`)
+    return request(`/api/v1/discovery/users?${params.toString()}`)
   },
 
   // --- Portföy & eşleştirme ---
-  myPortfolio: () => request('/api/portfolio/entries'),
-  addPortfolioEntry: (payload) => request('/api/portfolio/entries', { method: 'POST', body: payload }),
-  removePortfolioEntry: (id) => request(`/api/portfolio/entries/${id}`, { method: 'DELETE' }),
-  suggestions: (limit = 20) => request(`/api/portfolio/suggestions?limit=${limit}`),
+  myPortfolio: () => request('/api/v1/portfolio/entries'),
+  addPortfolioEntry: (payload) => request('/api/v1/portfolio/entries', { method: 'POST', body: payload }),
+  removePortfolioEntry: (id) => request(`/api/v1/portfolio/entries/${id}`, { method: 'DELETE' }),
+  suggestions: (limit = 20) => request(`/api/v1/portfolio/suggestions?limit=${limit}`),
 
-  myMatches: () => request('/api/matches'),
+  myMatches: () => request('/api/v1/matches'),
   // Konusuz (üniversite ağı) istekte requestedTopicId null gönderilebilir.
-  createMatch: (payload) => request('/api/matches', { method: 'POST', body: payload }),
+  createMatch: (payload) => request('/api/v1/matches', { method: 'POST', body: payload }),
   respondMatch: (matchId, accept) =>
-    request(`/api/matches/${matchId}/respond`, { method: 'POST', body: { accept } }),
-  closeMatch: (matchId) => request(`/api/matches/${matchId}/close`, { method: 'POST' }),
+    request(`/api/v1/matches/${matchId}/respond`, { method: 'POST', body: { accept } }),
+  closeMatch: (matchId) => request(`/api/v1/matches/${matchId}/close`, { method: 'POST' }),
 
   // --- Sohbet ---
-  conversations: () => request('/api/conversations'),
+  conversations: () => request('/api/v1/conversations'),
   messages: (conversationId, page = 1, pageSize = 50) =>
-    request(`/api/conversations/${conversationId}/messages?page=${page}&pageSize=${pageSize}`),
+    request(`/api/v1/conversations/${conversationId}/messages?page=${page}&pageSize=${pageSize}`),
   sendMessage: (conversationId, content) =>
-    request(`/api/conversations/${conversationId}/messages`, { method: 'POST', body: { content } }),
+    request(`/api/v1/conversations/${conversationId}/messages`, { method: 'POST', body: { content } }),
   markRead: (conversationId) =>
-    request(`/api/conversations/${conversationId}/read`, { method: 'POST' }),
+    request(`/api/v1/conversations/${conversationId}/read`, { method: 'POST' }),
 
   // --- Dersler ---
   /**
@@ -253,8 +253,8 @@ export const api = {
    * (bkz. GetMySessions: aksiyon bekleyen bir ders sayfanın altında kalmamalı).
    */
   mySessions: (pastPage = 1, pastPageSize = 20) =>
-    request(`/api/sessions?pastPage=${pastPage}&pastPageSize=${pastPageSize}`),
-  sessionProofs: (sessionId) => request(`/api/sessions/${sessionId}/proofs`),
+    request(`/api/v1/sessions?pastPage=${pastPage}&pastPageSize=${pastPageSize}`),
+  sessionProofs: (sessionId) => request(`/api/v1/sessions/${sessionId}/proofs`),
 
   /**
    * Kanıt görselini blob olarak indirir ve object URL döner.
@@ -262,41 +262,41 @@ export const api = {
    * çağıran, URL'yi kullanmayı bitirince URL.revokeObjectURL ile serbest bırakmalıdır.
    */
   proofContentUrl: (sessionId, proofId) =>
-    fetchProofBlob(`/api/sessions/${sessionId}/proofs/${proofId}/content`),
-  bookSession: (payload) => request('/api/sessions', { method: 'POST', body: payload }),
+    fetchProofBlob(`/api/v1/sessions/${sessionId}/proofs/${proofId}/content`),
+  bookSession: (payload) => request('/api/v1/sessions', { method: 'POST', body: payload }),
   completeSession: (sessionId, verificationCode, file) => {
     const form = new FormData()
     form.append('verificationCode', verificationCode)
     form.append('proof', file)
-    return request(`/api/sessions/${sessionId}/complete`, { method: 'POST', formData: form })
+    return request(`/api/v1/sessions/${sessionId}/complete`, { method: 'POST', formData: form })
   },
-  approveSession: (sessionId) => request(`/api/sessions/${sessionId}/approve`, { method: 'POST' }),
+  approveSession: (sessionId) => request(`/api/v1/sessions/${sessionId}/approve`, { method: 'POST' }),
   cancelSession: (sessionId, reason) =>
-    request(`/api/sessions/${sessionId}/cancel`, { method: 'POST', body: { reason } }),
+    request(`/api/v1/sessions/${sessionId}/cancel`, { method: 'POST', body: { reason } }),
   /**
    * Ders hakkında TEK YÖNLÜ şikayet. Şikayet edilen kişi bunu görmez, bildirilmez ve
    * yanıt veremez; kayıt doğrudan yönetim kuyruğuna düşer. Ders akışı etkilenmez.
    */
   reportSession: (sessionId, reason, description) =>
-    request(`/api/sessions/${sessionId}/report`, { method: 'POST', body: { reason, description } }),
+    request(`/api/v1/sessions/${sessionId}/report`, { method: 'POST', body: { reason, description } }),
 
   // --- Cüzdan ---
-  wallet: () => request('/api/wallet'),
+  wallet: () => request('/api/v1/wallet'),
   statement: (page = 1, pageSize = 20) =>
-    request(`/api/wallet/statement?page=${page}&pageSize=${pageSize}`),
+    request(`/api/v1/wallet/statement?page=${page}&pageSize=${pageSize}`),
 
   // --- Profil ve değerlendirmeler ---
-  userProfile: (userId) => request(`/api/users/${userId}/profile`),
+  userProfile: (userId) => request(`/api/v1/users/${userId}/profile`),
 
   /** Oturumdaki kullanıcının profili — çağıranların userId taşımasını gerektirmez. */
   myProfile: () => {
     const userId = loadSession()?.userId
     if (!userId) return Promise.resolve(null)
-    return request(`/api/users/${userId}/profile`)
+    return request(`/api/v1/users/${userId}/profile`)
   },
 
-  updateProfile: (payload) => request('/api/profile', { method: 'PUT', body: payload }),
-  uploadAvatar: (formData) => request('/api/profile/avatar', { method: 'POST', formData }),
+  updateProfile: (payload) => request('/api/v1/profile', { method: 'PUT', body: payload }),
+  uploadAvatar: (formData) => request('/api/v1/profile/avatar', { method: 'POST', formData }),
   /**
    * Öğrenci belgesi (PDF/görsel, en fazla 10 MB). Yeni belge, önceki doğrulama/ret
    * kararını sıfırlar ve beyanı yeniden kuyruğa sokar.
@@ -304,11 +304,11 @@ export const api = {
   uploadTeacherDocument: (file) => {
     const form = new FormData()
     form.append('document', file)
-    return request('/api/profile/teacher-candidate/document', { method: 'POST', formData: form })
+    return request('/api/v1/profile/teacher-candidate/document', { method: 'POST', formData: form })
   },
 
   declareTeacherCandidate: (payload) =>
-    request('/api/profile/teacher-candidate', { method: 'PUT', body: payload }),
+    request('/api/v1/profile/teacher-candidate', { method: 'PUT', body: payload }),
 
   /**
    * Avatar'ı blob olarak indirir ve object URL döner; yoksa null.
@@ -330,13 +330,13 @@ export const api = {
   },
 
   userReviews: (userId, page = 1, pageSize = 10) =>
-    request(`/api/users/${userId}/reviews?page=${page}&pageSize=${pageSize}`),
+    request(`/api/v1/users/${userId}/reviews?page=${page}&pageSize=${pageSize}`),
 
   /**
    * Branş rozetleri + branş bazlı anlatım saatleri.
    * Profil ucundan AYRI: rozet şeridi daha seyrek değişiyor ve gecikmeli yüklenebiliyor.
    */
-  userSubjectBadges: (userId) => request(`/api/users/${userId}/subject-badges`),
+  userSubjectBadges: (userId) => request(`/api/v1/users/${userId}/subject-badges`),
 
   /*
     KULLANICI ŞİKAYETİ — ders bağlamı olmadan (2026-08-27).
@@ -346,9 +346,9 @@ export const api = {
     destekliyordu, eksik olan HTTP kapısı ve buradaki sarmalayıcıydı.
   */
   reportUser: (userId, reason, description) =>
-    request(`/api/users/${userId}/report`, { method: 'POST', body: { reason, description } }),
+    request(`/api/v1/users/${userId}/report`, { method: 'POST', body: { reason, description } }),
   createReview: (sessionId, payload) =>
-    request(`/api/sessions/${sessionId}/review`, { method: 'POST', body: payload }),
+    request(`/api/v1/sessions/${sessionId}/review`, { method: 'POST', body: payload }),
 
   /*
     ─── TOPLULUK (FORUM) ────────────────────────────────────────────────────────
@@ -370,16 +370,16 @@ export const api = {
     // Etiket yoksa parametre HİÇ gönderilmiyor: boş bir `tag=` değeri sunucuda geçersiz
     // enum olarak bağlanır ve akış 400 dönerdi.
     if (tag) q.set('tag', tag)
-    return request(`/api/community/posts?${q}`, { signal })
+    return request(`/api/v1/community/posts?${q}`, { signal })
   },
 
   createForumPost: (tag, title, body) =>
-    request('/api/community/posts', { method: 'POST', body: { tag, title, body } }),
+    request('/api/v1/community/posts', { method: 'POST', body: { tag, title, body } }),
 
-  forumComments: (postId, signal) => request(`/api/community/posts/${postId}/comments`, { signal }),
+  forumComments: (postId, signal) => request(`/api/v1/community/posts/${postId}/comments`, { signal }),
 
   createForumComment: (postId, body) =>
-    request(`/api/community/posts/${postId}/comments`, { method: 'POST', body: { body } }),
+    request(`/api/v1/community/posts/${postId}/comments`, { method: 'POST', body: { body } }),
 
   /**
    * Oy. value yalnızca 1 ya da -1; SIFIR GÖNDERİLMEZ — geri almak, aynı yöne ikinci kez
@@ -390,9 +390,9 @@ export const api = {
    * İstemci optimistik gösterip bu yanıtla düzeltiyor.
    */
   voteForumPost: (postId, value) =>
-    request(`/api/community/posts/${postId}/vote`, { method: 'POST', body: { value } }),
+    request(`/api/v1/community/posts/${postId}/vote`, { method: 'POST', body: { value } }),
   voteForumComment: (commentId, value) =>
-    request(`/api/community/comments/${commentId}/vote`, { method: 'POST', body: { value } }),
+    request(`/api/v1/community/comments/${commentId}/vote`, { method: 'POST', body: { value } }),
 
   /**
    * Şikayet aynı moderasyon kuyruğuna düşüyor (moderation.Reports) — ders, sohbet ve
@@ -401,36 +401,36 @@ export const api = {
    * sınırı uyguluyor ki kullanıcı yazıp gönderdikten sonra 400 görmesin.
    */
   reportForumPost: (postId, reason, description) =>
-    request(`/api/community/posts/${postId}/report`, {
+    request(`/api/v1/community/posts/${postId}/report`, {
       method: 'POST',
       body: { reason, description },
     }),
   reportForumComment: (commentId, reason, description) =>
-    request(`/api/community/comments/${commentId}/report`, {
+    request(`/api/v1/community/comments/${commentId}/report`, {
       method: 'POST',
       body: { reason, description },
     }),
 
   // --- Tercihler (çerez rızası / ürün turu) ---
-  myPreferences: () => request('/api/preferences'),
+  myPreferences: () => request('/api/v1/preferences'),
   saveCookieConsent: (analytics, functional, consentVersion) =>
-    request('/api/preferences/cookie-consent', {
+    request('/api/v1/preferences/cookie-consent', {
       method: 'PUT',
       body: { analytics, functional, consentVersion },
     }),
   saveOnboarding: (lastStep, completed, suppressed) =>
-    request('/api/preferences/onboarding', {
+    request('/api/v1/preferences/onboarding', {
       method: 'PUT',
       body: { lastStep, completed, suppressed },
     }),
 
   // --- Admin ---
-  disputes: () => request('/api/admin/disputes'),
+  disputes: () => request('/api/v1/admin/disputes'),
 
   /** Açık şikayet kuyruğu (yalnızca yönetim). */
-  reports: (onlyOpen = true) => request(`/api/admin/reports?onlyOpen=${onlyOpen}`),
+  reports: (onlyOpen = true) => request(`/api/v1/admin/reports?onlyOpen=${onlyOpen}`),
   resolveReport: (reportId, actionTaken, note) =>
-    request(`/api/admin/reports/${reportId}/resolve`, { method: 'POST', body: { actionTaken, note } }),
+    request(`/api/v1/admin/reports/${reportId}/resolve`, { method: 'POST', body: { actionTaken, note } }),
   /**
    * Forum içeriğini kaldırır (remove=true) ya da geri getirir (remove=false).
    *
@@ -442,21 +442,21 @@ export const api = {
    * Gerekçe zorunlu (sunucu en az 10 karakter istiyor) ve denetim izine yazılıyor.
    */
   moderateForumContent: ({ postId = null, commentId = null, remove, reason }) =>
-    request('/api/admin/community/moderate', {
+    request('/api/v1/admin/community/moderate', {
       method: 'POST',
       body: { postId, commentId, remove, reason },
     }),
 
-  adminSessionProofs: (sessionId) => request(`/api/admin/sessions/${sessionId}/proofs`),
+  adminSessionProofs: (sessionId) => request(`/api/v1/admin/sessions/${sessionId}/proofs`),
 
   /** Yönetici, katılımcı olmadığı derslerin kanıtını kendi ucundan görür. */
   adminProofContentUrl: (sessionId, proofId) =>
-    fetchProofBlob(`/api/admin/sessions/${sessionId}/proofs/${proofId}/content`),
+    fetchProofBlob(`/api/v1/admin/sessions/${sessionId}/proofs/${proofId}/content`),
 
   resolveDispute: (disputeId, resolution, note) =>
-    request(`/api/admin/disputes/${disputeId}/resolve`, { method: 'POST', body: { resolution, note } }),
+    request(`/api/v1/admin/disputes/${disputeId}/resolve`, { method: 'POST', body: { resolution, note } }),
   banUser: (userId, reason) =>
-    request(`/api/admin/users/${userId}/ban`, { method: 'POST', body: { reason } }),
+    request(`/api/v1/admin/users/${userId}/ban`, { method: 'POST', body: { reason } }),
 
   /*
     YAPTIRIM UÇLARI — 2026-08-27'de bağlandı.
@@ -472,30 +472,30 @@ export const api = {
     yetki kontrolünü iki yerde tutmak, birinin unutulduğu gün sessizce açık bırakır.
   */
   unbanUser: (userId, reason) =>
-    request(`/api/admin/users/${userId}/unban`, { method: 'POST', body: { reason } }),
+    request(`/api/v1/admin/users/${userId}/unban`, { method: 'POST', body: { reason } }),
 
   /** @param type 'Warning' | 'TemporaryBan' — durationHours yalnızca TemporaryBan'de anlamlı. */
   sanctionUser: (userId, type, reason, durationHours = null) =>
-    request(`/api/admin/users/${userId}/sanction`, {
+    request(`/api/v1/admin/users/${userId}/sanction`, {
       method: 'POST',
       body: { type, reason, durationHours },
     }),
 
   /** İtiraz detayı: ders, iki taraf, kanıtlar, escrow durumu — hakem kararı için. */
-  disputeDetail: (disputeId) => request(`/api/admin/disputes/${disputeId}`),
+  disputeDetail: (disputeId) => request(`/api/v1/admin/disputes/${disputeId}`),
 
   /** Öğretmen adaylığı kuyruğu. status: Pending | Verified | Rejected | All */
   teacherCandidates: (status = 'Pending', page = 1, pageSize = 25) =>
-    request(`/api/admin/teacher-candidates?status=${status}&page=${page}&pageSize=${pageSize}`),
+    request(`/api/v1/admin/teacher-candidates?status=${status}&page=${page}&pageSize=${pageSize}`),
 
   /** decision: Verify | Reject | Revert. Gerekçe zorunlu (sunucu da doğruluyor). */
   reviewTeacherCandidate: (profileId, decision, note) =>
-    request(`/api/admin/teacher-candidates/${profileId}/review`, {
+    request(`/api/v1/admin/teacher-candidates/${profileId}/review`, {
       method: 'POST',
       body: { decision, note },
     }),
 
-  economyMetrics: () => request('/api/admin/metrics'),
+  economyMetrics: () => request('/api/v1/admin/metrics'),
 
   /**
    * Yönetim eliyle puan tanımlama/düzeltme. Pozitif ekler, negatif düşer; gerekçe zorunlu.
@@ -508,12 +508,12 @@ export const api = {
    * korunması gereken durumda.
    */
   adjustCredits: (userId, amount, reason, idempotencyKey) =>
-    request(`/api/admin/users/${userId}/credits`, {
+    request(`/api/v1/admin/users/${userId}/credits`, {
       method: 'POST',
       body: { amount, reason },
       headers: { 'Idempotency-Key': idempotencyKey },
     }),
   auditLog: (page = 1, pageSize = 25) =>
-    request(`/api/admin/audit-log?page=${page}&pageSize=${pageSize}`),
+    request(`/api/v1/admin/audit-log?page=${page}&pageSize=${pageSize}`),
 
 }
