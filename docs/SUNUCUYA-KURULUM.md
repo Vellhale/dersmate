@@ -227,12 +227,32 @@ Rol değişikliği denetim izine yazılıyor. Ayrıntı: `docs/URETIME-CIKIS.md`
 
 ## 9. Yayına çıkmadan son kontrol
 
+**Dışarıdan** (kendi bilgisayarından):
+
 ```bash
-curl -I https://dersmate.com                       # 200, HTTPS
-curl -I http://dersmate.com                        # 301 → https
+curl -I https://www.dersmate.com                   # 200  ← kanonik adres
+curl -I http://www.dersmate.com                    # 301 → https
+curl -I https://dersmate.com                       # 301 → https://www.dersmate.com/
+curl -I https://www.dersmate.com/gizlilik          # 200  ← SPA geri düşüşü
 curl -s https://api.dersmate.com/health            # {"status":"ok"}
-curl -s https://api.dersmate.com/health/ready      # Healthy
+curl -s https://api.dersmate.com/api/v1/catalog/categories   # 200
 ```
+
+> **`https://dersmate.com` 200 DEĞİL, 301 döner.** www kanonik adres; www olmayan istek
+> ona yönlendiriliyor (bkz. §3). 200 beklemek yanlış — CORS listesi tek adres aldığı için
+> bu yönlendirme kasıtlı.
+
+**Sunucudan** (SSH ile bağlıyken) — bu uç dışarıdan çağrılamaz:
+
+```bash
+curl -s http://127.0.0.1:5000/health/ready         # Healthy
+```
+
+> ⚠️ **`/health/ready` dışarıdan 403 verir ve bu DOĞRUDUR.** `tools/ornek-nginx.conf` onu
+> `allow 127.0.0.1; deny all;` ile kısıtlıyor: derin sağlık kontrolü her çağrıda PostgreSQL
+> ve Redis'e gidiyor, dışarı açık bırakmak hem altyapıyı ele verir hem ücretsiz bir yük
+> kapısı olur. Dışarıdan deneyip 403 görürsen sistem **çalışıyor** demektir — arıza arama.
+> (Gerçek kurulumda bu yanlış komut yüzünden bir kez arandı: 2026-09-04.)
 
 Sonra **elle** iki şey dene — ikisi de otomatik doğrulanamıyor:
 
@@ -240,6 +260,30 @@ Sonra **elle** iki şey dene — ikisi de otomatik doğrulanamıyor:
    *varlığını* kontrol ediyor, gerçekten çalıştığını değil.
 2. **Sohbet aç ve mesaj gönder.** SignalR WebSocket yükseltmesi vekil yapılandırmasına
    bağlı; yanlışsa sohbet sessizce "bağlanıyor"da kalır.
+
+### Sertifika yenilemesini SINA (⛔ atlanırsa 90 gün sonra site düşer)
+
+Sertifikayı `--standalone` ile aldın (certbot 80 portunu kendi tuttu). Yenileme ise
+`--webroot` ile yapılacak, çünkü artık nginx 80'i tutuyor. **İkisi farklı yol** ve
+uyuşup uyuşmadıkları ancak sınanınca anlaşılır:
+
+```bash
+dc run --rm --entrypoint certbot certbot renew --webroot -w /var/www/certbot --dry-run
+```
+
+Beklenen: `Congratulations, all simulated renewals succeeded`
+
+> **`--entrypoint certbot` ŞART.** `docker compose run <servis> <komut>` yalnızca
+> *command*'i değiştirir, *entrypoint*'i değil. Bu servisin entrypoint'i sonsuz bir
+> döngü (`while :; do certbot renew --quiet; sleep 12h; done`); yazdığın argümanlar o
+> kabuk betiğine konumsal parametre olarak geçer ve **sessizce yok sayılır**. Komut
+> hiç hata vermez, sadece 12 saatlik uykuya oturur ve sen sınama yaptığını sanırsın.
+> (Gerçek kurulumda bu yaşandı: 2026-09-04.)
+
+Bu adım neden atlanamaz: yenileme 12 saatte bir kendiliğinden koşuyor ve `--quiet`
+çalıştığı için **başarısız olsa da ses çıkarmaz**. Site 89 gün sorunsuz çalışır, sonra
+bir sabah `NET::ERR_CERT_DATE_INVALID` verir. Sınama, o sabahı bugünden görmenin tek
+yolu.
 
 ---
 

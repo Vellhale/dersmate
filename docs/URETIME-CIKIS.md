@@ -110,6 +110,12 @@ dağıtımın ayrı ve görünür bir adımıdır.
 | `GET /health` | Süreç ayakta mı? (canlılık) | Hayır |
 | `GET /health/ready` | İstek karşılayabilir mi? (hazırlık) | Evet: PostgreSQL + Redis |
 
+⚠️ **`/health/ready` DIŞARIYA KAPALI.** `tools/ornek-nginx.conf` onu `allow 127.0.0.1;
+deny all;` ile kısıtlıyor — her çağrı PostgreSQL ve Redis'e gittiği için dışarı açık bir
+uç, hem altyapıyı ele verir hem ücretsiz bir yük kapısı olur. Dış izleme (uptime servisi
+vb.) bu uca **bağlanamaz**; ona `/health` verin, `/health/ready`'yi sunucunun içinden
+çağırın (`curl http://127.0.0.1:5000/health/ready`).
+
 Yük dengeleyici **`/health`**'e bakmalı. `/health/ready` DB kopukken `503 Unhealthy` döner;
 Redis kopukken `Degraded` — uygulama çalışmaya devam eder ama kilit ve önbellek süreç
 içine düşer, yani o anda **birden fazla instance çalıştırmak güvenli değildir**.
