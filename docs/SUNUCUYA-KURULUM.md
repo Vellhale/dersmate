@@ -34,9 +34,24 @@ kayıt olan hiç kimse hesabını doğrulayamaz ve platform kullanılamaz durumd
 ## 1. Sunucuyu hazırla
 
 ```bash
-sudo apt update && sudo apt install -y docker.io docker-compose-plugin git
+sudo apt update && sudo apt install -y docker.io docker-compose-v2 git
 sudo usermod -aG docker $USER   # oturumu kapatıp aç
 ```
+
+> **Paket adı `docker-compose-v2`, `docker-compose-plugin` DEĞİL.** İkincisi Docker'ın
+> kendi deposuna ait; Ubuntu'nun deposunda yok ve `apt` onu bulamayınca **hiçbir paketi
+> kurmaz** — `docker.io` da kurulmamış olur, oysa hata satırı yalnızca eksik paketten
+> söz eder. Ubuntu 24.04'te Compose v2 eklentisi `docker-compose-v2` adıyla geliyor.
+> (Ölçüldü: 2026-09-04, Ubuntu 24.04.4 LTS.)
+
+Kurulumu doğrula — ikisi de çıktı vermeli:
+
+```bash
+docker --version && docker compose version
+```
+
+`docker compose` **boşluklu**: bu kılavuzdaki bütün komutlar v2 biçimini kullanıyor,
+tireli `docker-compose` (v1) değil.
 
 Güvenlik duvarı — **yalnızca 22, 80, 443**:
 
