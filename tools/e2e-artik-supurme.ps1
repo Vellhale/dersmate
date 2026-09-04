@@ -1,4 +1,4 @@
-# dersmate — artık dosya süpürücüsünün referans kümesi testi
+﻿# dersmate — artık dosya süpürücüsünün referans kümesi testi
 #
 # NEDEN VAR: süpürücü, hiçbir DB kaydının işaret etmediği dosyaları siliyor. Referans
 # kümesi eksik kalırsa GERÇEK dosyalar "artık" sayılır ve gider. Bu bir kez oldu:
@@ -109,7 +109,7 @@ function NewHwid { -join ((1..64) | ForEach-Object { '0123456789abcdef'[(Get-Ran
 function NewUser($prefix, $stamp) {
     $hwid = NewHwid
     $email = "$prefix$stamp@test.dev"
-    $reg = Post '/api/auth/register' @{ email = $email; password = 'Demo12345'; displayName = "$prefix $stamp"; termsVersion = '2026-08-27'; ageConfirmed = $true; hwidHash = $hwid } $null
+    $reg = Post '/api/auth/register' @{ email = $email; password = 'Demo12345'; displayName = "$prefix $stamp"; termsVersion = (& "$PSScriptRoot\yasal-surum.ps1"); ageConfirmed = $true; hwidHash = $hwid } $null
     Post '/api/auth/verify-email' @{ email = $email; code = $reg.verificationToken } $null | Out-Null
     $login = Post '/api/auth/login' @{ email = $email; password = 'Demo12345'; hwidHash = $hwid } $null
     return [pscustomobject]@{ Email = $email; Hwid = $hwid; Token = $login.accessToken; UserId = $login.userId }

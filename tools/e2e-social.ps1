@@ -79,7 +79,7 @@ function Get_($path, $token) { Invoke-RestMethod -Uri "$Api$path" -Headers @{ Au
 function NewHwid { -join ((1..64) | ForEach-Object { '0123456789abcdef'[(Get-Random -Max 16)] }) }
 function NewUser($prefix, $stamp) {
     $hwid = NewHwid; $email = "$prefix$stamp@test.dev"
-    $r = Send Post '/api/auth/register' @{ email = $email; password = 'Demo12345'; displayName = "$prefix $stamp"; termsVersion = '2026-08-27'; ageConfirmed = $true; hwidHash = $hwid } $null
+    $r = Send Post '/api/auth/register' @{ email = $email; password = 'Demo12345'; displayName = "$prefix $stamp"; termsVersion = (& "$PSScriptRoot\yasal-surum.ps1"); ageConfirmed = $true; hwidHash = $hwid } $null
     Send Post '/api/auth/verify-email' @{ email = $email; code = $r.verificationToken } $null | Out-Null
     $l = Send Post '/api/auth/login' @{ email = $email; password = 'Demo12345'; hwidHash = $hwid } $null
     # Hwid saklanır: rol değişikliği token'a ancak YENİDEN GİRİŞLE yansır, giriş ise

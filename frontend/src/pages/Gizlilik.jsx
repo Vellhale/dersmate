@@ -125,6 +125,16 @@ export default function Gizlilik() {
           <li>
             <strong>Mesajlar:</strong> konuşma silinene kadar.
           </li>
+          <li>
+            <strong>Yedekler.</strong> Sistemi bir arıza ya da veri kaybından geri
+            getirebilmek için düzenli yedek alıyoruz. Bir veri canlı sistemden silindiğinde
+            <strong> o an</strong> silinir, ama daha önce alınmış yedeklerde bir süre daha
+            durur. Sunucudaki yedekler <strong>en fazla 14 gün</strong> saklanır ve süresi
+            dolanlar kendiliğinden silinir. Yedeklerin bir kopyası, sunucunun tümden
+            kaybolduğu durumlara karşı ayrı bir bulut deposunda tutulur. Yedekler
+            <strong> yalnızca</strong> geri yükleme amacıyla kullanılır; içlerinde arama
+            yapmıyor, analiz etmiyor, kimseyle paylaşmıyoruz.
+          </li>
         </Maddeler>
       </Bolum>
 
@@ -136,8 +146,54 @@ export default function Gizlilik() {
           telefon numaran ve cihaz kimliğin <strong>hiçbir kullanıcıya gösterilmez</strong>.
         </p>
         <p>
-          Verini pazarlama amacıyla üçüncü taraflara aktarmıyoruz. Analitik ölçüm,
-          yalnızca sen izin verdiysen ve sayfa kullanım düzeyinde çalışır.
+          Verini pazarlama amacıyla üçüncü taraflara <strong>aktarmıyoruz</strong> ve
+          satmıyoruz.
+        </p>
+
+        <h3 className="mt-6 text-base font-semibold text-slate-900">
+          Hizmet sağlayıcılarımız (veri işleyenler)
+        </h3>
+        <p>
+          Platformu çalıştırabilmek için birkaç dış hizmetten yararlanıyoruz. Bunlar
+          verini <strong>bizim adımıza ve yalnızca aşağıdaki amaçla</strong> işler; kendi
+          amaçları için kullanamazlar.
+        </p>
+        <Maddeler>
+          <li>
+            <strong>Sunucu barındırma.</strong> Platformun sunucusunu ve veritabanını
+            barındıran hizmet sağlayıcı. Hesap verilerinin tamamı burada tutulur.
+          </li>
+          <li>
+            <strong>E-posta gönderimi — Resend.</strong> Doğrulama kodu, parola sıfırlama
+            ve bildirim e-postalarını iletir. Ona giden veri: e-posta adresin ve iletinin
+            içeriği.
+          </li>
+          <li>
+            <strong>Yedek deposu — Google Drive.</strong> Yedeklerin sunucu dışındaki
+            kopyası burada tutulur (bkz. §5).
+          </li>
+          <li>
+            <strong>Analitik — Google Analytics.</strong> <strong>Yalnızca analitik
+            çerezlere izin verirsen</strong> devreye girer ve sayfa kullanım düzeyinde
+            ölçüm yapar. İzin vermezsen hiçbir istek gönderilmez. İznini istediğin zaman
+            geri alabilirsin (bkz. §4).
+          </li>
+        </Maddeler>
+
+        <h3 className="mt-6 text-base font-semibold text-slate-900">
+          Yurt dışına aktarım
+        </h3>
+        <p>
+          Yukarıdaki sağlayıcıların bir kısmı sunucularını <strong>Türkiye dışında</strong>{' '}
+          işletiyor. Bu, KVKK m.9 anlamında yurt dışına aktarım sayılır ve hesap açarken
+          verdiğin onay bunu da kapsar. Aktarılan veri, her sağlayıcı için yalnızca o
+          hizmetin gerektirdiği kadarıdır: e-posta gönderimi için adresin ve iletinin
+          içeriği, yedekleme için yedek dosyalarının kendisi, analitik için —
+          <strong> izin verdiysen</strong> — sayfa kullanım ölçümleri.
+        </p>
+        <p>
+          Bu listeyi değiştirdiğimizde metni günceller ve üstteki tarihi değiştiririz
+          (bkz. §9).
         </p>
       </Bolum>
 
