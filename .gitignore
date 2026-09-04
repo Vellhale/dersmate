@@ -88,3 +88,20 @@ deploy/
 # yani buraya düşen bir PNG bugüne kadar HER SEFERİNDE kazaydı. Zaten izlenenler bu
 # kuraldan etkilenmiyor, temizlikleri ayrı bir karar.
 /*.png
+
+# --- YEDEKLER (2026-09-05) ---
+# ⛔ İÇİNDE KİŞİSEL VERİ VAR: veritabanı dökümü (e-posta adresleri, parola özetleri,
+# HWID'ler) ve kanıt arşivi (öğrencilerin yüklediği kimlik/öğrenci belgeleri).
+#
+# Buraya bir kural gerekiyordu çünkü yedek betiğinin ESKİ varsayılanı depo kökünün
+# İÇİYDİ (`$KOK/yedekler`) ve tools/dagit.sh onu her dağıtımda argümansız çağırıyordu —
+# yani sunucudaki git çalışma ağacına, her yayında, kişisel veri düşüyordu. `git add -A`
+# ya da oto-commit hook'u bunları GitHub'a itebilirdi; aynı kaza dump.rdb ve kök
+# PNG'lerle bu depoda iki kez yaşandı.
+#
+# ⚠️ TEK BAŞINA BU SATIR YETMEZ, hatta yeni bir risk açar: `git clean -xdf` YOKSAYILAN
+# dosyaları da siler, yani yedeği git ağacında bırakıp yoksaymak onu tek komutla
+# silinebilir yapardı. Bu yüzden betiğin varsayılan hedefi de depo DIŞINA taşındı
+# (/var/backups/dersmate). Bu kural artık yalnızca ağ emniyeti: eski kurulumlardan
+# kalan ya da elle `./tools/yedek-al.sh ./yedekler` denen durumlar için.
+yedekler/

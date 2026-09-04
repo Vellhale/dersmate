@@ -162,6 +162,33 @@ services:
     container_name: dersmate-web
     restart: unless-stopped
 
+    # ⛔ YENİLENEN SERTİFİKAYI BELLEĞE ALMANIN TEK YOLU BU DÖNGÜ.
+    #
+    # nginx sertifikayı YALNIZCA açılışta ve reload anında okur; bağlanmış dosya diskte
+    # değişince kendiliğinden almaz. Aşağıdaki certbot servisi 12 saatte bir yeniliyor
+    # ama hiçbir şeye haber vermiyordu ve `restart: unless-stopped` konteyneri kendi
+    # başına yeniden başlatmıyor. Sonuç, ölçülerek bulundu (2026-09-04 denetimi):
+    #
+    #   bitişe 30 gün kala  certbot yeni sertifikayı BAŞARIYLA yazar, log tertemiz
+    #   bitiş günü          nginx hâlâ ESKİSİNİ sunuyor → site, API ve SignalR birden düşer
+    #
+    # ⚠️ `certbot renew --dry-run` BU ARIZAYI YAKALAYAMAZ. Dry-run hiçbir sertifika
+    # yazmaz, dolayısıyla teslim yolunu hiç denemez — yalnızca DOĞRULAMA yolunu sınar.
+    # "Yenilemeyi sınadık, geçti" demek bu yüzden yeterli değildi.
+    #
+    # 6 saat, 30 günlük yenileme penceresinin yanında ihmal edilebilir bir gecikme.
+    #
+    # `exec` ŞART: onsuz kabuk PID 1 olarak kalır, sinyalleri çocuklarına İLETMEZ ve her
+    # `compose stop` nginx'i 10 saniyelik zaman aşımından sonra SIGKILL ile öldürür.
+    # exec ile nginx PID 1 olur, SIGTERM'i doğrudan alır ve düzgün kapanır.
+    #
+    # Alternatif (certbot'a `--deploy-hook "docker exec … nginx -s reload"`) BİLEREK
+    # SEÇİLMEDİ: docker soketini certbot konteynerine bağlamayı gerektirir ve bu, o
+    # konteynere host üzerinde root eşdeğeri yetki vermek demektir.
+    command: >
+      /bin/sh -c "while :; do sleep 6h; nginx -s reload; done &
+      exec nginx -g 'daemon off;'"
+
     depends_on:
       api: { condition: service_healthy }
 

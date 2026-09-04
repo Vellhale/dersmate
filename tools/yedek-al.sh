@@ -5,8 +5,9 @@
 # tools/yedek-al.ps1'in sunucu karşılığı: o betik PowerShell ve geliştirme
 # makinesi için yazıldı; üretim sunucusunda pwsh kurulu olmayabilir.
 #
-#   ./tools/yedek-al.sh                    → depo kökündeki ./yedekler altına
+#   ./tools/yedek-al.sh                    → /var/backups/dersmate altına
 #   ./tools/yedek-al.sh /mnt/yedek         → başka bir dizine
+#   YEDEK_DIZINI=/mnt/yedek ./tools/yedek-al.sh   → ortam değişkeniyle (cron için)
 #
 # CRON (her gece 03:15) — `cd` GEREKMİYOR, betik kendi kökünü buluyor:
 #   15 3 * * * /opt/dersmate/tools/yedek-al.sh >> /var/log/dersmate-yedek.log 2>&1
@@ -35,7 +36,24 @@ set -euo pipefail
 # çalıştırıldığında sessizce boş yedek üretmiyor.
 KOK="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-HEDEF="${1:-$KOK/yedekler}"
+# ⛔ VARSAYILAN HEDEF DEPO KÖKÜNÜN DIŞINDA (2026-09-05'te taşındı).
+#
+# Eskiden `$KOK/yedekler` idi ve tools/dagit.sh bu betiği argümansız çağırıyor —
+# yani sunucudaki git çalışma ağacına, HER DAĞITIMDA, veritabanı dökümü (e-posta
+# adresleri, parola özetleri, HWID'ler) ve öğrenci belgelerini taşıyan tar dosyası
+# düşüyordu. `git add -A` ya da oto-commit hook'u bunları depoya itebilirdi.
+#
+# ⚠️ Yalnızca .gitignore'a eklemek YETMEZDİ, hatta yeni bir risk açardı:
+# `git clean -xdf` yoksayılan dosyaları da siler, yani yedek tek komutla yok
+# olabilirdi. Doğru çözüm yedeği git ağacından TAMAMEN çıkarmak.
+#
+# /var/backups Ubuntu'da zaten var ve sistem yedekleri için ayrılmış standart yer
+# (FHS). Farklı bir yol isteyen ya argüman verir ya YEDEK_DIZINI'ni ayarlar.
+#
+# ⚠️ GÖÇ: eski kurulumlarda yedekler hâlâ /opt/dersmate/yedekler altındadır. Yeni
+# hedefe TAŞI, yoksa saklama temizliği eskileri budamaz ve kişisel veri git ağacında
+# kalmaya devam eder:  mv /opt/dersmate/yedekler/* /var/backups/dersmate/
+HEDEF="${1:-${YEDEK_DIZINI:-/var/backups/dersmate}}"
 COMPOSE="docker compose -f $KOK/docker-compose.prod.yml --env-file $KOK/.env.production"
 DAMGA="$(date +%F-%H%M)"
 
@@ -112,14 +130,40 @@ docker run --rm \
 tar tzf "$HEDEF/kanitlar-$DAMGA.tar.gz" >/dev/null   # arşiv bütün mü
 GIRDI=$(tar tzf "$HEDEF/kanitlar-$DAMGA.tar.gz" | grep -c . || true)
 
-# SIFIR GİRDİ SESSİZ BİR ARIZADIR: yukarıdaki hacim adı bir gün değişirse tar
-# yine başarılı olur, arşiv yine geçerlidir — yalnızca boştur. Uyarı burada.
+# ⛔ SIFIR GİRDİ = ÖLÜMCÜL, UYARI DEĞİL (2026-09-05'te uyarıdan hataya yükseltildi).
+#
+# Hacim adı bir gün değişirse tar yine başarılı olur, arşiv yine geçerlidir —
+# yalnızca boştur. Eskiden burada stderr'e bir UYARI basılıp devam ediliyordu ve
+# çıkış kodu 0 kalıyordu. Zincir ölçüldü ve şöyle işliyordu:
+#
+#   1. gece   → 0 girdilik, "geçerli" bir .tar.gz üretilir, betik 0 ile çıkar
+#   14. gece  → aşağıdaki saklama temizliği son GERÇEK kanıt yedeğini de siler
+#
+# Yani sessiz arıza, 14 günde kalıcı veri kaybına dönüşüyordu. Uyarının kimseye
+# ulaşmaması da bunun bir parçasıydı: önerilen cron satırı `2>&1` ile stderr'i de
+# log dosyasına yönlendiriyor, dolayısıyla cron uyarı postası HİÇ gitmiyor.
+#
+# `exit 1` iki şeyi birden yapıyor: temizlik hiç çalışmıyor (aşağıdaki adım bu
+# satırdan sonra) ve cron gerçekten haber veriyor — sıfırdan farklı çıkış kodu,
+# stderr yönlendirilmiş olsa bile cron'un ilgisini çeker.
+#
+# Veritabanı tarafında bunun karşılığı zaten vardı (1000 baytlık eşik); kanıt
+# tarafında yoktu.
 if [ "$GIRDI" -eq 0 ]; then
-    echo "UYARI: kanıt arşivi BOŞ (0 girdi). '$HACIM' hacmi var mı? 'docker volume ls' ile bak." >&2
+    echo "HATA: kanıt arşivi BOŞ (0 girdi) — yedek GEÇERSİZ." >&2
+    echo "      '$HACIM' hacmi var mı? 'docker volume ls' ile bak." >&2
+    echo "      Saklama temizliği ÇALIŞTIRILMADI: eldeki geçerli yedekler korundu." >&2
+    exit 1
 fi
 echo "      kanitlar-$DAMGA.tar.gz ($(numfmt --to=iec "$(stat -c%s "$HEDEF/kanitlar-$DAMGA.tar.gz")")) — $GIRDI girdi, arşiv bütün"
 
 # ── 3. Eski yedekleri temizle ────────────────────────────────────────────────
+#
+# BURAYA ANCAK İKİ ARŞİV DE DOĞRULANMIŞSA GELİNİR. Yol boyunca üç kapı var ve
+# üçü de silmeden ÖNCE: veritabanı boyut eşiği (1000 bayt), `gzip -t`/`tar tzf`
+# bütünlük sınamaları (`set -e` ile ölümcül) ve yukarıdaki sıfır-girdi kontrolü.
+# Sıra bilinçli: bu turun yedeği geçerli değilse eskisini silmek, elde hiç yedek
+# bırakmamanın en kısa yoludur.
 echo "[3/3] $SAKLAMA_GUN günden eski yedekler siliniyor…"
 
 # AD DESENİNE göre siliniyor, klasöre göre değil. Alternatif (tarihli klasör açıp
@@ -149,13 +193,55 @@ echo "   Geri yükleme adımları bu betiğin sonundaki yorumda."
 #     -c 'DROP DATABASE dersmate;' -c 'CREATE DATABASE dersmate OWNER dersmate;'
 #
 #   # 3. Veritabanı
-#   gunzip -c yedekler/db-2026-08-29-0315.sql.gz | \
+#   #    Kullanıcı adı ve db adı ELLE YAZILMAZ — betiğin kendi kuralı bu
+#   #    (bkz. yukarısı: "elle gömülen isim, sessizce yanlış veritabanını
+#   #    yedeklemenin en kolay yolu"). Aynısı geri yüklemede de geçerli:
+#   YEDEK=/var/backups/dersmate
+#   PGUSER="$(grep -E '^POSTGRES_USER=' .env.production | cut -d= -f2-)"
+#   PGDB="$(grep -E '^POSTGRES_DB=' .env.production | cut -d= -f2-)"
+#
+#   gunzip -c "$YEDEK/db-2026-08-29-0315.sql.gz" | \
 #     docker compose -f docker-compose.prod.yml --env-file .env.production \
-#     exec -T db psql -U dersmate -d dersmate
+#     exec -T db psql -U "$PGUSER" -d "$PGDB"
 #
 #   # 4. Kanıt dosyaları
-#   docker run --rm -v dersmate_proof-storage:/veri -v "$PWD/yedekler":/yedek \
-#     alpine sh -c 'rm -rf /veri/* && tar xzf /yedek/kanitlar-2026-08-29-0315.tar.gz -C /veri'
+#   #
+#   # ⛔ SIRA BİLİNÇLİ: ÖNCE DOĞRULA, SONRA TAŞI, EN SON AÇ. Hiçbir adımda `rm` yok.
+#   #
+#   # Eskiden burada tek satırda `rm -rf /veri/* && tar xzf …` vardı: yıkım önce,
+#   # doğrulama hiç. Boş bir arşivle çalıştırıldığında canlı kanıt deposunu siliyor,
+#   # yerine hiçbir şey koymuyor ve `tar` hatasız 0 ile çıkıyordu — tek komutta
+#   # kalıcı kanıt kaybı. (`/veri/*` glob'u ayrıca gizli dosyaları atlıyordu, yani
+#   # "temiz" geri yükleme aslında temiz değildi.)
+#   #
+#   # Kanıt iki parçalı bir kayıt ve itiraz hakemliğinin tek dayanağı; geri dönüşü
+#   # olmayan bir adımı doğrulamadan atmak burada özellikle pahalı.
+#
+#   ARSIV=kanitlar-2026-08-29-0315.tar.gz
+#
+#   # 4a. Arşiv gerçekten dolu mu? (0 ise DUR — geri yükleyecek bir şey yok)
+#   tar tzf "$YEDEK/$ARSIV" | grep -c .
+#
+#   # 4b. Eskisini SİLME, kenara al — geri dönüş noktası kalsın.
+#   #
+#   # ⚠️ HEDEF HOST'TA OLMAK ZORUNDA. Konteyner içinde bir yola (/veri.eski gibi)
+#   # taşımak dosyaları YOK EDER: orası hacim değil konteynerin kendi katmanı ve
+#   # `--rm` ile birlikte siliniyor. Yani "kenara alma" adımı sessizce silme adımına
+#   # dönüşürdü — kaçınmaya çalıştığımız şeyin ta kendisi.
+#   mkdir -p "$YEDEK/kanit-eski"
+#   docker run --rm -v dersmate_proof-storage:/veri -v "$YEDEK/kanit-eski":/eski \
+#     alpine sh -c 'mv /veri/* /veri/.[!.]* /eski/ 2>/dev/null; true'
+#
+#   # 4c. Şimdi aç
+#   docker run --rm -v dersmate_proof-storage:/veri -v "$YEDEK":/yedek:ro \
+#     alpine tar xzf "/yedek/$ARSIV" -C /veri
+#
+#   # 4d. Sayılar tutuyor mu? 4a'daki girdi sayısıyla karşılaştır
+#   docker run --rm -v dersmate_proof-storage:/veri alpine \
+#     sh -c 'find /veri -type f | wc -l'
+#
+#   # 4e. ANCAK tuttuysa eskiyi at (kişisel veri — açıkta bırakma):
+#   #   rm -rf "$YEDEK/kanit-eski"
 #
 #   # 5. Başlat
 #   docker compose -f docker-compose.prod.yml --env-file .env.production start api web
