@@ -189,8 +189,36 @@ public sealed class CleanupStorageHandler : IRequestHandler<CleanupStorageComman
             .Select(p => p.StorageKey)
             .ToListAsync(ct);
 
+        /*
+          ⛔ ADAY BELGELERİ. Bu sorgu bir dönem YOKTU ve süpürücü öğrencilerin yüklediği
+          kimlik/öğrenci belgelerini sessizce siliyordu (2026-09-05'te bulundu).
+
+          Üç kod yolu da AYNI IProofStorage'a yazıyor (ProfileCommands → avatar,
+          CompleteSession → kanıt, TeacherCandidateDocument → belge) ve LocalProofStorage
+          kökün tamamını `SearchOption.AllDirectories` ile dolaşıyor. Yani belge dosyaları
+          taramaya GİRİYOR ama referans kümesine girmiyordu: OrphanGraceDays'ten (7 gün)
+          eski her belge "artık" sayılıp siliniyordu. İş 24 saatte bir koşuyor.
+
+          Kullanıcıya nasıl görünüyordu: TeacherCandidateProfile satırı DocumentStorageKey'i
+          taşımaya devam ediyor (HasDocument true), moderasyon kuyruğu "belgesi var" diyor
+          (TeacherCandidateReview.cs), ama GetTeacherDocumentHandler dosyayı açamıyor.
+          Yedekten de kurtarılamıyor: 7 günden sonra alınan hiçbir yedekte dosya yok.
+
+          ⚠️ AŞAĞIDAKİ EMNİYET SÜRGÜSÜ BUNU YAKALAMAZ. O sürgü "referans kümesi BOŞ mu"
+          diye bakıyor; küme boş değildi — avatarlar ve kanıtlar içindeydi. Kısmen doğru
+          bir küme, tamamen boş bir kümeden daha tehlikeli: sürgüyü geçiyor.
+
+          Yeni bir dosya türü eklenirse buraya da bir sorgu eklenmeli. Ölçüt basit:
+          `_storage.SaveAsync` çağıran her kod yolunun anahtarı bu kümede olmalı.
+        */
+        var adayBelgeleri = await _db.TeacherCandidateProfiles.AsNoTracking()
+            .Where(p => p.DocumentStorageKey != null)
+            .Select(p => p.DocumentStorageKey!)
+            .ToListAsync(ct);
+
         foreach (var key in avatarlar) referansli.Add(key);
         foreach (var key in kanitlar) referansli.Add(key);
+        foreach (var key in adayBelgeleri) referansli.Add(key);
 
         /*
           EMNİYET SÜRGÜSÜ. Referans kümesinin boş çıkması, "her dosya artık" demek DEĞİL;

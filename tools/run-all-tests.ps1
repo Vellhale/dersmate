@@ -85,6 +85,11 @@ try {
     Betik 'Yönetim puan düzeltmesi' 'e2e-admin-credits.ps1'
     Betik 'Arka plan işleri' 'e2e-jobs.ps1'
 
+    # Artık süpürücüsünün referans kümesi. Ayrı paket, çünkü tek şeyi çok kesin
+    # ölçüyor: depoya yazan HER kod yolunun anahtarı kümede mi. Bir kez eksik kaldı
+    # (aday belgeleri) ve öğrencilerin yüklediği kimlik belgeleri sessizce silindi.
+    Betik 'Artık süpürme (referans kümesi)' 'e2e-artik-supurme.ps1'
+
     # Suistimal frenleri sona yakın: eşzamanlılık paketi gibi İKİ instance ister (B adımı)
     # ve bir eğitmene bağlı ~35 hesap üretir. Tek instance'ta kendini [ATLANDI] ile
     # bildirir, yani özet "eksik koştu" der — sessizce yeşile dönmez.
