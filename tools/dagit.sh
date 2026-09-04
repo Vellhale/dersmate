@@ -27,7 +27,29 @@ if [ ! -f .env.production ]; then
     exit 1
 fi
 
-API_URL="$(grep -E '^API_URL=' .env.production | cut -d= -f2-)"
+# ⛔ EKSİK ANAHTAR = SESSİZ ÖLÜM. Bu satır bir dağıtımı kaybettirdi (2026-09-05).
+#
+# Eskiden `|| true` yoktu. Anahtar dosyada yoksa grep 1 ile çıkıyor, `set -euo pipefail`
+# betiği TAM BURADA öldürüyor ve ekrana HİÇBİR ŞEY yazılmıyor: ne hata, ne satır numarası,
+# ne de hangi anahtarın eksik olduğu.
+#
+# Gerçekte olan şuydu: `./tools/dagit.sh` çalıştırıldı, tek satır çıktı vermedi, prompt
+# geri geldi ve "sorunsuz geçti" sanıldı. Sunucu günlerce eski commit'te kaldı; kimse
+# fark etmedi çünkü ortada bir hata mesajı yoktu.
+#
+# Yukarıdaki kontrol dosyanın VARLIĞINA bakıyordu, İÇERİĞİNE değil — ayarlar elle
+# yazıldığında (tools/uretim-ayarlari-uret.ps1 kullanılmadığında) bu satır eksik kalıyor.
+API_URL="$(grep -E '^API_URL=' .env.production | cut -d= -f2- || true)"
+
+if [ -z "$API_URL" ]; then
+    echo "HATA: .env.production içinde API_URL satırı yok (ya da boş)." >&2
+    echo "      7. adımdaki sağlık kontrolü bu adrese gidiyor; onsuz dağıtımın" >&2
+    echo "      başarılı olup olmadığı doğrulanamaz." >&2
+    echo "" >&2
+    echo "      Ekle:  echo 'API_URL=https://api.<alan-adın>' >> .env.production" >&2
+    echo "      (tools/uretim-ayarlari-uret.ps1 bu satırı üretiyor.)" >&2
+    exit 1
+fi
 
 # ─── 1. Yedek ───────────────────────────────────────────────────────────────
 if [ "$ATLA_YEDEK" != "--atla-yedek" ]; then
