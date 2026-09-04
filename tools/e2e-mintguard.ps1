@@ -187,7 +187,7 @@ function NewUser($prefix) {
     $script:seq++
     $email = "$prefix$([DateTimeOffset]::UtcNow.ToUnixTimeSeconds())m$($script:seq)@test.dev"
     $hwid = (([Guid]::NewGuid().ToString('N')) * 2).Substring(0, 64)
-    $reg = Api POST '/api/auth/register' @{ email = $email; password = 'Parola12345'; displayName = "$prefix K"; termsVersion = '2026-08-27'; ageConfirmed = $true }
+    $reg = Api POST '/api/auth/register' @{ email = $email; password = 'Parola12345'; displayName = "$prefix K"; termsVersion = (& "$PSScriptRoot\yasal-surum.ps1"); ageConfirmed = $true }
     Api POST '/api/auth/verify-email' @{ email = $email; code = $reg.verificationToken } | Out-Null
     $login = Api POST '/api/auth/login' @{ email = $email; password = 'Parola12345'; hwidHash = $hwid }
     return @{ email = $email; userId = $login.userId; token = $login.accessToken }

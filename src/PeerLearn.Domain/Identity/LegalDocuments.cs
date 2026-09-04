@@ -33,5 +33,18 @@ public static class LegalDocuments
     /// şey de tarih ("Son güncelleme: 27 Ağustos 2026"); iki ayrı kimlik tutmak, birinin
     /// diğerinden ayrışması demekti.
     /// </summary>
-    public const string CurrentVersion = "2026-08-27";
+    /// <remarks>
+    /// ⚠️ MOBİL PAKETE GÖMÜLÜ BİR KOPYASI VAR ve o dağıtımla güncellenmez.
+    ///
+    /// Web'de sürüm, arayüz yeniden derlendiği için dağıtımla birlikte hizalanır.
+    /// Mobilde kullanıcının telefonundaki APK eski sabiti taşır; burası artıp o
+    /// güncellenmeyince eşitlik kontrolü düşer ve o kullanıcı KAYIT OLAMAZ.
+    ///
+    /// Sıra: mobil deposundaki src/lib/yasalMetinler.js artır → yeni APK yayınla →
+    /// sonra bu değeri dağıt.
+    ///
+    /// 2026-09-05: gizlilik metnine veri işleyenler, yurt dışına aktarım ve yedek
+    /// saklama süresi eklendi (KVKK m.9/m.10).
+    /// </remarks>
+    public const string CurrentVersion = "2026-09-05";
 }

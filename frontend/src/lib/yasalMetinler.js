@@ -17,8 +17,20 @@
   yalnızca bir denetimde, en kötü anda fark edilirdi.
 */
 
+/*
+  ⚠️ MOBİL UYGULAMA DA BU SÜRÜMÜ GÖNDERİYOR ve onunki PAKETE GÖMÜLÜ.
+
+  Web'de sürüm dağıtımla birlikte anında güncellenir (paket yeniden derlenir). Mobilde
+  öyle değil: kullanıcının telefonundaki APK eski sabiti taşır ve sunucu eşitlik aradığı
+  için o kullanıcı KAYIT OLAMAZ. Yani sürüm artırmak, mobil tarafta bir yayın işidir.
+
+  Sıra: mobil deposundaki src/lib/yasalMetinler.js'i de artır → yeni APK'yı yayınla →
+  sonra sunucuyu dağıt. Ters sırada, güncellemeyi almamış her kullanıcı kayıt ekranında
+  takılır.
+*/
+
 /** Sunucudaki LegalDocuments.CurrentVersion ile BİREBİR aynı olmalı. */
-export const SOZLESME_SURUMU = '2026-08-27'
+export const SOZLESME_SURUMU = '2026-09-05'
 
 /** Kullanıcıya gösterilen biçim. Sürümle aynı günü anlatır. */
-export const SOZLESME_TARIHI = '27 Ağustos 2026'
+export const SOZLESME_TARIHI = '5 Eylül 2026'

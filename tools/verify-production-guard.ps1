@@ -142,7 +142,7 @@ try {
         function YeniKullanici($onek) {
             $hwid = -join ((1..64) | ForEach-Object { '0123456789abcdef'[(Get-Random -Max 16)] })
             $eposta = "$onek$([DateTimeOffset]::UtcNow.ToUnixTimeSeconds())$(Get-Random -Max 999)@test.dev"
-            $govde = @{ email = $eposta; password = 'Demo12345'; displayName = "$onek test"; termsVersion = '2026-08-27'; ageConfirmed = $true; hwidHash = $hwid } | ConvertTo-Json
+            $govde = @{ email = $eposta; password = 'Demo12345'; displayName = "$onek test"; termsVersion = (& "$PSScriptRoot\yasal-surum.ps1"); ageConfirmed = $true; hwidHash = $hwid } | ConvertTo-Json
             $kayit = Invoke-RestMethod -Uri "$B/api/auth/register" -Method Post -ContentType 'application/json' -Body ([Text.Encoding]::UTF8.GetBytes($govde))
             $dog = @{ email = $eposta; code = $kayit.verificationToken } | ConvertTo-Json
             Invoke-RestMethod -Uri "$B/api/auth/verify-email" -Method Post -ContentType 'application/json' -Body ([Text.Encoding]::UTF8.GetBytes($dog)) | Out-Null
