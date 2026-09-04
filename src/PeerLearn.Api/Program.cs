@@ -112,7 +112,16 @@ if (!string.IsNullOrWhiteSpace(redisConnection))
 }
 
 builder.Services
-    .AddControllers()
+    .AddControllers(options =>
+    {
+        /*
+          Her uç /api/… ile birlikte /api/v1/… altında DA yayımlanıyor. Gerekçesi ve
+          neden toplu yol değişimi yerine bu yolun seçildiği: Startup/SurumOnekiKurali.cs.
+          Kısaca: mağazaya çıkan mobil sürüm ilk günden /api/v1 çağırsın, ama web ve 454
+          test referansı tek seferde taşınmak zorunda kalmasın.
+        */
+        options.Conventions.Add(new SurumOnekiKurali());
+    })
     .AddJsonOptions(options =>
     {
         // Enum'lar YANITLARDA zaten string dönüyor ("Offer", "SessionNotHeld").
