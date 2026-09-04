@@ -139,15 +139,30 @@ public static class ProductionGuard
             }
 
             /*
-              Bağlantısız doğrulama e-postası, kullanıcıdan 300 karakterlik bir JWT'yi elle
-              kopyalamasını istemek demek — mobilde pratikte yapılamıyor, yani kayıt akışı
-              teknik olarak çalışsa bile kullanılamaz. Bkz. DogrulamaEpostasi.Govde.
+              ⚠️ BU KAPI DURUYOR AMA GEREKÇESİ DEĞİŞTİ (2026-09-04).
+
+              Eskiden buradaki gerekçe DOĞRULAMA e-postasıydı: gövde bir bağlantı taşıyordu
+              ve PublicWebUrl boşsa kullanıcıdan 300 karakterlik bir JWT'yi elle kopyalaması
+              isteniyordu. 2 Eylül'de doğrulama 6 haneli koda geçti ve o bağımlılık tümüyle
+              kalktı — DogrulamaEpostasi.Govde artık alan adına hiç bakmıyor.
+
+              Kapıyı bu yüzden kaldırmak YANLIŞ olurdu: PublicWebUrl hâlâ kullanılıyor,
+              yalnızca başka bir yerde. ForgotPassword.cs → ParolaSifirlama.Govde(token, url)
+              parola sıfırlamayı hâlâ TIKLANABİLİR BAĞLANTI ile gönderiyor ve ParolaSifirlama
+              boş adreste çıplak token'a düşüyor.
+
+              Yani eski gerekçe yanlış, kapının kendisi doğru. Yanlış gerekçeli bir kapı
+              tehlikelidir: onu okuyan bir sonraki kişi "doğrulama artık kod kullanıyor,
+              bu kontrol bayatlamış" deyip kaldırır ve parola sıfırlamayı sessizce kırar —
+              hem de yalnızca ÜRETİMDE, çünkü geliştirmede adres zaten boş bırakılıyor.
             */
             if (string.IsNullOrWhiteSpace(email.PublicWebUrl))
             {
-                sorunlar.Add("Email:PublicWebUrl boş — doğrulama e-postası tıklanabilir bağlantı " +
-                             "yerine çıplak token taşır ve kullanıcı onu elle kopyalamak zorunda " +
-                             "kalır. Arayüzün genel adresini verin: Email__PublicWebUrl=https://…");
+                sorunlar.Add("Email:PublicWebUrl boş — PAROLA SIFIRLAMA e-postası tıklanabilir " +
+                             "bağlantı yerine çıplak token taşır ve kullanıcı onu elle kopyalamak " +
+                             "zorunda kalır (ParolaSifirlama.Govde). Doğrulama e-postası bu ayara " +
+                             "artık bağlı değil, kod kullanıyor. Arayüzün genel adresini verin: " +
+                             "Email__PublicWebUrl=https://…");
             }
         }
 

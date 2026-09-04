@@ -54,12 +54,29 @@ public sealed class AuthController : ControllerBase
     public sealed record ResendVerificationRequest(string Email);
 
     /// <summary>
-    /// Doğrulama bağlantısını yeniden gönderir. Token'ın ömrü 24 saat; süresi dolan
-    /// kullanıcının başka çıkış yolu yok (giriş kapalı, aynı e-postayla yeniden kayıt kapalı).
+    /// Yeni bir doğrulama KODU gönderir (bağlantı değil — bkz. <see cref="DogrulamaEpostasi"/>).
+    /// Kod 6 hane ve 15 dakika geçerli (tek kaynak:
+    /// <c>PeerLearn.Domain.Identity.EmailVerificationRules</c>); süresi dolan
+    /// kullanıcının başka çıkış yolu yok (giriş kapalı, aynı e-postayla yeniden kayıt kapalı),
+    /// bu uç onun tek kapısı.
     ///
-    /// Yanıt her durumda AYNI: e-posta kayıtlı olsun olmasın 204. Aksi halde uç, bir
-    /// e-postanın bu platformda kayıtlı olup olmadığını herkese söylerdi.
+    /// Yanıt her durumda AYNI: e-posta kayıtlı olsun olmasın <c>200</c> +
+    /// <see cref="ResendVerificationResult"/>. Aksi halde uç, bir e-postanın bu platformda
+    /// kayıtlı olup olmadığını herkese söylerdi. Aynı gerekçeyle 60 saniyelik bekleme
+    /// (<c>ResendCooldownSeconds</c>) SESSİZ uygulanıyor: "biraz bekle" demek de o adresin
+    /// kayıtlı olduğunu söylerdi. Bekleme
+    /// içindeki çağrı da 200 döner ve hiçbir posta gitmez.
+    ///
+    /// ⚠️ <c>VerificationToken</c> alanı YALNIZCA geliştirmede dolu gelir; üretimde boş
+    /// dizedir. İstemciler bunu "kod" diye göstermemeli, yalnızca varsa kutuya yazmalı.
     /// </summary>
+    /// <remarks>
+    /// Bu özet bir dönem gerçeğe uymuyordu ve üçü de mobilin bağlı olduğu sözleşmeyi yanlış
+    /// tarif ediyordu: "204" (oysa 200 + gövde), "bağlantı" (oysa kod), "24 saat" (oysa 15
+    /// dakika). Yanlış sözleşme belgesi, ona uyan istemciyi sessizce kırar — mobil
+    /// <c>verificationToken</c>'ı okuduğu için 204 varsayan bir okuyucu, var olan alanı
+    /// hiç aramazdı.
+    /// </remarks>
     [HttpPost("resend-verification")]
     public async Task<ResendVerificationResult> ResendVerification(
         ResendVerificationRequest request, CancellationToken ct)
