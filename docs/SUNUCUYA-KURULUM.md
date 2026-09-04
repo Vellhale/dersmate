@@ -236,13 +236,13 @@ Sonra **elle** iki şey dene — ikisi de otomatik doğrulanamıyor:
 ```
 
 Betik veritabanı dökümünü ve kanıt dosyalarını **birlikte** alır, ikisinin de bütünlüğünü
-doğrular ve 14 günden eski yedekleri siler (`SAKLANACAK_GUN` ile değiştirilir).
+doğrular ve 14 günden eski yedekleri siler (`SAKLAMA_GUN` ile değiştirilir).
 
 Cron'a bağla — bu adım atlanırsa geriye tek seferlik, elle alınmış ve unutulmuş bir yedek
 kalır:
 
 ```bash
-15 3 * * * cd /opt/dersmate && ./tools/yedek-al.sh >> /var/log/dersmate-yedek.log 2>&1
+15 3 * * * /opt/dersmate/tools/yedek-al.sh >> /var/log/dersmate-yedek.log 2>&1
 ```
 
 ⚠️ **Elle `pg_dump ... | gzip > dosya` YAZMAYIN.** Kabuk, borunun SON komutunun çıkış kodunu
