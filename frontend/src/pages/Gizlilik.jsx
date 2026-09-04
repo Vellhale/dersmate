@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import { Bolum, Maddeler, MetinSayfasi } from './MetinSayfasi'
 import { SOZLESME_TARIHI } from '../lib/yasalMetinler'
 
@@ -11,9 +12,13 @@ import { SOZLESME_TARIHI } from '../lib/yasalMetinler'
     • Kanıt saklama süresi    → Features/Moderation/CleanupStorage.cs (180 gün)
     • Analitik davranışı      → state/AnalyticsGate.jsx (rıza yoksa script hiç yüklenmiyor)
 
-  ⚠️ EKSİK OLDUĞU BİLİNEN NOKTA: hesap silme ucu YOK (12 controller içindeki tek
-  DELETE portföy kaydı silme). Metin bunu gizlemiyor — silme talebinin e-postayla
-  yapılacağını söylüyor. Uç yazıldığında §7 güncellenmeli.
+  ✅ HESAP SİLME ARTIK VAR: POST /api/profile/delete (DeleteAccountHandler). §7 buna
+  göre güncellendi ve ayrıntılı anlatım /hesap-silme sayfasına taşındı — mağaza kaydının
+  istediği, uygulamayı kurmadan açılabilen adres orası.
+
+  ⚠️ Sunucu kaydı ANONİMLEŞTİRİYOR, satırı yok etmiyor: identity.Users'a 23 yabancı
+  anahtar bakıyor ve çoğu karşı tarafa ait (ders geçmişi, puanlar, değerlendirmeler).
+  Metin bunu gizlemiyor; "her şey silinir" demek yanlış olurdu.
 */
 export default function Gizlilik() {
   return (
@@ -147,14 +152,24 @@ export default function Gizlilik() {
             düzenle” ekranından değiştirebilirsin.
           </li>
           <li>
-            <strong>Silme ve erişim:</strong> şu an hesabını kendi başına silebileceğin
-            bir düğme <strong>yok</strong>. Silme ya da verinin bir kopyasını alma
-            talebini{' '}
+            <strong>Silme:</strong> hesabını kendin silebilirsin — Profil sayfasının
+            (mobilde Profil sekmesinin) en altındaki “Hesabımı sil” bağlantısı. Onay için
+            parolan yeniden sorulur ve işlem geri alınamaz. Kimlik bilgilerin siliniyor;
+            ders geçmişi, kazandırdığın puanlar ve değerlendirmeler karşı tarafa ait
+            olduğu için kalıyor ve orada adın yerine “Silinmiş kullanıcı” görünüyor.
+            Adım adım anlatım:{' '}
+            <Link to="/hesap-silme" className="font-medium text-brand-700 hover:underline">
+              hesabını silme
+            </Link>
+            .
+          </li>
+          <li>
+            <strong>Erişim ve hesabına giremiyorsan:</strong> verinin bir kopyasını alma
+            talebini ya da hesabına hiç erişemediğin durumda silme talebini{' '}
             <a href="mailto:iletisim@dersmate.com" className="font-medium text-brand-700 hover:underline">
               iletisim@dersmate.com
             </a>{' '}
-            adresine ilettiğinde işleme alıyoruz. Bu düğmeyi eklemek geliştirme
-            listemizde.
+            adresine ilettiğinde işleme alıyoruz.
           </li>
         </Maddeler>
       </Bolum>

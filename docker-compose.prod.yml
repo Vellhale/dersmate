@@ -134,10 +134,20 @@ services:
       RateLimit__AuthPerMinute: ${RATE_AUTH_PER_MINUTE:-10}
       RateLimit__GlobalPerMinute: ${RATE_GLOBAL_PER_MINUTE:-300}
 
+      # EF Core'un sorgu günlüğü ÜRETİMDE kapalı. appsettings.json'da Logging:Default
+      # Information ve EntityFrameworkCore için ayrı bir seviye yok; o hâliyle çalışan
+      # HER sorgunun metni konteyner günlüğüne düşer. Sonuç: istek başına birden çok
+      # satır, dönüşüm tanımlı olmadığı için hızla dolan disk ve gerçek hata satırlarının
+      # gürültüde kaybolması. Geliştirmede sorgular görünmeye devam ediyor (bu değişken
+      # yalnızca burada tanımlı) — orada sorgu görmek bilinçli bir kolaylık.
+      Logging__LogLevel__Microsoft.EntityFrameworkCore: ${LOG_EF_CORE:-Warning}
+
     volumes:
       # ⛔ KANIT DOSYALARI. Bu hacim olmadan kanıtlar konteynerle birlikte silinir ve
       # itiraz hakemliğinin tek dayanağı kaybolur. Yedeğe DAHİL EDİLMELİ
-      # (tools/yedek-al.ps1 veritabanını alıyor, bu klasörü ayrıca alın).
+      # — tools/yedek-al.sh veritabanını VE bu hacmi birlikte alıyor (bkz.
+      # docs/SUNUCUYA-KURULUM.md §10). İkisini ayrı almak anlamsızdır: kanıt satırı
+      # veritabanında, dosyası bu hacimde durur.
       - proof-storage:/var/lib/dersmate/proof-storage
 
     # Port SADECE loopback'e. nginx aynı ağda olduğu için `api:8080` ile erişiyor;

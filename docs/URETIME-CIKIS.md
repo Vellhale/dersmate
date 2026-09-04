@@ -161,11 +161,21 @@ ayarlarıyla açılışı durduruyor mu; kimlik ucu 429 veriyor mu; sağlık ucu
 
 ## 9. Yedekleme (⛔ İLK KULLANICIDAN ÖNCE)
 
-Depoda yedekleme altyapısı **yoktu**; `tools/yedek-al.ps1` 2026-08-27'de eklendi.
+Depoda yedekleme altyapısı **yoktu**; 2026-08-27'de eklendi. İki betik var ve
+**hangisini çalıştıracağın ortama göre değişir**:
+
+```bash
+# ÜRETİM (Ubuntu + Docker) — cron'a bağlanacak olan budur.
+./tools/yedek-al.sh
+```
 
 ```powershell
+# GELİŞTİRME (Windows, yerel PostgreSQL)
 powershell -ExecutionPolicy Bypass -File .\tools\yedek-al.ps1 -Hedef D:\yedek\dersmate
 ```
+
+⚠️ `yedek-al.ps1` üretim sunucusunda **çalışmaz** — PowerShell betiğidir. Üretim yedeği
+için `yedek-al.sh` kullan (ayrıntı: SUNUCUYA-KURULUM.md §10).
 
 İki şeyi birlikte alır ve **ayrı alınmaları anlamsızdır**:
 

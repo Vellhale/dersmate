@@ -63,7 +63,15 @@ public sealed record TeacherCandidateRowDto(
     int CompletedVolunteerSessions,
 
     decimal AverageRating,
-    int RatingCount);
+    int RatingCount,
+
+    /// <summary>
+    /// Aday öğrenci belgesi yükledi mi. Belge yükleme kanalı 2026-09-01'de açıldı; bu
+    /// alan olmadan panel belgenin varlığını bilemiyor ve görüntüleyiciyi hiç gösteremiyordu.
+    /// Belgenin KENDİSİ ayrı uçtan okunuyor (GET admin/teacher-candidates/{id}/document) —
+    /// listede taşımak, her satırda dosya çekmek olurdu.
+    /// </summary>
+    bool HasDocument);
 
 public sealed class GetTeacherCandidatesHandler
     : IRequestHandler<GetTeacherCandidatesQuery, PagedResult<TeacherCandidateRowDto>>
@@ -186,7 +194,8 @@ public sealed class GetTeacherCandidatesHandler
                 x.VolunteerOffers,
                 x.VolunteerSessions,
                 x.AverageRating,
-                x.RatingCount);
+                x.RatingCount,
+                x.Beyan.DocumentStorageKey != null);
         }).ToList();
 
         return new PagedResult<TeacherCandidateRowDto>(rows, total, page, pageSize);

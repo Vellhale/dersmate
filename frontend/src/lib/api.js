@@ -280,6 +280,18 @@ export const api = {
   reportSession: (sessionId, reason, description) =>
     request(`/api/v1/sessions/${sessionId}/report`, { method: 'POST', body: { reason, description } }),
 
+  /**
+   * İTİRAZ — şikayetten FARKLI ve daha ağır: "ders yapılmadı" ya da "kanıt sahte".
+   *
+   * Ders Disputed'a geçer, puan basımı DONAR ve konu yönetim hakemliğine düşer. Şikayet
+   * dersin akışını hiç etkilemiyor (bkz. reportSession) — ikisi ayrı mekanizma.
+   *
+   * Yalnızca öğrenci ve yalnızca onay bekleyen derste; kural sunucuda
+   * (SessionRules.EnsureCanDispute). Açıklama 10-2000 karakter.
+   */
+  disputeSession: (sessionId, reason, description) =>
+    request(`/api/v1/sessions/${sessionId}/dispute`, { method: 'POST', body: { reason, description } }),
+
   // --- Cüzdan ---
   wallet: () => request('/api/v1/wallet'),
   statement: (page = 1, pageSize = 20) =>
@@ -296,6 +308,19 @@ export const api = {
   },
 
   updateProfile: (payload) => request('/api/v1/profile', { method: 'PUT', body: payload }),
+
+  /**
+   * HESABI SİL — geri alınamaz.
+   *
+   * Sunucu kişisel alanları temizleyip kaydı anonimleştiriyor; ders geçmişi, kazandırılan
+   * puanlar ve değerlendirmeler KARŞI TARAFA ait olduğu için siliniyor değil, orada
+   * "Silinmiş kullanıcı" olarak görünüyor (bkz. DeleteAccountHandler).
+   *
+   * VERB POST, DELETE DEĞİL: parola gövdede gidiyor ve gövdeli DELETE isteklerini bazı
+   * vekiller kırpıyor — istek sunucuya parolasız ulaşıp 401'e düşerdi.
+   */
+  deleteAccount: (password) =>
+    request('/api/v1/profile/delete', { method: 'POST', body: { password } }),
   uploadAvatar: (formData) => request('/api/v1/profile/avatar', { method: 'POST', formData }),
   /**
    * Öğrenci belgesi (PDF/görsel, en fazla 10 MB). Yeni belge, önceki doğrulama/ret
@@ -452,6 +477,28 @@ export const api = {
   /** Yönetici, katılımcı olmadığı derslerin kanıtını kendi ucundan görür. */
   adminProofContentUrl: (sessionId, proofId) =>
     fetchProofBlob(`/api/v1/admin/sessions/${sessionId}/proofs/${proofId}/content`),
+
+  /**
+   * Adayın öğrenci belgesi (hakem gözüyle). Belge yükleme kanalı 2026-09-01'de açıldı.
+   *
+   * fetchProofBlob'dan FARKI içerik türünü de döndürmesi: belge PDF de olabilir görsel
+   * de (sunucu ikisini de kabul ediyor) ve panel hangisini nasıl göstereceğini bilmek
+   * zorunda — <img> bir PDF'i çizemez.
+   *
+   * Çağıran, işi bitince URL.revokeObjectURL ile serbest bırakmalıdır.
+   */
+  adminTeacherDocument: async (profileId) => {
+    const yanit = await fetch(`${API_BASE}/api/v1/admin/teacher-candidates/${profileId}/document`, {
+      headers: { Authorization: `Bearer ${getToken()}` },
+    })
+
+    if (!yanit.ok) {
+      throw new ApiError('Belge yüklenemedi.', 'DOCUMENT_LOAD_FAILED', yanit.status)
+    }
+
+    const blob = await yanit.blob()
+    return { url: URL.createObjectURL(blob), contentType: blob.type }
+  },
 
   resolveDispute: (disputeId, resolution, note) =>
     request(`/api/v1/admin/disputes/${disputeId}/resolve`, { method: 'POST', body: { resolution, note } }),

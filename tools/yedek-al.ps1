@@ -63,16 +63,44 @@ if ($Konteyner) {
     if ($bulunan -eq $Konteyner) { $konteynerVar = $true }
 }
 
+# On kontrol: pg_dump PATH'te mi? Yoksa hata "terim taninmiyor" olur ve sebebi
+# soylemez. Docker yolunda gerekmiyor -- dokumu konteynerin icindeki pg_dump aliyor.
+if (-not $konteynerVar -and -not (Get-Command pg_dump -ErrorAction SilentlyContinue)) {
+    throw ("pg_dump bulunamadi. PostgreSQL istemci araclari kurulu degil ya da PATH'te yok. " +
+           "Windows'ta genellikle 'C:\Program Files\PostgreSQL\<surum>in' altindadir; " +
+           "o klasoru PATH'e ekleyip yeni bir kabuk acin.")
+}
+
+# DOKUM PowerShell BORUSUNDAN GECMEZ -- pg_dump dosyayi kendisi yazar (-f).
+#
+# Borudan gecirmek (pg_dump | Out-File) dokumu iki kez donusturur: PowerShell, yerel
+# komutun cikti baytlarini [Console]::OutputEncoding ile METNE cevirir, Out-File onu
+# yeniden kodlar. Konsol kod sayfasi UTF-8 ise sonuc dogru cikar; Turkce bir Windows'ta
+# sik gorulen CP857/CP1254 ise TUM Turkce karakterler bozulur. Olculdu:
+#
+#   kod sayfasi 65001 -> "Yarim Aci Formulle" dogru  (asil metin: Yarım Açı Formülle)
+#   kod sayfasi 857   -> "Yar─▒m A├ğ─▒ Form├╝lle"
+#   kod sayfasi 1254  -> "YarÄ±m AÃ§Ä± FormÃ¼lle"
+#
+# Bu, yedeklerin en tehlikeli bozulma bicimi: dosya olusur, boyut kontrolunu gecer,
+# geri yukleme HATASIZ tamamlanir ve veritabanindaki her Turkce isim bozuk gelir.
+# -f ile pg_dump baytlari dogrudan diske yazar; arada donusum yoktur.
 if ($konteynerVar) {
     Write-Host "[1/2] Veritabani dokumu (docker: $Konteyner)..."
-    docker exec -e PGPASSWORD=$Parola $Konteyner pg_dump -U $Kullanici -d $Veritabani --clean --if-exists |
-        Out-File -FilePath $dokum -Encoding utf8
+    # Konteyner icine yazip disari kopyalaniyor: `docker exec ... > dosya` da ayni
+    # boru sorununu yasardi.
+    $gecici = "/tmp/dersmate-dokum.sql"
+    docker exec -e PGPASSWORD=$Parola $Konteyner `
+        pg_dump -U $Kullanici -d $Veritabani --clean --if-exists -f $gecici
+    if ($LASTEXITCODE -ne 0) { throw "pg_dump basarisiz (cikis kodu $LASTEXITCODE). Yedek EKSIK, kullanmayin." }
+    docker cp "${Konteyner}:${gecici}" $dokum
+    if ($LASTEXITCODE -ne 0) { throw "docker cp basarisiz; dokum konteynerden alinamadi." }
+    docker exec $Konteyner rm -f $gecici | Out-Null
 }
 else {
     Write-Host "[1/2] Veritabani dokumu (yerel pg_dump: $Sunucu`:$Port)..."
     $env:PGPASSWORD = $Parola
-    pg_dump -h $Sunucu -p $Port -U $Kullanici -d $Veritabani --clean --if-exists |
-        Out-File -FilePath $dokum -Encoding utf8
+    pg_dump -h $Sunucu -p $Port -U $Kullanici -d $Veritabani --clean --if-exists -f $dokum
     Remove-Item Env:\PGPASSWORD -ErrorAction SilentlyContinue
 }
 
@@ -84,6 +112,12 @@ $dokumBoyut = (Get-Item $dokum).Length
 if ($dokumBoyut -lt 1024) {
     # Bos bir dokum, basarili gorunen en tehlikeli sonuctur: dosya var, icinde veri yok.
     throw "Dokum sadece $dokumBoyut bayt. Baglanti ya da yetki sorunu olmali; yedek gecersiz."
+}
+# Bozulma kontrolu: gecerli UTF-8 olmayan bayt dizisi, cozumlemede U+FFFD birakir.
+# Boyut kontrolu bunu YAKALAMAZ -- bozuk dokum de dolu ve "saglikli" gorunur.
+$icerik = [System.Text.Encoding]::UTF8.GetString([System.IO.File]::ReadAllBytes($dokum))
+if ($icerik.Contains([char]0xFFFD)) {
+    throw "Dokum gecerli UTF-8 degil (U+FFFD bulundu). Kodlama bozulmus; yedek gecersiz."
 }
 Write-Host ("      tamam - {0:N0} bayt" -f $dokumBoyut)
 

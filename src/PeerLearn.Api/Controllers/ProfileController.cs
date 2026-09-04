@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PeerLearn.Application.Abstractions;
 using PeerLearn.Application.Features.Community;
+using PeerLearn.Application.Features.Identity;
 using PeerLearn.Application.Features.Moderation;
 using PeerLearn.Domain.Moderation;
 using PeerLearn.Domain.Community;
@@ -20,6 +21,97 @@ public sealed class ProfileController : ControllerBase
     private readonly IMediator _mediator;
 
     public ProfileController(IMediator mediator) => _mediator = mediator;
+
+    public sealed record DeleteAccountRequest(string Password);
+
+    /// <summary>
+    /// Hesabı sil (Google Play'in hesap silme politikası + KVKK/GDPR silme hakkı).
+    ///
+    /// VERB NEDEN DELETE DEĞİL: parola gövdede taşınıyor ve gövdeli DELETE isteklerini
+    /// bazı vekiller/istemciler kırpıyor — istek sunucuya parolasız ulaşıp 401'e düşerdi.
+    /// Teşhisi zor, sebebi görünmez bir hata sınıfı; POST bu riski hiç doğurmuyor.
+    ///
+    /// Kişisel verinin ne olduğu ve neyin KALDIĞI DeleteAccountHandler'da yazılı.
+    /// </summary>
+    [HttpPost("profile/delete")]
+    public async Task<IActionResult> DeleteAccount(
+        DeleteAccountRequest request,
+        [FromServices] IProofStorage storage,
+        [FromServices] ILogger<ProfileController> logger,
+        CancellationToken ct)
+    {
+        var sonuc = await _mediator.Send(new DeleteAccountCommand(User.GetUserId(), request.Password), ct);
+
+        /*
+          FOTOĞRAF COMMIT'TEN SONRA SİLİNİYOR ve hatası YUTULUYOR.
+
+          Sıra bilinçli: önce satırdaki referans temizlenip kaydedildi, dosya ancak ondan
+          sonra siliniyor. Tersi olsaydı — dosyayı silip sonra kayıt başarısız olsaydı —
+          profil var olmayan bir dosyaya işaret ederdi (projedeki avatar güncelleme notu
+          da aynı gerekçeyle eski dosyaya dokunmuyor).
+
+          Silme başarısız olursa istek BAŞARISIZ SAYILMAZ: hesap zaten silindi ve kullanıcıya
+          "silinemedi" demek yanlış olurdu. Dosya artık hiçbir satırdan referanslı olmadığı
+          için depo bakım işi (CleanupStorage faz 2) onu artık dosya olarak topluyor.
+        */
+        if (!string.IsNullOrEmpty(sonuc.AvatarStorageKey))
+        {
+            try
+            {
+                await storage.DeleteAsync(sonuc.AvatarStorageKey, ct);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Silinen hesabın profil fotoğrafı kaldırılamadı: {Key}. " +
+                                    "Depo bakımı artık dosya olarak toplayacak.", sonuc.AvatarStorageKey);
+            }
+        }
+
+        return NoContent();
+    }
+
+    /// <summary>
+    /// Öğrenci belgesi (PDF/görsel, en fazla 10 MB). Yeni belge, önceki doğrulama/ret
+    /// kararını sıfırlar ve beyanı yeniden kuyruğa sokar.
+    ///
+    /// ⚠️ BU UÇ AÇILDI ama özellik HENÜZ TAM DEĞİL: yönetim ekranı belgeyi gösteren bir
+    /// görüntüleyici taşımıyor ve operatöre hâlâ "sistemde belge yükleme kanalı yok"
+    /// diyor. Belge yüklenebilir ve GET ile okunabilir; hakem arayüzü bağlanana kadar
+    /// doğrulama pratikte sistem dışı kanıta dayanmaya devam eder.
+    ///
+    /// Boyut/tür doğrulaması ve karar sıfırlama UploadTeacherDocumentHandler'da.
+    /// Controller sınırı handler'ın 10 MB'ının bir tık üstünde: aşan istek, gövde
+    /// okunmadan 413 yerine handler'ın anlaşılır hatasına düşsün.
+    /// </summary>
+    [HttpPost("profile/teacher-candidate/document")]
+    [RequestSizeLimit(11 * 1024 * 1024)]
+    public async Task<IActionResult> UploadTeacherDocument(IFormFile document, CancellationToken ct)
+    {
+        if (document is null || document.Length == 0)
+        {
+            return BadRequest(new { code = "VALIDATION_FAILED", detail = "Belge seçilmedi." });
+        }
+
+        await using var stream = document.OpenReadStream();
+        await _mediator.Send(new UploadTeacherDocumentCommand(
+            User.GetUserId(), stream, document.ContentType, document.Length), ct);
+
+        return NoContent();
+    }
+
+    /// <summary>
+    /// Kendi yüklediğin öğrenci belgesini geri okur. Yetki kontrolü
+    /// GetTeacherDocumentHandler'da: moderatör değilsen yalnızca KENDİ beyanının
+    /// belgesine erişebilirsin (aksi 403).
+    /// </summary>
+    [HttpGet("profile/teacher-candidate/{profileId:guid}/document")]
+    public async Task<IActionResult> GetTeacherDocument(Guid profileId, CancellationToken ct)
+    {
+        var belge = await _mediator.Send(
+            new GetTeacherDocumentQuery(profileId, User.GetUserId(), AsModerator: false), ct);
+
+        return File(belge.Content, belge.ContentType);
+    }
 
     public sealed record UpdateProfileRequest(string DisplayName, string? Bio, string? University, string? Department);
 

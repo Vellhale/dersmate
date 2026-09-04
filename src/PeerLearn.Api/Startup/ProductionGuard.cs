@@ -23,6 +23,11 @@ public static class ProductionGuard
     private const string DevDbPasswordMarker = "PeerLearnDev2026";
     private const int MinJwtKeyLength = 32;
 
+    /// <summary>Kod içi güvenli varsayılanlar (RateLimitOptions). Üretimde bunların
+    /// ÜSTÜNE çıkan bir değer, appsettings.json'daki geliştirme ayarının sızdığını gösterir.</summary>
+    private const int GuvenliAuthPerMinute = 10;
+    private const int GuvenliGlobalPerMinute = 300;
+
     public static void EnsureSafeForProduction(IConfiguration configuration, IHostEnvironment environment)
     {
         if (environment.IsDevelopment())
@@ -144,6 +149,37 @@ public static class ProductionGuard
                              "yerine çıplak token taşır ve kullanıcı onu elle kopyalamak zorunda " +
                              "kalır. Arayüzün genel adresini verin: Email__PublicWebUrl=https://…");
             }
+        }
+
+        /*
+          HIZ SINIRI — bu kapının denetlemediği son ayardı ve "varsayılanlar güvenlidir"
+          sanısı burada YANLIŞ.
+
+          RateLimitOptions'ta kod içi varsayılanlar 10 / 300. Ama appsettings.json üretimde
+          de taban yapılandırma olarak yüklenir ve içindeki GELİŞTİRME değerleri
+          (AuthPerMinute: 2000, GlobalPerMinute: 20000 — uçtan uca testler saniyeler içinde
+          yüzlerce istek attığı için bilerek yükseltilmiş) o varsayılanları EZER. Depoda
+          appsettings.Production.json yok, yani ortam değişkeni verilmezse giriş ucu
+          üretimde dakikada 2000 parola denemesine açık kalır.
+
+          Belge bunu yazıyor (URETIME-CIKIS.md §1) ama belgedeki bir uyarı, atlanabilir bir
+          adımdır; buradaki kontrol atlanamaz.
+        */
+        var rateLimit = configuration.GetSection(RateLimitOptions.SectionName).Get<RateLimitOptions>()
+                        ?? new RateLimitOptions();
+
+        if (rateLimit.AuthPerMinute > GuvenliAuthPerMinute)
+        {
+            sorunlar.Add($"RateLimit:AuthPerMinute = {rateLimit.AuthPerMinute} — appsettings.json'daki " +
+                         $"geliştirme değeri üretime sızmış. Kayıt/giriş ucu IP başına dakikada bu kadar " +
+                         $"denemeye açık kalır (kaba kuvvet). Ortam değişkeni: " +
+                         $"RateLimit__AuthPerMinute={GuvenliAuthPerMinute}");
+        }
+
+        if (rateLimit.GlobalPerMinute > GuvenliGlobalPerMinute)
+        {
+            sorunlar.Add($"RateLimit:GlobalPerMinute = {rateLimit.GlobalPerMinute} — geliştirme değeri " +
+                         $"üretime sızmış. Ortam değişkeni: RateLimit__GlobalPerMinute={GuvenliGlobalPerMinute}");
         }
 
         if (sorunlar.Count == 0)

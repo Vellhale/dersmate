@@ -92,6 +92,27 @@ public sealed class SessionsController : ControllerBase
 
     public sealed record DisputeRequest(DisputeReason Reason, string Description);
 
+    /// <summary>
+    /// İtiraz (öğrenci): "ders yapılmadı" / "sahte kanıt". Ders Disputed'a geçer, kredi
+    /// transferi DONAR ve konu yönetim hakemliğine düşer.
+    ///
+    /// GERİ EKLENDİ (bilerek). Aşağıdaki nottaki gibi bu uç şikayet modeline geçilirken
+    /// kaldırılmıştı, ama kaldırma YARIM kalmış: yönetim tarafı olduğu gibi duruyor
+    /// (AdminController → GetOpenDisputes + ResolveDispute), OpenDisputeHandler duruyor,
+    /// iki istemci de Disputed durumunu çiziyor. Eksik olan tek şey oluşturma yoluydu ve
+    /// sonucu şuydu: itiraz kuyruğu HİÇ dolmuyor, kanıt inceleme ekranı erişilemez kalıyor
+    /// ve öğrencinin "sahte kanıt yüklendi" diyip kredi basımını durdurmasının bir yolu
+    /// bulunmuyor. Şikayet bunun yerine geçemez — CreateReportCommand'ın kendi notu da
+    /// "şikayet puan basımını DURDURMAZ" diyor.
+    ///
+    /// Yetki, durum ve süre kuralları SessionRules.EnsureCanDispute'ta; cüzdan kilidi ve
+    /// transaction OpenDisputeHandler'da. Bu aksiyon yalnızca kapıyı açıyor.
+    /// </summary>
+    [HttpPost("{sessionId:guid}/dispute")]
+    public async Task<ActionResult<Guid>> Dispute(Guid sessionId, DisputeRequest request, CancellationToken ct)
+        => Ok(await _mediator.Send(new OpenDisputeCommand(
+            sessionId, User.GetUserId(), request.Reason, request.Description), ct));
+
     /// <summary>İtiraz (öğrenci): "ders yapılmadı" / "sahte kanıt". Transfer donar, konu admine düşer.</summary>
     public sealed record ReportRequest(ReportReason Reason, string Description);
 

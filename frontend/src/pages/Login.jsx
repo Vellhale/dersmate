@@ -294,6 +294,12 @@ export function AuthShell({ title, subtitle, children }) {
             <Link to="/gizlilik" className="text-xs text-slate-500 underline hover:text-slate-700">
               Gizlilik
             </Link>
+            {/* Silme sayfası ÇIKIŞ YAPMIŞ kullanıcıya da görünmeli: mağaza kaydındaki
+                adres, hesabına giremeyen birinin de bulabileceği bir yerde olmalı —
+                oturum açmadan ulaşılamayan bir bağlantı o işi görmez. */}
+            <Link to="/hesap-silme" className="text-xs text-slate-500 underline hover:text-slate-700">
+              Hesap silme
+            </Link>
           </div>
         </div>
       </main>
