@@ -1,7 +1,9 @@
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
+using PeerLearn.Api.Startup;
 using PeerLearn.Application.Abstractions;
 using PeerLearn.Application.Features.Community;
 using PeerLearn.Application.Features.Identity;
@@ -33,6 +35,19 @@ public sealed class ProfileController : ControllerBase
     ///
     /// Kişisel verinin ne olduğu ve neyin KALDIĞI DeleteAccountHandler'da yazılı.
     /// </summary>
+    /// <remarks>
+    /// ⛔ SIKI HIZ SINIRI — parola soran İKİNCİ uç burası (2026-09-05'te eklendi).
+    ///
+    /// AuthController sınıf düzeyinde AuthPolicy taşıyor (IP başına 10/dk) çünkü parola
+    /// denemesi hep oraya gelir. Ama parola SORAN tek uç orası değil: burası da gövdede
+    /// parola alıyor ve bu controller'da hiç politika yoktu, yani genel sınırın
+    /// (kullanıcı/IP başına 300/dk) altındaydı — parola denemesi için otuz kat gevşek.
+    ///
+    /// Saldırı senaryosu dar ama gerçek: geçerli bir token ele geçiren biri (çalınmış
+    /// cihaz, ödünç alınmış oturum) kurbanın parolasını buradan deneyebilir ve başarırsa
+    /// hesabı GERİ ALINAMAZ biçimde siler. Sıkı sınır o pencereyi kapatıyor.
+    /// </remarks>
+    [EnableRateLimiting(RateLimiting.AuthPolicy)]
     [HttpPost("profile/delete")]
     public async Task<IActionResult> DeleteAccount(
         DeleteAccountRequest request,

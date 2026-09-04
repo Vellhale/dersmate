@@ -1,5 +1,6 @@
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.RateLimiting;
+using PeerLearn.Api.Controllers;   // GetUserIdOrNull — genel sınırın bölüm anahtarı
 using PeerLearn.Application.Options;
 
 namespace PeerLearn.Api.Startup;
@@ -72,9 +73,36 @@ public static class RateLimiting
             });
 
             /*
-              Genel sınır IP başına bölümlenir. Kimlik doğrulanmış kullanıcıyı anahtar
-              yapmak daha adil olurdu ama saldırı zaten giriş YAPMADAN geliyor; kullanıcıya
-              göre bölümlemek korunması gereken yüzeyi korumasız bırakırdı.
+              ⛔ GENEL SINIR KİMLİK DOĞRULANMIŞSA KULLANICI BAŞINA (2026-09-05).
+
+              Eskiden burada da anahtar IP idi ve buradaki yorum "saldırı zaten giriş
+              YAPMADAN geliyor" diyerek bunu savunuyordu. O gerekçe KİMLİK POLİTİKASI için
+              doğru (aşağıda değil, yukarıda; orası IP'de KALIYOR) ama genel sınır için
+              yanlıştı: genel sınırın yönettiği trafik neredeyse tamamen GİRİŞ YAPMIŞ
+              kullanıcıların olağan uygulama kullanımı.
+
+              CGNAT bunu bir arızaya çeviriyordu. Mobil operatörler binlerce aboneyi tek
+              genel IP'nin arkasına koyuyor. Maliyet karşılaştırması:
+
+                giriş           kullanıcı başına ~2 saatte BİR istek
+                uygulama açmak  kullanıcı hiçbir şeye dokunmadan ≥4 istek
+                gezinme         dakikada 10-20 istek
+
+              Yani tek bir CGNAT IP'sinde 300/dk tavanı ~15-30 EŞZAMANLI kullanıcıda
+              doluyor; kimlik tavanı ise aynı kümede dakikada 0,2 girişe denk geliyor —
+              iki mertebe uzak. Mağazaya çıkıldığında ilk 429 dalgası giriş ekranından
+              DEĞİL, uygulama içi gezinmeden gelecekti ve teşhisi çok zor olurdu:
+              kullanıcıların bir kısmı çalışıyor, bir kısmı çalışmıyor, sunucu sağlıklı.
+
+              GÜVENLİK GERİLEMESİ YOK. Kendi kovasını almanın bedeli GEÇERLİ BİR JWT ve
+              onu almak için kayıt + giriş gerekiyor; o yol da yukarıdaki kimlik
+              politikasıyla IP başına 10/dk'ya kilitli. Kimliksiz her istek (token yok,
+              süresi dolmuş, imza tutmuyor) eskisi gibi IP kovasına düşüyor.
+
+              ⚠️ BU, Program.cs'te UseAuthentication'ın UseRateLimiter'dan ÖNCE
+              çağrılmasına bağlı. Sıra ters olursa HttpContext.User burada boştur, her
+              istek IP kovasına düşer ve düzeltme SESSİZCE etkisiz kalır — hata vermez,
+              yalnızca eski davranışa döner.
 
               Sağlık uçları sınır DIŞI: yük dengeleyicinin yoklaması, kullanıcı trafiğiyle
               aynı kovaya girip 429 almamalı — aksi halde yoğunlukta sağlıklı instance
@@ -87,7 +115,12 @@ public static class RateLimiting
                     return RateLimitPartition.GetNoLimiter("health");
                 }
 
-                var key = context.Connection.RemoteIpAddress?.ToString() ?? "bilinmeyen";
+                // Önek ŞART: kullanıcı kimliği ile IP aynı anahtar uzayına düşerse
+                // (teoride) çakışabilirdi. Ayrıca günlükte hangi kovanın dolduğu okunur.
+                var userId = context.User.GetUserIdOrNull();
+                var key = userId is not null
+                    ? $"u:{userId}"
+                    : $"ip:{context.Connection.RemoteIpAddress?.ToString() ?? "bilinmeyen"}";
 
                 return RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions
                 {
