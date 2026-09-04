@@ -447,6 +447,7 @@ export default function Sessions() {
             setDialog({ type: 'review', session })
           }}
           onReport={() => setDialog({ type: 'report', session: dialog.session })}
+          onDispute={() => setDialog({ type: 'dispute', session: dialog.session })}
         />
       )}
 
@@ -468,6 +469,20 @@ export default function Sessions() {
           session={dialog.session}
           onClose={() => setDialog(null)}
           onDone={() => refresh('Şikayetin yönetime iletildi. Karşı tarafa bildirilmez.')}
+        />
+      )}
+
+      {dialog?.type === 'dispute' && (
+        <DisputeModal
+          key={dialog.session.sessionId}
+          session={dialog.session}
+          onClose={() => setDialog(null)}
+          onDone={() =>
+            refresh(
+              'İtirazın yönetime iletildi. Karar verilene kadar puan yazılmayacak; ' +
+                'sonucu bu ekrandan takip edebilirsin.',
+            )
+          }
         />
       )}
 
@@ -1145,7 +1160,7 @@ function SessionCard({ session, onAction, past = false }) {
  * ama onay hâlâ şart — basımın tek meşru tetikleyicisi dersin gerçekten yapılmış olması.)
  * Kanıt görseli Authorization başlığı gerektirdiği için blob olarak indirilip object URL'e çevrilir.
  */
-function ApproveModal({ session, onClose, onApproved, onReport }) {
+function ApproveModal({ session, onClose, onApproved, onReport, onDispute }) {
   const proofs = useAsync(() => api.sessionProofs(session.sessionId), [session.sessionId])
   const [imageUrl, setImageUrl] = useState(null)
   const [imageError, setImageError] = useState(null)
@@ -1271,15 +1286,32 @@ function ApproveModal({ session, onClose, onApproved, onReport }) {
 
         <ErrorBox error={error} />
 
+        {/*
+          ŞİKAYET DÜĞMEDEN BAĞLANTIYA İNDİ. Düğmeler dersin KADERİNİ belirleyenler:
+          onayla ya da itiraz et. Şikayet dersi etkilemiyor (kişi hakkında bildirim);
+          üçünü eşit ağırlıkta sunmak "hangisi puan basımını durdurur" sorusunu
+          belirsiz bırakıyordu.
+        */}
+        <div className="border-t border-slate-100 pt-3 text-center">
+          <button
+            type="button"
+            disabled={onaylaniyor}
+            onClick={onReport}
+            className="text-sm text-slate-500 underline underline-offset-2 hover:text-slate-700
+                       disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Ders değil, kişi hakkında şikayetim var
+          </button>
+        </div>
+
         <div className="flex flex-wrap justify-end gap-2">
-          {/* Onay uçarken diğer iki düğme de kapalı: kullanıcı basım devam ederken
-              şikayet ekranına geçerse aynı ders hem onaylanmış hem şikayet edilmiş
-              olur ve hangi sonucun geçerli olduğu tıklama sırasına kalırdı. */}
+          {/* Onay uçarken diğer düğmeler de kapalı: basım devam ederken itiraza geçmek,
+              hangi sonucun geçerli olduğunu tıklama sırasına bırakırdı. */}
           <Button variant="secondary" disabled={onaylaniyor} onClick={onClose}>
             Sonra karar ver
           </Button>
-          <Button variant="danger" disabled={onaylaniyor} onClick={onReport}>
-            Şikayet et
+          <Button variant="danger" disabled={onaylaniyor} onClick={onDispute}>
+            İtiraz et
           </Button>
           <Button variant="success" loading={onaylaniyor} disabled={onaylaniyor} onClick={approve}>
             Onayla ve puanı yaz
@@ -1715,6 +1747,92 @@ function CompleteModal({ session, onClose, onDone }) {
 
   Sıra bilinçli: en sık şikayet edilen ilk sırada, "Diğer" en sonda.
 */
+/*
+  İTİRAZ — şikayetten AYRI bir mekanizma ve arayüzün bunu net söylemesi gerekiyor.
+
+  Şikayet kişi hakkında; ders akmaya devam eder, puan basılır. İtiraz ise dersin
+  KENDİSİNE dair: "yapılmadı" ya da "kanıt sahte". Ders Disputed'a geçer, puan basımı
+  DONAR ve konu yönetim hakemliğine düşer; öğrenci onay yolunu da kapatmış olur.
+
+  Sebep listesi DisputeReason enum'undan ve ders şikayeti listesiyle aynı beş değeri
+  taşıyor — ama AYRI yazılıyor: iki enum bağımsız, birinin değişmesi diğerinin formunu
+  sessizce bozmamalı.
+*/
+const ITIRAZ_SEBEPLERI = ['SessionNotHeld', 'FakeProof', 'DurationMismatch', 'Abuse', 'Other']
+
+function DisputeModal({ session, onClose, onDone }) {
+  const [reason, setReason] = useState('SessionNotHeld')
+  const [description, setDescription] = useState('')
+  const [error, setError] = useState(null)
+  const [gonderiliyor, setGonderiliyor] = useState(false)
+
+  async function submit(e) {
+    e.preventDefault()
+    // Çift gönderim: ikincisi DISPUTE_ALREADY_OPEN alır ve kullanıcı, itiraz ASLINDA
+    // açılmışken hata görürdü.
+    if (gonderiliyor || description.trim().length < 10) return
+    setGonderiliyor(true)
+    setError(null)
+    try {
+      await api.disputeSession(session.sessionId, reason, description.trim())
+      onDone()
+    } catch (err) {
+      setError(err)
+      setGonderiliyor(false)
+    }
+  }
+
+  return (
+    <Modal open onClose={gonderiliyor ? () => {} : onClose} title="Bu derse itiraz et">
+      <form onSubmit={submit} className="space-y-4">
+        <Notice tone="warning">
+          İtiraz, dersi <strong>yönetim hakemliğine</strong> taşır: {session.otherDisplayName}{' '}
+          kişisine puan <strong>yazılmaz</strong> ve karar verilene kadar donar. Bu dersi
+          artık onaylayamazsın. Yalnızca ders gerçekten yapılmadıysa ya da kanıt bu derse
+          ait değilse itiraz et.
+        </Notice>
+
+        <Field label="Sebep">
+          <select className="input" value={reason} onChange={(e) => setReason(e.target.value)}>
+            {ITIRAZ_SEBEPLERI.map((value) => (
+              <option key={value} value={value}>
+                {REPORT_REASON_LABELS[value]}
+              </option>
+            ))}
+          </select>
+        </Field>
+
+        <Field label="Ne oldu?" hint="En az 10 karakter. Hakem yalnızca bunu ve kanıtı görecek.">
+          <textarea
+            className="input h-28 resize-none"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            required
+            minLength={10}
+            maxLength={2000}
+          />
+        </Field>
+
+        <ErrorBox error={error} />
+
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="secondary" disabled={gonderiliyor} onClick={onClose}>
+            Vazgeç
+          </Button>
+          <Button
+            type="submit"
+            variant="danger"
+            loading={gonderiliyor}
+            disabled={gonderiliyor || description.trim().length < 10}
+          >
+            İtirazı gönder
+          </Button>
+        </div>
+      </form>
+    </Modal>
+  )
+}
+
 const DERS_SIKAYET_SEBEPLERI = ['SessionNotHeld', 'FakeProof', 'DurationMismatch', 'Abuse', 'Other']
 
 function ReportModal({ session, onClose, onDone }) {

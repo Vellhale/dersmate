@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using PeerLearn.Api.Authorization;
 using PeerLearn.Application.Abstractions;
 using PeerLearn.Application.Common;
+using PeerLearn.Application.Features.Community;
 using PeerLearn.Application.Features.Economy;
 using PeerLearn.Application.Features.Maintenance;
 using PeerLearn.Application.Features.Moderation;
@@ -81,6 +82,25 @@ public sealed class AdminController : ControllerBase
         [FromQuery] int pageSize = 25,
         CancellationToken ct = default)
         => await _mediator.Send(new GetTeacherCandidatesQuery(status, page, pageSize), ct);
+
+    /// <summary>
+    /// Adayın yüklediği öğrenci belgesini hakem olarak okur.
+    ///
+    /// Belge yükleme kanalı 2026-09-01'de açıldı (ProfileController). Bu uç onun yönetim
+    /// tarafındaki karşılığı: karar verirken belgeye BAKILABİLMESİ gerekiyor, aksi hâlde
+    /// yüklenen belge hiçbir işe yaramaz.
+    ///
+    /// AsModerator: true — yetki kontrolü GetTeacherDocumentHandler'da; sahiplik şartı
+    /// yalnızca moderatör olmayanlar için geçerli. Bu controller zaten AdminOnly.
+    /// </summary>
+    [HttpGet("teacher-candidates/{profileId:guid}/document")]
+    public async Task<IActionResult> GetTeacherCandidateDocument(Guid profileId, CancellationToken ct)
+    {
+        var belge = await _mediator.Send(
+            new GetTeacherDocumentQuery(profileId, User.GetUserId(), AsModerator: true), ct);
+
+        return File(belge.Content, belge.ContentType);
+    }
 
     public sealed record TeacherCandidateReviewRequest(TeacherCandidateDecision Decision, string Note);
 

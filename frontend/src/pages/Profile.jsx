@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { api } from '../lib/api'
 import { useAuth } from '../state/AuthContext'
@@ -14,7 +14,7 @@ import { Button, ErrorBox, Field, Modal, Notice } from '../components/ui'
  */
 export default function Profile() {
   const { userId } = useParams()
-  const { session } = useAuth()
+  const { session, logout } = useAuth()
   const targetId = userId ?? session?.userId
 
   const [dialog, setDialog] = useState(null)
@@ -80,6 +80,24 @@ export default function Profile() {
         )}
 
         <UserProfileView key={`${targetId}-${version}`} userId={targetId} />
+
+        {/*
+          HESABI SİL — Google Play, hesap açtıran uygulamalarda silmeyi uygulama içinde
+          zorunlu tutuyor ve web sürümü de aynı hesabı yönettiği için burada da olmalı.
+          Bulunabilir ama öne çıkmıyor: geri alınamaz bir işlem, düzenleme düğmelerinin
+          yanında eşit ağırlıkta durursa yanlışlıkla tıklanır.
+        */}
+        {isSelf && (
+          <div className="border-t border-slate-200 pt-4 text-center">
+            <button
+              type="button"
+              onClick={() => setDialog('sil')}
+              className="text-sm text-slate-400 underline underline-offset-2 hover:text-rose-600"
+            >
+              Hesabımı sil
+            </button>
+          </div>
+        )}
       </div>
 
       {isSelf && (
@@ -96,6 +114,12 @@ export default function Profile() {
             }}
           />
 
+          <HesabiSilModali
+            open={dialog === 'sil'}
+            onClose={() => setDialog(null)}
+            onDeleted={logout}
+          />
+
           <EditProfileModal
             open={dialog === 'edit'}
             userId={targetId}
@@ -109,6 +133,103 @@ export default function Profile() {
         </>
       )}
     </div>
+  )
+}
+
+/*
+  HESABI SİL — geri alınamaz olduğu için iki kapı var: ne olacağını AÇIKÇA yazan bir metin
+  ve parolanın yeniden girilmesi. Parola sunucuda da doğrulanıyor; buradaki alan güvenliği
+  tek başına taşımıyor, onay niyetini kanıtlıyor (oturumu açık kalmış bir tarayıcıdan
+  tek tıkla hesap silinememeli).
+
+  METİN NEYİN KALDIĞINI DA SÖYLÜYOR. "Her şey silinecek" demek yanlış olurdu: ders
+  geçmişi, verilen puanlar ve değerlendirmeler karşı tarafa ait ve duruyor — orada
+  "Silinmiş kullanıcı" olarak görünüyorsun. Kullanıcıya olmayan bir şey vaat etmek,
+  silme hakkını yanlış anlatmak olur.
+*/
+function HesabiSilModali({ open, onClose, onDeleted }) {
+  const [sifre, setSifre] = useState('')
+  const [error, setError] = useState(null)
+  const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    if (open) {
+      setSifre('')
+      setError(null)
+    }
+  }, [open])
+
+  async function sil(e) {
+    e.preventDefault()
+    // Geri alınamaz işlemde çift gönderim koruması: ikinci istek 404 döner ve kullanıcı
+    // hesabı silindiği hâlde hata görürdü.
+    if (busy) return
+    if (!sifre) {
+      setError({ message: 'Devam etmek için parolanı yaz.' })
+      return
+    }
+
+    setBusy(true)
+    setError(null)
+    try {
+      await api.deleteAccount(sifre)
+      // Oturumu düşürmek yeterli: RequireAuth giriş ekranına kendisi yönlendiriyor.
+      onDeleted()
+    } catch (err) {
+      setError(err)
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Modal open={open} onClose={busy ? () => {} : onClose} title="Hesabımı sil">
+      <form onSubmit={sil} className="space-y-4">
+        <Notice tone="warning">
+          Bu işlem geri alınamaz. Hesabına bir daha giriş yapamazsın.
+        </Notice>
+
+        <div>
+          <p className="text-sm font-semibold text-slate-900">Silinecekler</p>
+          <ul className="mt-1.5 list-disc space-y-1 pl-5 text-sm text-slate-600">
+            <li>Adın, e-postan, telefonun ve profil fotoğrafın</li>
+            <li>Biyografin, üniversite ve bölüm bilgin</li>
+            <li>Açtığın ders ilanları</li>
+            <li>Veri tercihlerin ve cihaz kaydın</li>
+          </ul>
+        </div>
+
+        <div>
+          <p className="text-sm font-semibold text-slate-900">Kalacaklar</p>
+          <p className="mt-1.5 text-sm leading-relaxed text-slate-600">
+            Yaptığın dersler, kazandırdığın puanlar ve yazdığın değerlendirmeler karşı
+            tarafın geçmişine ait olduğu için siliniyor değil — orada adın yerine
+            &ldquo;Silinmiş kullanıcı&rdquo; görünecek.
+          </p>
+        </div>
+
+        <Field label="Parolan" hint="Onay için parolanı yeniden yaz.">
+          <input
+            type="password"
+            autoComplete="current-password"
+            value={sifre}
+            onChange={(e) => setSifre(e.target.value)}
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-base
+                       focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
+          />
+        </Field>
+
+        <ErrorBox error={error} />
+
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="secondary" onClick={onClose} disabled={busy}>
+            Vazgeç
+          </Button>
+          <Button type="submit" variant="danger" loading={busy}>
+            Hesabımı kalıcı olarak sil
+          </Button>
+        </div>
+      </form>
+    </Modal>
   )
 }
 

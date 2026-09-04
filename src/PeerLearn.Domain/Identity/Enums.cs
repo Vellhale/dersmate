@@ -6,7 +6,22 @@ public enum UserStatus
     PendingVerification = 0,
     Active = 1,
     Suspended = 2,
-    Banned = 3
+    Banned = 3,
+
+    /// <summary>
+    /// Kullanıcı hesabını KENDİSİ sildi (Google Play'in hesap silme politikası ve
+    /// KVKK/GDPR silme hakkı gereği).
+    ///
+    /// SATIR DURUYOR, KİŞİSEL VERİ SİLİNİYOR. Users satırını gerçekten silmek mümkün
+    /// değil: 23 yabancı anahtar buraya bakıyor ve çoğu RESTRICT — ders oturumları,
+    /// eşleşmeler, değerlendirmeler, kredi defteri ve moderasyon kayıtları KARŞI TARAFA
+    /// ait. Silmek, hiç silinmemesi gereken başkasının geçmişini yok ederdi.
+    ///
+    /// Bunun yerine kimlik alanları temizlenip satır mezar taşına çevriliyor
+    /// (bkz. DeleteAccountHandler): ad "Silinmiş kullanıcı", e-posta kullanılamaz bir
+    /// yer tutucu, parola özeti kullanılamaz hâle getiriliyor.
+    /// </summary>
+    Deleted = 4
 }
 
 /// <summary>

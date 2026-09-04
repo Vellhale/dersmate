@@ -231,15 +231,31 @@ Sonra **elle** iki şey dene — ikisi de otomatik doğrulanamıyor:
 ## 10. Yedek (⛔ İLK KULLANICIDAN ÖNCE)
 
 ```bash
-# Veritabanı
-dc exec -T db pg_dump -U dersmate dersmate | gzip > yedek-$(date +%F).sql.gz
-
-# Kanıt dosyaları — AYRI ve unutulması kolay
-docker run --rm -v dersmate_proof-storage:/veri -v "$PWD:/cikti" alpine \
-  tar czf /cikti/kanitlar-$(date +%F).tar.gz -C /veri .
+./tools/yedek-al.sh                 # varsayılan hedef: ./yedekler
+./tools/yedek-al.sh /mnt/yedek      # başka bir diske
 ```
 
-Bunu bir cron'a bağla ve **geri yüklemeyi bir kez dene**. Denenmemiş yedek, yedek değildir.
+Betik veritabanı dökümünü ve kanıt dosyalarını **birlikte** alır, ikisinin de bütünlüğünü
+doğrular ve 14 günden eski yedekleri siler (`SAKLANACAK_GUN` ile değiştirilir).
+
+Cron'a bağla — bu adım atlanırsa geriye tek seferlik, elle alınmış ve unutulmuş bir yedek
+kalır:
+
+```bash
+15 3 * * * cd /opt/dersmate && ./tools/yedek-al.sh >> /var/log/dersmate-yedek.log 2>&1
+```
+
+⚠️ **Elle `pg_dump ... | gzip > dosya` YAZMAYIN.** Kabuk, borunun SON komutunun çıkış kodunu
+döndürür: `pg_dump` başarısız olsa bile `gzip` boş girdiden geçerli bir `.gz` üretip 0 ile
+çıkar. Geriye yedek sanılan ~20 baytlık bir dosya kalır ve bunu ancak geri yüklemeye
+çalıştığın gün öğrenirsin. Betik `set -o pipefail` kullanıyor ve boyutu ayrıca doğruluyor.
+
+⚠️ **Kullanıcı ve veritabanı adını elle yazma.** Compose bunları `.env.production` içindeki
+`POSTGRES_USER` / `POSTGRES_DB` değişkenlerinden alıyor; betik de aynı kaynaktan okuyor.
+Elle yazılan bir ad, sessizce yanlış veritabanını yedeklemenin en kolay yoludur.
+
+**Geri yüklemeyi bir kez dene.** Denenmemiş yedek, yedek değildir — betik bitiminde geri
+yükleme komutlarını da yazdırıyor.
 
 ---
 

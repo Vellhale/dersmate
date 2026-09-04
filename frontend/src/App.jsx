@@ -7,6 +7,7 @@ import VerifyEmail from './pages/VerifyEmail'
 import SifreSifirla from './pages/SifreSifirla'
 import Kosullar from './pages/Kosullar'
 import Gizlilik from './pages/Gizlilik'
+import HesapSilme from './pages/HesapSilme'
 import Portfolio from './pages/Portfolio'
 import Discover from './pages/Discover'
 import Matches from './pages/Matches'
@@ -53,6 +54,12 @@ export default function App() {
           biri okuyamıyorsa "okudum, kabul ediyorum" demesi anlamsız olurdu. */}
       <Route path="/kosullar" element={<Kosullar />} />
       <Route path="/gizlilik" element={<Gizlilik />} />
+
+      {/* HESAP SİLME — oturum GEREKTİRMEZ ve kabuğun dışında.
+          Google Play, hesap açtıran uygulamalarda silme yolunu uygulamayı KURMADAN
+          açılabilen bir adreste de istiyor: telefonunu kaybetmiş ya da hesabına
+          giremeyen biri de talepte bulunabilmeli. Mağaza kaydına yazılacak adres budur. */}
+      <Route path="/hesap-silme" element={<HesapSilme />} />
 
       <Route
         element={

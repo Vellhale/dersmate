@@ -1016,6 +1016,96 @@ const CANDIDATE_DECISIONS = {
   },
 }
 
+/*
+  ADAY BELGESİ — hakemin karar dayanağı.
+
+  Belge yükleme kanalı 2026-09-01'de açıldı; öncesinde yüklenen belge hiçbir yerde
+  görünmüyordu (yükleme ucu da yoktu). Burası o zincirin son halkası: hakem kararı
+  vermeden önce belgeye bakabilmeli.
+
+  TÜR ÖNCEDEN BİLİNMİYOR: liste satırı yalnızca "belge var mı" diyor (dosyayı her satırda
+  çekmemek için bilinçli). Tür indirme sonucundan geliyor: görsel <img> ile, PDF <object>
+  ile gösteriliyor — <img> bir PDF'i çizemez.
+
+  Object URL, bileşen sökülürken serbest bırakılıyor; aksi halde uzun süre açık kalan
+  panelde her açılan kart bir blob sızdırırdı.
+*/
+function AdayBelgesi({ profileId, varMi }) {
+  const [belge, setBelge] = useState(null)
+  const [hata, setHata] = useState(false)
+
+  useEffect(() => {
+    if (!varMi) return undefined
+
+    let iptal = false
+    let acikUrl = null
+    setHata(false)
+
+    api
+      .adminTeacherDocument(profileId)
+      .then((sonuc) => {
+        if (iptal) {
+          URL.revokeObjectURL(sonuc.url)
+          return
+        }
+        acikUrl = sonuc.url
+        setBelge(sonuc)
+      })
+      .catch(() => {
+        if (!iptal) setHata(true)
+      })
+
+    return () => {
+      iptal = true
+      if (acikUrl) URL.revokeObjectURL(acikUrl)
+    }
+  }, [profileId, varMi])
+
+  if (!varMi) {
+    return (
+      <p className="mt-2 text-xs text-slate-500">
+        Aday belge yüklemedi — doğrulama sistem dışı kanıta dayanır.
+      </p>
+    )
+  }
+
+  if (hata) {
+    return (
+      <p className="mt-2 rounded-lg border border-rose-200 bg-rose-50 p-2 text-xs text-rose-800">
+        Belge yüklenemedi. Sayfayı yenileyip yeniden dene.
+      </p>
+    )
+  }
+
+  if (!belge) {
+    return <p className="mt-2 text-xs text-slate-500">Belge yükleniyor…</p>
+  }
+
+  return (
+    <div className="mt-2">
+      <p className="mb-1 text-xs font-medium text-slate-700">Öğrenci belgesi</p>
+      {belge.contentType === 'application/pdf' ? (
+        <object
+          data={belge.url}
+          type="application/pdf"
+          className="h-96 w-full rounded-lg border border-slate-200"
+          aria-label="Adayın öğrenci belgesi (PDF)"
+        >
+          <a href={belge.url} target="_blank" rel="noreferrer" className="text-brand-700 underline">
+            PDF bu tarayıcıda gömülü açılmadı — yeni sekmede aç
+          </a>
+        </object>
+      ) : (
+        <img
+          src={belge.url}
+          alt="Adayın öğrenci belgesi"
+          className="max-h-96 w-full rounded-lg border border-slate-200 bg-slate-50 object-contain"
+        />
+      )}
+    </div>
+  )
+}
+
 function TeacherCandidateQueue({ onNotice }) {
   const [filter, setFilter] = useState('Pending')
   const [page, setPage] = useState(1)
@@ -1051,10 +1141,14 @@ function TeacherCandidateQueue({ onNotice }) {
         {CANDIDATE_FILTERS.find((f) => f.key === filter)?.label} ({data?.totalCount ?? 0})
       </SectionTitle>
 
-      {/* Dürüstlük notu operatöre de gösteriliyor: bu ekran belge doğrulamaz, karar kaydeder. */}
+      {/* Dürüstlük notu operatöre de gösteriliyor. 2026-09-01'de güncellendi: belge
+          yükleme kanalı AÇILDI, "kanal yok" demek artık yanlış olurdu. Ama belge ZORUNLU
+          değil — yüklemeyen aday da kuyrukta duruyor ve onun doğrulaması hâlâ sistem dışı
+          kanıta dayanıyor. Metin ikisini ayırıyor. */}
       <p className="text-xs text-slate-500">
-        Sistemde öğrenci belgesi yükleme kanalı yok. Doğrulama, sistem dışı bir kanıta (ör.
-        e-posta ile gelen öğrenci belgesi) dayanır; gerekçe alanı o kanıtın kayda geçtiği
+        Belge yükleyen adayın belgesi kartında görünür. Belge yüklemek zorunlu değil;
+        yüklemeyen adayda doğrulama sistem dışı bir kanıta (ör. e-postayla gelen öğrenci
+        belgesi) dayanır. Her iki durumda da gerekçe alanı kararın dayanağının kayda geçtiği
         tek yerdir ve denetim izine yazılır.
       </p>
 
@@ -1149,6 +1243,8 @@ function CandidateCard({ row, onDecide }) {
               {row.profileDepartment ? ` · ${row.profileDepartment}` : ''}
             </p>
           )}
+
+          <AdayBelgesi profileId={row.profileId} varMi={row.hasDocument} />
 
           <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600">
             <span>Beyan: {formatDateTime(row.declaredAtUtc)}</span>

@@ -85,6 +85,18 @@ public sealed class LoginHandler : IRequestHandler<LoginCommand, LoginResult>
                 throw new AppException(ErrorCodes.UserBanned, "Hesabınız kalıcı olarak engellendi.", statusCode: 403);
             case UserStatus.Suspended:
                 throw new AppException(ErrorCodes.UserBanned, "Hesabınız geçici olarak askıda.", statusCode: 403);
+            /*
+              SİLİNMİŞ HESAP: parola özeti zaten kullanılamaz hâle getirildiği için giriş
+              yukarıdaki parola kontrolünde düşüyor ve buraya HİÇ ULAŞMIYOR. Dal yine de
+              açıkça yazılıyor: bu bir switch ve yeni bir durum eklendiğinde sessizce
+              DÜŞÜP GEÇMEK, girişin yanlışlıkla açılması demek olurdu.
+
+              Mesaj bilerek "geçersiz kimlik bilgileri" ile aynı sınıfta değil — buraya
+              ulaşmak zaten mümkün olmadığı için bilgi sızdırmıyor.
+            */
+            case UserStatus.Deleted:
+                throw new AppException(ErrorCodes.InvalidCredentials,
+                    "E-posta ya da parola hatalı.", statusCode: 401);
             case UserStatus.PendingVerification:
                 throw new AppException(ErrorCodes.EmailNotVerified,
                     "Önce e-postanızı doğrulayın (gelen kutunuzu kontrol edin).", statusCode: 403);

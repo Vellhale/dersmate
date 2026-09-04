@@ -516,6 +516,11 @@ function LayoutShell() {
             <NavLink to="/gizlilik" className="text-xs text-slate-500 underline hover:text-slate-700">
               Gizlilik
             </NavLink>
+            {/* Silme sayfası altbilgide: mağaza kaydındaki adresin sitede de bulunabilir
+                olması gerekiyor, yalnızca doğrudan yazılarak ulaşılan gizli bir sayfa değil. */}
+            <NavLink to="/hesap-silme" className="text-xs text-slate-500 underline hover:text-slate-700">
+              Hesap silme
+            </NavLink>
           </footer>
         </div>
       </div>
