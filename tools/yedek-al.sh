@@ -191,8 +191,9 @@ find "$HEDEF" -maxdepth 1 -name 'kanitlar-*.tar.gz' -mtime "+$SAKLAMA_GUN" -prin
 echo ""
 echo "Yedek tamam: $HEDEF"
 echo ""
-echo "⚠️ Yedek SUNUCUNUN KENDİSİNDE duruyor. Sunucu kaybolursa yedek de kaybolur —"
-echo "   düzenli olarak başka bir yere kopyala (rclone, scp, S3…)."
+echo "⚠️ Bu yedek SUNUCUNUN KENDİSİNDE. Sunucu kaybolursa bu da kaybolur —"
+echo "   sunucu dışına şifreli kopya için: ./tools/yedek-gonder.sh"
+echo "   (cron'da bu betiğin ARDINDAN '&&' ile; kurulum: docs/SUNUCUYA-KURULUM.md §10)"
 echo "   Geri yükleme adımları bu betiğin sonundaki yorumda."
 
 # ─────────────────────────────────────────────────────────────────────────────
