@@ -73,8 +73,22 @@ fi
 # `source` yerine `grep` BİLEREK: source, dosyanın içindeki her satırı ÇALIŞTIRIR.
 # Yedek betiğinin bir yapılandırma dosyasını yürütmesi gerekmiyor; iki değer
 # okumak için kabuk çalıştırmak gereksiz bir yetki.
-POSTGRES_USER="$(grep -E '^POSTGRES_USER=' "$KOK/.env.production" | cut -d= -f2-)"
-POSTGRES_DB="$(grep -E '^POSTGRES_DB=' "$KOK/.env.production" | cut -d= -f2-)"
+# ⛔ `|| true` OLMADAN AŞAĞIDAKİ İKİ KORUMA HİÇ ÇALIŞMIYORDU (2026-09-05).
+#
+# grep aradığını bulamazsa 1 ile çıkar; `set -euo pipefail` altında atama BAŞARISIZ
+# sayılır ve betik TAM BU SATIRDA, hiçbir şey yazmadan ölür. Yani hemen altındaki
+# `:?` mesajlarına asla ulaşılmıyordu — koruma yazılmıştı ama erişilemezdi.
+#
+# Ölçüldü:
+#   set -euo pipefail; X="$(grep -E '^YOK=' /dev/null)"; : "${X:?YOK bulunamadi}"
+#     → çıkış 1, EKRANDA HİÇBİR ŞEY YOK
+#   aynısı `|| true` ile
+#     → "X: YOK bulunamadi", yani koruma devreye giriyor
+#
+# Aynı kusur tools/dagit.sh'te bir dağıtımı kaybettirdi: betik sessizce öldü, "sorunsuz
+# geçti" sanıldı ve sunucu günlerce eski commit'te kaldı.
+POSTGRES_USER="$(grep -E '^POSTGRES_USER=' "$KOK/.env.production" | cut -d= -f2- || true)"
+POSTGRES_DB="$(grep -E '^POSTGRES_DB=' "$KOK/.env.production" | cut -d= -f2- || true)"
 
 : "${POSTGRES_USER:?POSTGRES_USER .env.production içinde bulunamadı}"
 : "${POSTGRES_DB:?POSTGRES_DB .env.production içinde bulunamadı}"

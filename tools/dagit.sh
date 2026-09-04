@@ -27,7 +27,29 @@ if [ ! -f .env.production ]; then
     exit 1
 fi
 
-API_URL="$(grep -E '^API_URL=' .env.production | cut -d= -f2-)"
+# ⛔ EKSİK ANAHTAR = SESSİZ ÖLÜM. Bu satır bir dağıtımı kaybettirdi (2026-09-05).
+#
+# Eskiden `|| true` yoktu. Anahtar dosyada yoksa grep 1 ile çıkıyor, `set -euo pipefail`
+# betiği TAM BURADA öldürüyor ve ekrana HİÇBİR ŞEY yazılmıyor: ne hata, ne satır numarası,
+# ne de hangi anahtarın eksik olduğu.
+#
+# Gerçekte olan şuydu: `./tools/dagit.sh` çalıştırıldı, tek satır çıktı vermedi, prompt
+# geri geldi ve "sorunsuz geçti" sanıldı. Sunucu günlerce eski commit'te kaldı; kimse
+# fark etmedi çünkü ortada bir hata mesajı yoktu.
+#
+# Yukarıdaki kontrol dosyanın VARLIĞINA bakıyordu, İÇERİĞİNE değil — ayarlar elle
+# yazıldığında (tools/uretim-ayarlari-uret.ps1 kullanılmadığında) bu satır eksik kalıyor.
+API_URL="$(grep -E '^API_URL=' .env.production | cut -d= -f2- || true)"
+
+if [ -z "$API_URL" ]; then
+    echo "HATA: .env.production içinde API_URL satırı yok (ya da boş)." >&2
+    echo "      7. adımdaki sağlık kontrolü bu adrese gidiyor; onsuz dağıtımın" >&2
+    echo "      başarılı olup olmadığı doğrulanamaz." >&2
+    echo "" >&2
+    echo "      Ekle:  echo 'API_URL=https://api.<alan-adın>' >> .env.production" >&2
+    echo "      (tools/uretim-ayarlari-uret.ps1 bu satırı üretiyor.)" >&2
+    exit 1
+fi
 
 # ─── 1. Yedek ───────────────────────────────────────────────────────────────
 if [ "$ATLA_YEDEK" != "--atla-yedek" ]; then
@@ -84,19 +106,59 @@ echo "▸ [6/7] Servisler yeniden başlatılıyor…"
 $COMPOSE up -d
 
 # ─── 7. Doğrulama ───────────────────────────────────────────────────────────
+#
+# ⛔ /health/ready DIŞARIDAN ÇAĞRILAMAZ — ve bu doğru davranış.
+#
+# Bu adım eskiden `$API_URL/health/ready` sorguluyordu ve BAŞARILI HER DAĞITIMI
+# "HATA" diye raporluyordu: nginx bu ucu `allow 127.0.0.1; deny all;` ile kapatıyor,
+# yani dışarıdan gelen cevap 403. Hazırlık ucu veritabanı ve Redis durumunu sızdırdığı
+# için kapalı olması bilinçli; kılavuzda aynı hata bulunup düzeltilmişti (§ "Son kontrol"),
+# betikte kalmıştı. Gerçekte olan: 6 adım geçiyor, konteynerler ayağa kalkıyor, site
+# çalışıyor — betik yine de 1 ile çıkıyor. Yanlış alarm, gerçek alarmı değersizleştirir.
+#
+# İKİ AYRI KONTROL, çünkü ikisi farklı şeyi kanıtlıyor:
+#
+#   7a. DERİN HAZIRLIK — 127.0.0.1:5000 üzerinden, nginx'i BAYPAS EDEREK. Bu betik
+#       zaten sunucuda koşuyor ve compose api'yi 127.0.0.1:5000'e yayınlıyor, yani
+#       nginx'in kapattığı uca buradan ulaşılabiliyor. Veritabanı ve Redis bağlantısını
+#       gerçekten sınayan tek kontrol bu.
+#
+#   7b. GENEL YOL — $API_URL/health üzerinden, yani TLS + nginx + vekil zinciriyle.
+#       7a tek başına geçse bile nginx yapılandırması bozuksa site erişilemez olurdu;
+#       bu adım o zinciri kanıtlıyor.
 echo "▸ [7/7] Sağlık kontrolü…"
+
+HAZIR_UC="http://127.0.0.1:5000/health/ready"
+
 for i in $(seq 1 30); do
-    KOD="$(curl -s -o /dev/null -w '%{http_code}' "$API_URL/health/ready" || echo 000)"
+    KOD="$(curl -s -o /dev/null -w '%{http_code}' "$HAZIR_UC" || echo 000)"
     if [ "$KOD" = "200" ]; then
-        echo "        /health/ready → 200"
-        echo ""
-        echo "Dağıtım tamam: $YENI"
-        exit 0
+        echo "        derin hazırlık (127.0.0.1:5000/health/ready) → 200"
+        break
     fi
     sleep 2
 done
 
-echo "" >&2
-echo "HATA: /health/ready 60 saniyede 200 dönmedi (son: $KOD)." >&2
-echo "      Günlük: $COMPOSE logs --tail 50 api" >&2
-exit 1
+if [ "$KOD" != "200" ]; then
+    echo "" >&2
+    echo "HATA: $HAZIR_UC 60 saniyede 200 dönmedi (son: $KOD)." >&2
+    echo "      Bu uç veritabanı ve Redis bağlantısını sınıyor; 'Degraded' ya da" >&2
+    echo "      cevapsızsa sorun uygulamanın kendisinde." >&2
+    echo "      Günlük: $COMPOSE logs --tail 50 api" >&2
+    exit 1
+fi
+
+GENEL_KOD="$(curl -s -o /dev/null -w '%{http_code}' "$API_URL/health" || echo 000)"
+if [ "$GENEL_KOD" != "200" ]; then
+    echo "" >&2
+    echo "HATA: $API_URL/health → $GENEL_KOD (200 bekleniyordu)." >&2
+    echo "      Uygulama SAĞLIKLI (7a geçti); kırık olan dışarı açılan yol:" >&2
+    echo "      nginx yapılandırması, sertifika ya da DNS." >&2
+    echo "      Günlük: $COMPOSE logs --tail 50 web" >&2
+    exit 1
+fi
+echo "        genel yol ($API_URL/health) → 200"
+
+echo ""
+echo "Dağıtım tamam: $YENI"
+exit 0
