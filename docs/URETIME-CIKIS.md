@@ -24,8 +24,45 @@ ortam değişkeniyle verilir. ASP.NET'te iç içe anahtarlar çift alt çizgiyle
 
 | Değişken | Varsayılan | Anlamı |
 |---|---|---|
-| `RateLimit__AuthPerMinute` | 10 | Kayıt/giriş/doğrulama yeniden gönderimi — IP başına dakikada |
-| `RateLimit__GlobalPerMinute` | 300 | Diğer tüm uçlar — IP başına dakikada |
+| `RateLimit__AuthPerMinute` | 10 | Kayıt/giriş/doğrulama yeniden gönderimi + hesap silme — **IP** başına dakikada |
+| `RateLimit__GlobalPerMinute` | 300 | Diğer tüm uçlar — **kimlik doğrulanmışsa kullanıcı**, değilse IP başına dakikada |
+| `RateLimit__YuksekSinirBilerek` | `false` | Güvenli tavanların üstüne çıkmaya açık izin (olay anı kaldıracı) |
+
+### Genel sınır neden kullanıcı başına (CGNAT)
+
+Genel sınır 2026-09-05'e kadar IP başınaydı ve bu, mobil uygulamayı mağazaya çıkarmadan
+**önce** kapatılması gereken bir arızaydı. Mobil operatörler CGNAT kullanıyor: binlerce
+abone tek genel IP'nin arkasında. Maliyet karşılaştırması:
+
+| işlem | kullanıcı başına maliyet |
+|---|---|
+| giriş | ~2 saatte 1 istek |
+| uygulamayı açmak | hiçbir şeye dokunmadan ≥4 istek |
+| gezinmek | dakikada 10–20 istek |
+
+Yani tek bir CGNAT IP'sinde `GlobalPerMinute=300` tavanı **~15–30 eşzamanlı kullanıcıda**
+doluyordu; kimlik tavanı ise aynı kümede dakikada 0,2 girişe denk geliyor — iki mertebe
+uzak. İlk `429` dalgası giriş ekranından değil **uygulama içi gezinmeden** gelecekti ve
+teşhisi zor olurdu: kullanıcıların bir kısmı çalışıyor, bir kısmı çalışmıyor, sunucu sağlıklı.
+
+**Güvenlik gerilemesi yok:** kendi kovasını almanın bedeli geçerli bir JWT ve onu almak için
+kayıt + giriş gerekiyor; o yol kimlik politikasıyla IP başına 10/dk'ya kilitli. Kimliksiz her
+istek (token yok, süresi dolmuş, imza tutmuyor) eskisi gibi IP kovasına düşüyor.
+
+⚠️ Bu, `Program.cs`'te `UseAuthentication()`'ın `UseRateLimiter()`'dan **önce** çağrılmasına
+bağlı. Sıra ters çevrilirse `HttpContext.User` boş kalır, her istek IP kovasına düşer ve
+düzeltme **sessizce** etkisiz olur — hata vermez. `tools/verify-production-guard.ps1`
+C bölümü bunu yakalıyor (aynı IP'den iki kullanıcı; biri sınıra takılırken diğeri geçmeli).
+
+### Sınırı bilerek yükseltmek
+
+`ProductionGuard` güvenli tavanların üstünde bir değer görürse süreci durdurur. Kapı bir
+dönem **tek yönlüydü**: sızmayı engelliyor ama bilerek yükseltmeye de izin vermiyordu, yani
+canlıda bir `429` dalgası başladığında ayar dosyasıyla yapılabilecek hiçbir hafifletme yoktu
+— kod + derleme + dağıtım gerekiyordu.
+
+`RateLimit__YuksekSinirBilerek=true` o kapıyı **açık beyanla** açar ve açılışta uyarı loglar.
+Sızma kazayla olur; bu bayrak kazayla yazılmaz. Geçici bir hafifletmeyse geri almayı unutmayın.
 
 ⚠️ **"Ortam değişkeni verilmezse koddaki güvenli varsayılanlar geçerlidir" DOĞRU DEĞİL.**
 `appsettings.json` üretimde de taban yapılandırma olarak yüklenir ve içindeki geliştirme
@@ -33,9 +70,9 @@ değerleri (`AuthPerMinute: 2000`, `GlobalPerMinute: 20000`) koddaki 10/300 vars
 EZER. Depoda `appsettings.Production.json` yok. Yani ikisini de **açıkça ortam değişkeniyle
 vermek zorundasınız**; vermezseniz giriş ucu dakikada 2000 parola denemesine açık kalır.
 
-Sınır **IP başına** uygulanır (2026-08-27'de düzeltildi; öncesinde kimlik ucundaki sınır
-tüm site için tek kovaydı). Ters vekil arkasında bunun çalışması `UseForwardedHeaders'a
-bağlı — bkz. §3 (TLS ve ters vekil).
+Kimlik sınırı **IP başına** uygulanır (2026-08-27'de düzeltildi; öncesinde tüm site için
+tek kovaydı). Ters vekil arkasında bunun çalışması `UseForwardedHeaders`'a bağlı — bkz.
+§3 (TLS ve ters vekil). Genel sınırın anahtarı ise artık kullanıcı; gerekçesi yukarıda.
 
 ## 2. Arayüz derlemesi (⚠️ EN SIK ATLANAN ADIM)
 

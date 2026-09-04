@@ -94,9 +94,26 @@ public sealed class RateLimitOptions
     /// <summary>Kimlik uçları (kayıt/giriş/yeniden gönderim) — IP başına, dakikada.</summary>
     public int AuthPerMinute { get; set; } = 10;
 
-    /// <summary>Diğer tüm uçlar — IP başına, dakikada.</summary>
+    /// <summary>
+    /// Diğer tüm uçlar. Kimlik doğrulanmışsa KULLANICI başına, değilse IP başına; dakikada.
+    /// Bölümleme 2026-09-05'te IP'den kullanıcıya taşındı (bkz. RateLimiting.cs).
+    /// </summary>
     public int GlobalPerMinute { get; set; } = 300;
 
     /// <summary>Sınıra takılan istek kuyruğa alınmaz; 0 = anında 429.</summary>
     public int QueueLimit { get; set; }
+
+    /// <summary>
+    /// ÜRETİMDE güvenli tavanların ÜSTÜNE çıkmaya açık izin. Normalde ProductionGuard
+    /// AuthPerMinute &gt; 10 ya da GlobalPerMinute &gt; 300 görürse süreci durdurur;
+    /// bu bayrak o kapıyı bilinçli olarak açar ve açılışta uyarı loglanır.
+    ///
+    /// NEDEN VAR: kapı tek yönlüydü — geliştirme değerinin üretime sızmasını engelliyor
+    /// ama sınırı BİLEREK yükseltmenin hiçbir yolunu bırakmıyordu. CGNAT kaynaklı bir 429
+    /// dalgası canlıda başladığında elde ayar dosyasıyla yapılabilecek tek hafifletme
+    /// yoktu; kod değişikliği + derleme + dağıtım gerekiyordu, yani olay anında saatler.
+    ///
+    /// Ortam değişkeni: RateLimit__YuksekSinirBilerek=true
+    /// </summary>
+    public bool YuksekSinirBilerek { get; set; }
 }

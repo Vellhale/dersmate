@@ -399,11 +399,33 @@ app.UseMiddleware<ExceptionHandlingMiddleware>();
 
 app.UseCors();
 
-// Hız sınırı kimlik doğrulamadan ÖNCE: parola denemesi yapan istemci zaten kimliksiz
-// geliyor, sınırı doğrulamanın arkasına koymak onu hiç uygulamamak olurdu.
-app.UseRateLimiter();
+/*
+  ⛔ SIRA DEĞİŞTİ: KİMLİK DOĞRULAMA ARTIK HIZ SINIRINDAN ÖNCE (2026-09-05).
 
+  Eskiden ters sıradaydı ve buradaki not "parola denemesi yapan istemci zaten kimliksiz
+  geliyor" diyordu. O gerekçe hâlâ doğru ama SONUCU yanlıştı: sıra ters olduğu için
+  RateLimiting.cs'teki genel sınır HttpContext.User'ı BOŞ görüyor ve her isteği IP
+  kovasına koyuyordu. CGNAT'ta bu, tek operatör IP'sinin arkasındaki ~15-30 eşzamanlı
+  kullanıcının 300/dk tavanını doldurması demekti.
+
+  Kimlik doğrulama middleware'i hiçbir isteği REDDETMİYOR — yalnızca token'ı okuyup
+  HttpContext.User'ı dolduruyor; reddetme UseAuthorization'ın işi. Dolayısıyla sınırın
+  arkasına geçmiş olmuyor, sınırın DAHA İYİ bölümlenmesini sağlıyor.
+
+  Kimlik uçlarındaki sıkı politika (RateLimiting.AuthPolicy) IP'de KALIYOR ve bu sıradan
+  etkilenmiyor: oraya gelen istemcinin zaten token'ı yok, User boş kalıyor, IP anahtarı
+  devreye giriyor. Yani parola denemesi hâlâ IP başına 10/dk.
+
+  Bedeli: geçersiz token taşıyan bir sel, 429 yemeden önce JWT imza doğrulamasından
+  geçiyor. Ucuz bir işlem ve o istekler zaten kimliksiz sayılıp IP kovasına düşüyor,
+  yani tavan yine koruyor.
+
+  ⚠️ BU SIRAYI GERİ ALMA. Ters çevirirsen hiçbir hata çıkmaz, hiçbir test kırılmaz —
+  yalnızca genel sınır sessizce IP başına dönerdi.
+*/
 app.UseAuthentication();
+
+app.UseRateLimiter();
 
 // Kimlik doğrulandıktan SONRA, yetkilendirmeden ÖNCE: banlanan/askıya alınan kullanıcının
 // elindeki geçerli token'ı anında işlevsiz kılar (JWT'nin kendisi 2 saat daha geçerli).

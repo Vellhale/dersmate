@@ -183,18 +183,48 @@ public static class ProductionGuard
         var rateLimit = configuration.GetSection(RateLimitOptions.SectionName).Get<RateLimitOptions>()
                         ?? new RateLimitOptions();
 
-        if (rateLimit.AuthPerMinute > GuvenliAuthPerMinute)
-        {
-            sorunlar.Add($"RateLimit:AuthPerMinute = {rateLimit.AuthPerMinute} — appsettings.json'daki " +
-                         $"geliştirme değeri üretime sızmış. Kayıt/giriş ucu IP başına dakikada bu kadar " +
-                         $"denemeye açık kalır (kaba kuvvet). Ortam değişkeni: " +
-                         $"RateLimit__AuthPerMinute={GuvenliAuthPerMinute}");
-        }
+        /*
+          ⛔ KAPI TEK YÖNLÜYDÜ VE BU BİR OLAY ANI SORUNUYDU (2026-09-05'te düzeltildi).
 
-        if (rateLimit.GlobalPerMinute > GuvenliGlobalPerMinute)
+          Kapının amacı doğru: geliştirme değerinin (2000/20000) üretime sızmasını
+          engellemek. Ama üst sınırı BİLEREK yükseltmenin hiçbir yolunu bırakmıyordu —
+          10'un üstünde bir değerle uygulama hiç açılmıyordu. Sonuç: CGNAT kaynaklı bir
+          429 dalgası canlıda başladığında elde ayar dosyasıyla yapılabilecek TEK bir
+          hafifletme yok; kod değişikliği + derleme + dağıtım gerekiyor, yani saatler.
+
+          Çare, kapıyı kaldırmak değil AÇIK BEYAN istemek: sızma kazayla olur, bu bayrak
+          kazayla yazılmaz. Bayrak verilmediğinde davranış birebir eskisi gibi.
+        */
+        var sinirYukseltildi = rateLimit.AuthPerMinute > GuvenliAuthPerMinute ||
+                               rateLimit.GlobalPerMinute > GuvenliGlobalPerMinute;
+
+        if (sinirYukseltildi && rateLimit.YuksekSinirBilerek)
         {
-            sorunlar.Add($"RateLimit:GlobalPerMinute = {rateLimit.GlobalPerMinute} — geliştirme değeri " +
-                         $"üretime sızmış. Ortam değişkeni: RateLimit__GlobalPerMinute={GuvenliGlobalPerMinute}");
+            // Sessizce geçmiyor: bu satır, olaydan sonra "sınır neden yüksekti" sorusunun
+            // cevabı. Kapatılan koruma, günlükte iz bırakmadan kapatılmamalı.
+            Console.Error.WriteLine(
+                $"UYARI: hız sınırı güvenli tavanın ÜSTÜNDE ve bu BİLEREK açılmış " +
+                $"(RateLimit:YuksekSinirBilerek=true). Auth={rateLimit.AuthPerMinute}/dk " +
+                $"(güvenli {GuvenliAuthPerMinute}), Global={rateLimit.GlobalPerMinute}/dk " +
+                $"(güvenli {GuvenliGlobalPerMinute}). Geçici bir hafifletmeyse geri almayı unutma.");
+        }
+        else
+        {
+            if (rateLimit.AuthPerMinute > GuvenliAuthPerMinute)
+            {
+                sorunlar.Add($"RateLimit:AuthPerMinute = {rateLimit.AuthPerMinute} — appsettings.json'daki " +
+                             $"geliştirme değeri üretime sızmış. Kayıt/giriş ucu IP başına dakikada bu kadar " +
+                             $"denemeye açık kalır (kaba kuvvet). Ortam değişkeni: " +
+                             $"RateLimit__AuthPerMinute={GuvenliAuthPerMinute} " +
+                             $"(bilerek yükseltiyorsan: RateLimit__YuksekSinirBilerek=true)");
+            }
+
+            if (rateLimit.GlobalPerMinute > GuvenliGlobalPerMinute)
+            {
+                sorunlar.Add($"RateLimit:GlobalPerMinute = {rateLimit.GlobalPerMinute} — geliştirme değeri " +
+                             $"üretime sızmış. Ortam değişkeni: RateLimit__GlobalPerMinute={GuvenliGlobalPerMinute} " +
+                             $"(bilerek yükseltiyorsan: RateLimit__YuksekSinirBilerek=true)");
+            }
         }
 
         if (sorunlar.Count == 0)
