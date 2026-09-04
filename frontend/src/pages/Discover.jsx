@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../lib/api'
 import { useAsync } from '../state/useAsync'
 import { useDebounced } from '../hooks/useDebounced'
@@ -276,10 +276,19 @@ export default function Discover() {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[260px_1fr]">
-        {/* Masaüstünde sabit sütun; mobilde çekmece (aşağıda). */}
-        <aside className="hidden lg:block">
+        {/*
+          Masaüstünde YAPIŞKAN sütun (2026-08-25); mobilde çekmece (aşağıda).
+
+          Panel eskiden sayfayla birlikte kayıyordu. Sonuç listesi ondan uzun olduğu
+          için aşağı inildikçe panel yukarıda kalıyor ve ekranın SOL YARISI boşalıyordu.
+          Ölçüldü: panel ~700px, liste ise 20 kartta 2.000px'i geçiyor. Boşluk aslında
+          "panel bitti, liste devam ediyor" demekti; yapışkan panel hiç bitmiyor.
+
+          Kurulumun gerekçeleri YapiskanFiltreSutunu'nda (aşağıda) toplu duruyor.
+        */}
+        <YapiskanFiltreSutunu>
           <Card>{aktifPanel}</Card>
-        </aside>
+        </YapiskanFiltreSutunu>
 
         <div className="min-w-0">
           {universiteKipi ? (
@@ -372,6 +381,96 @@ const KART_IZGARASI = 'grid gap-4 md:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2'
 
 /** Kartların odak noktası. shrink-0 Avatar'ın kendisinden geliyor: dar ekranda
     küçülen şey kimlik sütunu olmalı, yüz değil. */
+/*
+  ══════════════════════════════════════════════════════════════════════════════
+  YAPIŞKAN FİLTRE SÜTUNU — kilitlenme anını gölgeyle işaretler.
+
+  ─── NEDEN ────────────────────────────────────────────────────────────────────
+  Yalnız `sticky` ile panel bir anda "kilitleniyor" ve bu geçiş hiçbir şeyle
+  işaretlenmiyordu: göz değişimi görüyor ama nedenini görmüyor, sonuç sert
+  duruyordu. Gölge süsleme değil, GERÇEK BİR DURUM DEĞİŞİMİNİ anlatıyor —
+  panel akışın içinden çıkıp ekrana tutundu. Aynı anda kâğıdı listeden bir kat
+  yukarı kaldırdığı için "sayfaya yapıştırılmış" hissi de kalkıyor.
+
+  ─── NEDEN SCROLL DİNLEYİCİSİ YOK ─────────────────────────────────────────────
+  Kaydırma konumuna bağlı hareket (panelin kayarken kaymasını/ölçeklenmesini
+  canlandırmak) bilerek REDDEDİLDİ: `sticky` ile kavga eder, her kaydırma
+  karesinde JS çalıştırır ve zayıf makinede takılır. IntersectionObserver ise
+  yalnızca EŞİK GEÇİLDİĞİNDE bir kez tetikleniyor — kaydırma boyunca sıfır iş.
+
+  ─── NÖBETÇİ NEDEN `absolute` ─────────────────────────────────────────────────
+  Nöbetçi, panelin doğal üst kenarında durmalı ama yer kaplamamalı. Akışta
+  bırakılsaydı 1px de olsa paneli aşağı iterdi. Sarmalayıcı bir kutuya konması
+  ise daha kötüydü: `sticky` ancak KAPSAYICISININ içinde gezinebilir, panelin
+  boyunda bir sarmalayıcı ona kayacak yer bırakmaz ve yapışkanlık ölürdü. Bu
+  yüzden nöbetçi doğrudan `aside`'ın (ızgara tarafından satır boyuna gerilen
+  uzun kutunun) içinde, konumlandırılmış olarak duruyor.
+
+  Yükseklik `h-px`: sıfır alanlı bir hedefte IntersectionObserver'ın kesişim
+  hesabı tarayıcıya göre değişiyor. 1px hem görünmez hem tartışmasız.
+
+  `-81px`: panel 80px'te (`top-20`) kilitleniyor; 1px'lik nöbetçinin o çizgiyi
+  TAMAMEN geçmiş olması için bir piksel fazlası.
+
+  ─── YAPIŞKANLIK NEDEN İÇTEKİ KUTUDA, `aside`'IN KENDİSİNDE DEĞİL ─────────────
+  `aside` bir ızgara öğesi ve `align-items` varsayılanı `stretch`, yani kendi
+  yüksekliği ZATEN SATIRIN TAMAMI. `sticky` ona verilseydi kutu kapsayıcısını
+  baştan sona doldurduğu için kayacak yer bulamaz, hiçbir şey yapmazdı. İçteki
+  kutu ise uzun `aside`'ın içinde gezinebiliyor — çalışan kurulum bu.
+
+  ─── SAYILAR ──────────────────────────────────────────────────────────────────
+  `top-20` = 64px'lik yapışkan üst bar + 16px pay. `max-h ... 6rem` = o 80px +
+  altta aynı pay. Panel ekrandan uzunsa (küçük dizüstü ya da ileride filtre
+  eklenirse) alt kısmı erişilemez kalırdı; kendi içinde kayıyor.
+
+  ─── UYARI: SESSİZ KIRILMA NOKTASI ────────────────────────────────────────────
+  `sticky`, ATALARINDAN BİRİNDE `overflow` varsa hata vermeden ölür. Zincir bugün
+  temiz (min-h-[100dvh] → lg:flex → relative min-w-0 flex-1 → main); SayfaZemini'nin
+  `overflow-hidden`'ı KARDEŞ bir katmanda, ata değil. Zincire bir gün overflow
+  eklenirse burası hata vermeden bozulur.
+
+  ─── HAREKET AZALTMA ──────────────────────────────────────────────────────────
+  `motion-reduce:transition-none` — gölge yine BELİRİYOR, sadece anında.
+  Hareketi azaltmak bilgiyi kaldırmak değildir; durum yine okunuyor.
+  ══════════════════════════════════════════════════════════════════════════════
+*/
+function YapiskanFiltreSutunu({ children }) {
+  const nobetciRef = useRef(null)
+  const [yapisti, setYapisti] = useState(false)
+
+  useEffect(() => {
+    const nobetci = nobetciRef.current
+    if (!nobetci) return undefined
+
+    const gozlemci = new IntersectionObserver(
+      ([giris]) => setYapisti(!giris.isIntersecting),
+      { rootMargin: '-81px 0px 0px 0px', threshold: 0 },
+    )
+
+    gozlemci.observe(nobetci)
+    return () => gozlemci.disconnect()
+  }, [])
+
+  return (
+    <aside className="relative hidden lg:block">
+      <div ref={nobetciRef} aria-hidden="true" className="absolute inset-x-0 top-0 h-px" />
+
+      {/*
+        rounded-2xl sarmalayıcıda DA gerekli: `overflow-y-auto` içeriği kendi kutusuna
+        göre kırpıyor, köşeler yalnızca Card'da kalsaydı panel kayarken üst ve alt
+        köşeler kare kesilirdi.
+      */}
+      <div
+        className={`kaydirma-ince sticky top-20 max-h-[calc(100dvh-6rem)] overflow-y-auto rounded-2xl transition-shadow duration-300 motion-reduce:transition-none ${
+          yapisti ? 'shadow-lg shadow-slate-900/10' : 'shadow-none'
+        }`}
+      >
+        {children}
+      </div>
+    </aside>
+  )
+}
+
 function KartAvatari({ userId, ad }) {
   return <Avatar userId={userId} name={ad} size="lg" className="shadow-md ring-2 ring-white" />
 }
