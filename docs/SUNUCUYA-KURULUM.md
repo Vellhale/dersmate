@@ -261,6 +261,30 @@ Sonra **elle** iki şey dene — ikisi de otomatik doğrulanamıyor:
 2. **Sohbet aç ve mesaj gönder.** SignalR WebSocket yükseltmesi vekil yapılandırmasına
    bağlı; yanlışsa sohbet sessizce "bağlanıyor"da kalır.
 
+### Sertifika yenilemesini SINA (⛔ atlanırsa 90 gün sonra site düşer)
+
+Sertifikayı `--standalone` ile aldın (certbot 80 portunu kendi tuttu). Yenileme ise
+`--webroot` ile yapılacak, çünkü artık nginx 80'i tutuyor. **İkisi farklı yol** ve
+uyuşup uyuşmadıkları ancak sınanınca anlaşılır:
+
+```bash
+dc run --rm --entrypoint certbot certbot renew --webroot -w /var/www/certbot --dry-run
+```
+
+Beklenen: `Congratulations, all simulated renewals succeeded`
+
+> **`--entrypoint certbot` ŞART.** `docker compose run <servis> <komut>` yalnızca
+> *command*'i değiştirir, *entrypoint*'i değil. Bu servisin entrypoint'i sonsuz bir
+> döngü (`while :; do certbot renew --quiet; sleep 12h; done`); yazdığın argümanlar o
+> kabuk betiğine konumsal parametre olarak geçer ve **sessizce yok sayılır**. Komut
+> hiç hata vermez, sadece 12 saatlik uykuya oturur ve sen sınama yaptığını sanırsın.
+> (Gerçek kurulumda bu yaşandı: 2026-09-04.)
+
+Bu adım neden atlanamaz: yenileme 12 saatte bir kendiliğinden koşuyor ve `--quiet`
+çalıştığı için **başarısız olsa da ses çıkarmaz**. Site 89 gün sorunsuz çalışır, sonra
+bir sabah `NET::ERR_CERT_DATE_INVALID` verir. Sınama, o sabahı bugünden görmenin tek
+yolu.
+
 ---
 
 ## 10. Yedek (⛔ İLK KULLANICIDAN ÖNCE)
