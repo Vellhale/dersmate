@@ -285,17 +285,57 @@ Bu adım neden atlanamaz: yenileme 12 saatte bir kendiliğinden koşuyor ve `--q
 bir sabah `NET::ERR_CERT_DATE_INVALID` verir. Sınama, o sabahı bugünden görmenin tek
 yolu.
 
+#### ⛔ Ama dry-run YETMEZ: yenilenen sertifikanın YÜKLENMESİ ayrı bir iş
+
+Yukarıdaki sınama **doğrulama yolunu** kanıtlar, **teslim yolunu** değil. `--dry-run`
+hiçbir sertifika yazmaz, dolayısıyla nginx'in yeni dosyayı okuyup okumadığını hiç
+denemez. Ölçülerek bulunan arıza (2026-09-04 denetimi):
+
+nginx sertifikayı yalnızca açılışta ve `reload` anında belleğe alır. certbot yeniler,
+dosyayı yazar, log tertemiz görünür — ama nginx **eskisini sunmaya devam eder** ve
+`restart: unless-stopped` konteyneri kendi başına yeniden başlatmaz. Sonuç, bitiş
+gününde site + API + SignalR'ın birlikte düşmesidir.
+
+Çözüm `docker-compose.prod.yml`'de: `web` servisi artık 6 saatte bir `nginx -s reload`
+çalıştıran bir döngü taşıyor. Kurulumdan sonra ayrıca bir şey yapman gerekmiyor, ama
+**ilk gerçek yenilemeden sonra doğrula** — yenileme bitişe 30 gün kala olur, yani
+sertifikanın bitiş tarihinden bir ay öncesi:
+
+```bash
+echo | openssl s_client -servername www.dersmate.com -connect www.dersmate.com:443 2>/dev/null \
+  | openssl x509 -noout -dates
+```
+
+`notBefore` hâlâ ilk kurulum tarihini gösteriyorsa yeniden yükleme çalışmıyordur ve
+düzeltmek için **bir ayın** vardır. Bu kontrolü takvime yaz; sessiz arıza ancak
+dışarıdan bakan bir ölçümle görülür.
+
 ---
 
 ## 10. Yedek (⛔ İLK KULLANICIDAN ÖNCE)
 
 ```bash
-./tools/yedek-al.sh                 # varsayılan hedef: ./yedekler
+./tools/yedek-al.sh                 # varsayılan hedef: /var/backups/dersmate
 ./tools/yedek-al.sh /mnt/yedek      # başka bir diske
 ```
 
 Betik veritabanı dökümünü ve kanıt dosyalarını **birlikte** alır, ikisinin de bütünlüğünü
-doğrular ve 14 günden eski yedekleri siler (`SAKLAMA_GUN` ile değiştirilir).
+doğrular ve 14 günden eski yedekleri siler (`SAKLAMA_GUN` ile değiştirilir). Kanıt arşivi
+**boş çıkarsa betik durur** (`exit 1`) ve temizliği çalıştırmaz — geçerli olmayan bir
+yedek uğruna eldeki geçerli yedekleri budamamak için.
+
+> **⚠️ Bu sürümden önce kurduysan:** varsayılan hedef `./yedekler` idi, yani depo kökünün
+> **içi**. Orada kişisel veri var (e-posta adresleri, parola özetleri, öğrenci belgeleri) ve
+> `tools/dagit.sh` her dağıtımda oraya yazıyordu. Bir kez taşı:
+>
+> ```bash
+> mkdir -p /var/backups/dersmate
+> mv /opt/dersmate/yedekler/* /var/backups/dersmate/ 2>/dev/null || true
+> rmdir /opt/dersmate/yedekler
+> ```
+>
+> Taşımazsan yeni yedekler yeni yere gider ama eskiler depo içinde kalır ve saklama
+> temizliği onları budamaz.
 
 Cron'a bağla — bu adım atlanırsa geriye tek seferlik, elle alınmış ve unutulmuş bir yedek
 kalır:
