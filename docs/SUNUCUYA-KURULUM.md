@@ -407,11 +407,17 @@ rclone config     # n → ad: dersmate-sifreli → tür: crypt
 **4. Cron'a bağla — `&&` ile, `;` ile değil:**
 
 ```bash
-15 3 * * * /KURULUM-YOLUN/tools/yedek-al.sh && /KURULUM-YOLUN/tools/yedek-gonder.sh >> /var/log/dersmate-yedek.log 2>&1
+15 3 * * * ( /KURULUM-YOLUN/tools/yedek-al.sh && /KURULUM-YOLUN/tools/yedek-gonder.sh ) >> /var/log/dersmate-yedek.log 2>&1
 ```
 
 `&&` bilinçli: yedek alma başarısızsa (0 girdili kanıt arşivi, şüpheli küçük döküm)
 gönderim hiç çalışmamalı.
+
+⚠️ **PARANTEZ DE ŞART.** Parantezsiz yazılırsa (`A && B >> log 2>&1`) yönlendirme
+yalnızca `B`'ye uygulanır: `yedek-al.sh`'in çıktısı log dosyasına DEĞİL cron'un
+e-postasına gider. Sonuç sinsi — log dosyası "yalnızca gönderim çalışmış" gibi
+görünür, yedek almanın hata mesajları hiçbir yerde aranmaz. Parantez ikisini tek
+akışa alıyor.
 
 #### Betiğin kapattığı üç sessiz arıza
 

@@ -5,12 +5,17 @@
 #   ./tools/yedek-gonder.sh                → varsayılan uzak: dersmate-sifreli:
 #   YEDEK_UZAK=baska: ./tools/yedek-gonder.sh
 #
-# CRON — yedek-al.sh'in ARDINDAN, `&&` ile:
-#   15 3 * * * /root/dersmate/tools/yedek-al.sh && /root/dersmate/tools/yedek-gonder.sh >> /var/log/dersmate-yedek.log 2>&1
+# CRON — yedek-al.sh'in ARDINDAN, `&&` ile ve PARANTEZ İÇİNDE:
+#   15 3 * * * ( /root/dersmate/tools/yedek-al.sh && /root/dersmate/tools/yedek-gonder.sh ) >> /var/log/dersmate-yedek.log 2>&1
 #
 # `&&` BİLİNÇLİ: yedek alma başarısızsa (0 girdili kanıt arşivi, küçük döküm…)
 # gönderim HİÇ çalışmamalı. Bozuk bir yedeği buluta taşımak, buluttaki sağlam
 # kopyanın yerini almaz ama saklama penceresini boşa harcar.
+#
+# ⚠️ PARANTEZ DE ŞART. Parantezsiz `A && B >> log 2>&1` yazılırsa yönlendirme yalnızca
+# B'ye uygulanır: yedek-al.sh'in çıktısı log dosyasına DEĞİL cron'un e-postasına gider.
+# Sinsi olan şu: log "yalnızca gönderim çalışmış" gibi görünür ve yedek almanın hata
+# mesajları hiçbir yerde aranmaz. (Bu kusur ilk yazımda vardı, canlıda yakalandı.)
 #
 # ⛔ NEDEN VAR: yedek SUNUCUNUN KENDİSİNDE duruyordu. Sunucu kaybolursa (disk arızası,
 #    sağlayıcı hesabının kapanması, fidye yazılımı) yedek de kaybolur — yani aslında
