@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useConsent } from '../state/ConsentContext'
 import { CONSENT_CATEGORIES, CONSENT_VERSION } from '../lib/consent'
 import { Button } from './ui'
@@ -18,10 +18,59 @@ export function CookieBanner() {
   // Şerit yalnızca hiç sorulmadıysa; ayarlar penceresi ayrıca her zaman açılabilir.
   const showBar = mustAsk && !settingsOpen
 
+  const seritRef = useRef(null)
+
+  /*
+    ⛔ ŞERİT KADAR YER AYRILIYOR — YOKSA ALTINDAKİ HER ŞEY TIKLANAMIYOR.
+
+    Yukarıdaki not "engelleyici bir pencere değil" diyor ve niyet doğru, ama uygulama
+    mobilde bunun tersini yapıyordu: şerit `fixed bottom-0` ve altında hiç yer
+    ayrılmıyordu. Dar ekranda içerik dikey yığıldığı için şerit 217 piksele çıkıyor
+    (375x812'de ölçüldü) ve sayfanın son 217 pikseli rıza verilene kadar KAPALI kalıyor.
+
+    Canlıda ölçülen sonuç — /kayit, mobil görünüm:
+
+        "Hesap oluştur"  → elementFromPoint şeridin <p>'sini döndürüyor  → TIKLANMIYOR
+        "Giriş yap"      → şeridin "Ayrıntılar" düğmesini döndürüyor     → TIKLANMIYOR
+
+    Yani mobilden gelen yeni kullanıcı, çerez şeridini kapatmadan KAYIT OLAMIYORDU.
+    Belirtisi de sinsi: düğme görünüyor, basılıyor, hiçbir şey olmuyor ve ekranda
+    sebebi söyleyen hiçbir şey yok. Sayfa kaydırılsa bile şerit ekrana sabit olduğu
+    için düğmenin üstünden çekilmiyor.
+
+    ⚠️ YÜKSEKLİK SABİT YAZILAMAZ. Şeridin boyu ekran genişliğine ve metnin kaç satıra
+    sarıldığına göre değişiyor (mobilde ~217px, geniş ekranda tek satır). Sabit bir
+    değer, bir kırılımda eksik kalıp aynı hatayı sessizce geri getirirdi — bu yüzden
+    ResizeObserver ile ÖLÇÜLÜYOR.
+
+    Şerit kapanınca (rıza verildi ya da ayarlar penceresi açıldı) dolgu geri alınıyor;
+    aksi halde sayfanın altında kalıcı bir boşluk kalırdı.
+  */
+  useLayoutEffect(() => {
+    const serit = seritRef.current
+    if (!showBar || !serit) return undefined
+
+    const uygula = () => {
+      document.body.style.paddingBottom = `${serit.offsetHeight}px`
+    }
+    uygula()
+
+    const gozlemci = new ResizeObserver(uygula)
+    gozlemci.observe(serit)
+
+    return () => {
+      gozlemci.disconnect()
+      document.body.style.paddingBottom = ''
+    }
+  }, [showBar])
+
   return (
     <>
       {showBar && (
-        <div className="fixed inset-x-0 bottom-0 z-50 border-t border-brand-100 bg-white/95 p-4 shadow-[0_-4px_20px_rgba(15,23,42,0.08)] backdrop-blur">
+        <div
+          ref={seritRef}
+          className="fixed inset-x-0 bottom-0 z-50 border-t border-brand-100 bg-white/95 p-4 shadow-[0_-4px_20px_rgba(15,23,42,0.08)] backdrop-blur"
+        >
           <div className="mx-auto flex max-w-4xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm text-slate-700">
               Siteyi çalıştırmak için zorunlu çerezleri kullanıyoruz. Analitik ve fonksiyonel
