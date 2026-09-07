@@ -399,9 +399,32 @@ function LayoutShell() {
         </div>
 
         {/* lg altı çekmece: rayla aynı içerik, aynı koyu zemin. dvh: mobil adres çubuğu
-            vh'ye dahil değil — vh kullanılsa alt satırlar çubuğun arkasında kalırdı. */}
+            vh'ye dahil değil — vh kullanılsa alt satırlar çubuğun arkasında kalırdı.
+
+            ⛔ `relative z-40` ŞART — YOKSA MENÜNÜN HİÇBİR ÖĞESİNE BASILAMIYOR.
+
+            Aşağıdaki perde `fixed … z-30`. KONUMLANDIRILMIŞ bir element, konumlandırılmamış
+            olanın ÜSTÜNE boyanır ve DOM sırası bunu değiştirmez. Bu `nav` bir dönem
+            konumsuzdu (`position: static`, `z-index: auto`), yani perde çekmecenin üstünde
+            kalıyordu.
+
+            Perdedeki yorum "header z-40'ta, yani çekmece perdenin ÜSTÜNDE kalır" diyordu —
+            YANLIŞ. O z-40 header'ın KENDİSİNE ait ve onu bir yığın bağlamı yapıyor; bağlamın
+            İÇİNDE karşılaştırma çocuklar arasında yapılıyor ve orada static bir çocuk,
+            z-30'lu konumlandırılmış bir kardeşe yeniliyor.
+
+            Belirtisi tam da bu projede tekrar eden sınıftan: hata yok, uyarı yok, menü
+            açılıyor ve GÖRÜNÜYOR (perde %40 saydam). Ama her dokunuş perdeye gidiyor,
+            perde de kapatma işleyicisini çalıştırıyor — kullanıcı için "menü açılıyor,
+            bir şeye basıyorum, kapanıyor" demek.
+
+            Ölçüldü (375x812, /kesfet): 11 menü öğesinin 11'i de elementFromPoint'te perdeyi
+            döndürüyordu; `relative z-40` ile 11'i de tıklanabilir oluyor.
+
+            ⚠️ Altbilgi bağlantılarının menü AÇIKKEN engelli kalması DOĞRU: perdenin işi
+            zaten arkadaki sayfayı devre dışı bırakmak. */}
         {menuOpen && (
-          <nav className="flex max-h-[75dvh] flex-col overflow-y-auto border-t border-white/10 bg-slate-900 px-3 py-2 lg:hidden">
+          <nav className="relative z-40 flex max-h-[75dvh] flex-col overflow-y-auto border-t border-white/10 bg-slate-900 px-3 py-2 lg:hidden">
             {/* Kimlik satırı çekmecenin tepesinde: barda avatar ve isme yer yok. */}
             <NavLink
               to="/profil"
@@ -429,8 +452,14 @@ function LayoutShell() {
           top-16: perde barın ALTINDAN başlar. Barı da karartsaydı hamburger ile çıkış
           düğmesi perdenin altında kalır, menüyü hamburgerle kapatmak imkânsızlaşırdı.
 
-          z-30: `<header>` z-40'ta, yani çekmece perdenin ÜSTÜNDE kalır; perde yalnızca
-          onun dışındaki her şeyi örter.
+          z-30: perde yalnızca kendi dışındaki her şeyi örtsün diye.
+
+          ⚠️ BURADA BİR DÖNEM ŞU YAZIYORDU VE YANLIŞTI: "`<header>` z-40'ta, yani çekmece
+          perdenin ÜSTÜNDE kalır." O z-40 header'ın KENDİSİNE ait ve onu bir yığın bağlamı
+          yapıyor; bağlamın içindeki karşılaştırma çocuklar arasında. Çekmece o zaman
+          konumsuzdu, dolayısıyla bu z-30'lu perde ONUN da üstüne boyanıyordu ve menünün
+          11 öğesinin 11'i birden tıklanamıyordu. Çekmece artık `relative z-40` taşıyor —
+          gerekçesi orada yazılı. İkisi birlikte anlamlı: birini değiştirirken diğerine bak.
 
           aria-hidden: perde saf dekor, ekran okuyucuya söyleyecek bir şeyi yok —
           kapatma eylemi zaten hamburgerin `aria-expanded`'ı ve menü öğeleriyle
