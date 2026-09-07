@@ -1,9 +1,20 @@
 <!-- Marka renkleri Logo.jsx ile AYNI olmalı (F1b): zemin brand-50 #E6F4FB,
      vurgu #0088CC, koyu düğüm #0F172A. Eskiden zemin indigo-50 (#EEF2FF) ve vurgu
-     #38BDF8 idi; ikisi de skala dışıydı. -->
+     #38BDF8 idi; ikisi de skala dışıydı.
+
+     GEOMETRİ Logo.jsx'teki işaretle AYNI AİLEDEN (2026-09-07): merkezler arası
+     ≈1.96r, yay kalınlığı ≈0.29r, yayın tepesi eksenin ≈0.56r üstünde. Rozet ile
+     kelime markasının işareti farklı oranlardaydı ve yan yana geldiklerinde iki
+     ayrı logo gibi duruyorlardı.
+
+     İKİ SESSİZ KUSUR DA BURADA DÜZELDİ:
+       • cy=34 idi — işaret 64'lük kutuda 2 birim AŞAĞIDAYDI (üstte 23, altta 19
+         birim boşluk). Rozet dikeyde ortalanmış görünmüyordu.
+       • Daireler opacity="0.95" taşıyordu. Amacı belirsiz, etkisi kesin: koyu
+         düğüm zemine karışıp soluyordu. Saydamlık kaldırıldı, renkler tam. -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
   <rect width="64" height="64" fill="#E6F4FB" rx="14"/>
-  <circle cx="23" cy="34" r="11" fill="#0088CC" opacity="0.95"/>
-  <circle cx="41" cy="34" r="11" fill="#0F172A" opacity="0.95"/>
-  <path d="M 23 34 Q 32 22, 41 34" stroke="#E6F4FB" stroke-width="3.5" fill="none" stroke-linecap="round"/>
+  <circle cx="21.2" cy="32" r="11" fill="#0088CC"/>
+  <circle cx="42.8" cy="32" r="11" fill="#0F172A"/>
+  <path d="M 21.2 32 Q 32 19.8, 42.8 32" stroke="#E6F4FB" stroke-width="3.2" fill="none" stroke-linecap="round"/>
 </svg>
