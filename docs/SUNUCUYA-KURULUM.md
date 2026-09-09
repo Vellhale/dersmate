@@ -310,6 +310,25 @@ echo | openssl s_client -servername www.dersmate.com -connect www.dersmate.com:4
 düzeltmek için **bir ayın** vardır. Bu kontrolü takvime yaz; sessiz arıza ancak
 dışarıdan bakan bir ölçümle görülür.
 
+Beklemeden yüklemen gerekirse — yukarıdaki ölçüm eskiyi gösterdi, ya da sertifikayı
+elle yenilledin:
+
+```bash
+docker exec dersmate-web nginx -s reload
+```
+
+Zarif reload: açık bağlantılar düşmez, kesinti olmaz. Döngünün 6 saatini beklemek
+yerine bunu çalıştır, sonra `openssl` ölçümünü tekrarla.
+
+> Döngünün ayakta olduğunu görmek (PID 1 `nginx`, yanında uykuda bir `sh`):
+>
+> ```bash
+> docker exec dersmate-web ps -o pid,args | head -5
+> ```
+>
+> Bu **reload'ların koştuğunu** söyler, sunulan sertifikanın yenilendiğini değil —
+> asıl kanıt yukarıdaki `openssl` ölçümüdür. İkisi farklı soruları yanıtlıyor.
+
 ---
 
 ## 10. Yedek (⛔ İLK KULLANICIDAN ÖNCE)
