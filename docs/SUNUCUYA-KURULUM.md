@@ -273,6 +273,19 @@ dc run --rm --entrypoint certbot certbot renew --webroot -w /var/www/certbot --d
 
 Beklenen: `Congratulations, all simulated renewals succeeded`
 
+> **Prova geçse de tek başına yetmez — nginx'in yeni sertifikayı yüklemesi gerekir.**
+> nginx sertifikayı yalnızca açılışta okur; certbot yeni dosyayı diske yazsa da nginx
+> bellekteki eskisini sunmaya devam eder. Bu yüzden `docker-compose.prod.yml`'daki `web`
+> servisi 6 saatte bir zarif `nginx -s reload` yapıyor (gerekçesi oradaki yorumda).
+> Reload'ların gerçekten koştuğunu görmek:
+>
+> ```bash
+> docker logs dersmate-web 2>&1 | grep -c "signal process started"   # 6 saatte bir artmalı
+> ```
+>
+> Hemen yüklemek gerekirse: `docker exec dersmate-web nginx -s reload` — kesinti yapmaz.
+> (Bu boşluk canlıda 2026-09-09'da fark edildi: yenileme çalışıyordu, nginx görmüyordu.)
+
 > **`--entrypoint certbot` ŞART.** `docker compose run <servis> <komut>` yalnızca
 > *command*'i değiştirir, *entrypoint*'i değil. Bu servisin entrypoint'i sonsuz bir
 > döngü (`while :; do certbot renew --quiet; sleep 12h; done`); yazdığın argümanlar o

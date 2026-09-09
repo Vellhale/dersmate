@@ -162,6 +162,32 @@ services:
     container_name: dersmate-web
     restart: unless-stopped
 
+    # ⛔ SERTİFİKA YENİLENİNCE nginx'İ KİMSE YENİDEN YÜKLEMİYORDU.
+    #
+    # certbot 12 saatte bir yeniler ve yeni dosyayı diske yazar; ama nginx sertifikayı
+    # yalnızca AÇILIŞTA ve reload'da okur. Reload olmadan bellekteki ESKİ sertifika
+    # sunulmaya devam eder: yenileme "başarılı" görünür, `--dry-run` da geçer, ama
+    # 90. günde site yine `NET::ERR_CERT_DATE_INVALID` verir. Prova bunu yakalayamaz —
+    # certbot'u sınar, nginx'i değil. (Canlıda fark edildi: 2026-09-09, sertifikanın
+    # 85 günü kalmışken.)
+    #
+    # Çözüm: 6 saatte bir zarif reload (`nginx -s reload` açık bağlantı düşürmez).
+    # Yenileme bitiş tarihinden 30 gün önce başladığı için 6 saatlik gecikme önemsiz.
+    # Döngü arka planda, nginx `exec` ile PID 1 kalıyor: `docker stop`'un SIGTERM'i
+    # doğrudan nginx'e gider ve zarif kapanış korunur (sh PID 1 olsaydı sinyali
+    # yutar, Docker 10 sn sonra SIGKILL atardı).
+    #
+    # `command` verilince resmi imajın /docker-entrypoint.d betikleri ATLANIR
+    # ($1 "nginx" olmadığı için). Bu kurulumda hiçbiri gerekmiyor: şablon
+    # (templates/) yok, worker autotune kapalı, IPv6 listen satırları zaten
+    # nginx.conf'ta. Şablon eklenecek olursa bu satırı yeniden düşün.
+    #
+    # `$$`: compose'un kendi değişken açılımından kaçış — kabuğa `$!` ulaşır.
+    # Yenilemenin nginx'e ulaştığını görmek: docs/SUNUCUYA-KURULUM.md, sertifika bölümü.
+    command: >
+      /bin/sh -c "while :; do sleep 6h & wait $${!}; nginx -s reload; done &
+      exec nginx -g 'daemon off;'"
+
     depends_on:
       api: { condition: service_healthy }
 
