@@ -105,6 +105,19 @@ test.describe('Marka paleti tek kaynakta', () => {
 
     expect(oku('ACCENT'), 'Logo ACCENT ile brand-500 ayrışmış').toBe(palet[500].toLowerCase())
     expect(oku('BG'), 'Logo BG ile brand-50 ayrışmış').toBe(palet[50].toLowerCase())
+
+    /*
+      ZEMIN_MARKA bir VURGU değil, ZEMİN: logonun bağ yayı arkasındaki yüzeyin
+      rengiyle çiziliyor ve `marka` varyantının arkasındaki yüzey giriş panelinin
+      `from-brand-600` gradyanı.
+
+      Bu senkron kopması SESSİZ olurdu ve öbür ikisinden daha sinsi: yay yanlış
+      renge kaysa bile logo "var" olmaya devam eder, yalnızca iki dairenin arasında
+      zeminden ayrışan bir çizgi belirir — ekran görüntüsüne bakmadan fark edilmez.
+    */
+    expect(oku('ZEMIN_MARKA'), 'Logo ZEMIN_MARKA ile brand-600 ayrışmış').toBe(
+      palet[600].toLowerCase(),
+    )
   })
 
   test('favicon, LogoMark ile aynı renkleri kullanıyor', () => {

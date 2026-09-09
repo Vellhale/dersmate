@@ -59,28 +59,73 @@ const ACCENT_GECE = '#33A7DF' // brand-400 — slate-900 üst bar üstünde
 const INK = '#0F172A' // slate-900
 const BEYAZ = '#FFFFFF'
 
+/* Bağ yayının rengi = ARKASINDAKİ ZEMİN. Üç varyantın ikisi zaten yukarıda var
+   (beyaz yüzey → BEYAZ, slate-900 üst bar → INK); üçüncüsü giriş ekranının
+   `from-brand-600` gradyanı, o yüzden palete bağlı ayrı bir sabit gerekiyor.
+   e2e/kaynak-sabitleri.spec.js bunu brand-600 ile senkron tutuyor: panelin gradyanı
+   bir gün değişirse yay zeminden ayrışır ve logonun ortasında yanlış renkte bir
+   çizgi belirir. */
+const ZEMIN_MARKA = '#0077B3' // brand-600 — giriş panelinin gradyan başlangıcı
+
 const ZEMINLER = {
   /** Beyaz / açık gri yüzeyler. */
-  acik: { nokta: ACCENT, ikinciNokta: INK, ders: 'text-slate-900', mate: 'text-brand-500' },
+  acik: {
+    nokta: ACCENT,
+    ikinciNokta: INK,
+    yay: BEYAZ,
+    ders: 'text-slate-900',
+    mate: 'text-brand-500',
+  },
   /** Giriş ekranının brand-600 gradyanlı sol paneli. */
-  marka: { nokta: ACCENT_MARKA, ikinciNokta: BEYAZ, ders: 'text-white', mate: 'text-brand-100' },
+  marka: {
+    nokta: ACCENT_MARKA,
+    ikinciNokta: BEYAZ,
+    yay: ZEMIN_MARKA,
+    ders: 'text-white',
+    mate: 'text-brand-100',
+  },
   /** slate-900 üst bar ve koyu ray. */
-  gece: { nokta: ACCENT_GECE, ikinciNokta: BEYAZ, ders: 'text-white', mate: 'text-brand-400' },
+  gece: {
+    nokta: ACCENT_GECE,
+    ikinciNokta: BEYAZ,
+    yay: INK,
+    ders: 'text-white',
+    mate: 'text-brand-400',
+  },
 }
 
 /*
-  Belirteçler. İşaret yüksekliği metnin gövde yüksekliğine yakın tutuluyor: noktalar
-  harflerden büyük olursa kilit "iki top ve yanında yazı" gibi okunuyor, küçük olursa
-  yazının noktalama işareti gibi görünüyor.
+  Belirteçler. İşaret artık metnin GÖVDE (x) yüksekliğine değil, BÜYÜK HARF
+  yüksekliğine yakın: kabaca punto × 0.7.
 
-  İşaretin genişliği verilmiyor (w-auto): viewBox oranı 40:18 olduğu için tarayıcı
+  ⛔ 12 PİKSELİN ALTINA İNME — ölçüldü, tahmin değil.
+
+  Eski belirteçler 7/8/9/11px'ti ve bu, işaretin içindeki bağ yayı DAİRELERİN ARKASINA
+  saklandığı sürece sorun değildi; görünen tek şey iki dolu daireydi ve daire her
+  boyutta daire kalır. Yeni kurguda yay işaretin İÇİNDEN geçiyor, yani çizimin
+  okunurluğu artık yayın kaç piksele düştüğüne bağlı.
+
+  Tarayıcıda rasterize edilip 1×/2×/3× cihaz piksel oranlarında ölçüldü (yay kalınlığı
+  viewBox'ta 2.6/20, yani işaret yüksekliğinin %13'ü):
+
+      işaret   DPR 1                        DPR 2 / 3
+       8px     yay 1px → kopuk lekeler      okunur
+      10px     hâlâ bulanık                 okunur
+      11px     sınırda                      okunur
+      12px     OKUNUR                       net
+      14px+    net                          net
+
+  DPR 1 belirleyici olan: masaüstü monitörlerin çoğu hâlâ 1× ve logo orada da doğru
+  görünmek zorunda. 2× ekranda bakıp "iyi" demek, kullanıcıların yarısını ölçmemektir.
+
+  İşaretin genişliği verilmiyor (w-auto): viewBox oranı 37.6:20 olduğu için tarayıcı
   yükseklikten türetiyor. Genişliği elle vermek, oranı iki yerde tutmak demekti.
 */
 const BOYUTLAR = {
-  sm: { yazi: 'text-[15px]', isaret: 'h-[7px]', bosluk: 'gap-1.5' },
-  md: { yazi: 'text-[17px]', isaret: 'h-2', bosluk: 'gap-2' },
-  lg: { yazi: 'text-xl', isaret: 'h-[9px]', bosluk: 'gap-2' },
-  xl: { yazi: 'text-2xl', isaret: 'h-[11px]', bosluk: 'gap-2.5' },
+  sm: { yazi: 'text-[15px]', isaret: 'h-3', bosluk: 'gap-1.5' }, // 12px — taban
+  md: { yazi: 'text-[17px]', isaret: 'h-3', bosluk: 'gap-2' }, // 12px
+  lg: { yazi: 'text-xl', isaret: 'h-[14px]', bosluk: 'gap-2' }, // 20px punto
+  xl: { yazi: 'text-2xl', isaret: 'h-[17px]', bosluk: 'gap-2.5' }, // 24px punto
 }
 
 /**
@@ -94,45 +139,53 @@ export function Logo({ boyut = 'md', zemin = 'acik', className = '', title = 'de
   return (
     <span className={`inline-flex items-center ${b.bosluk} ${className}`}>
       {/*
-        İki düğüm: akran eşleşmesi. Aralarındaki 4 birimlik boşluk BOYA DEĞİL, gerçek
-        boşluk. Eski çizimde daireler üst üste biniyor ve aradaki ayrım zemin rengiyle
-        çizilmiş bir yayla yapılıyordu; o yay koyu temada `stroke="none"` olduğu için
-        daireler tek bulanık kütleye dönüşüyordu. Ayrıca ikisi de opacity 0.95 taşıyordu.
+        İki düğüm: akran eşleşmesi. Erişilebilir ad BURADA — kelime markası
+        `aria-hidden`, yani ekran okuyucu "dersmate" ifadesini bir kez duyuyor.
 
-        Erişilebilir ad BURADA: kelime markası `aria-hidden`, yani ekran okuyucu
-        "dersmate" ifadesini bir kez duyuyor.
-      */}
-      {/*
-        viewBox'TA 1 BİRİMLİK PAY VAR (2026-08-25). Eski kutu 40×18'di ve daireler
-        kenarlara SIFIR payla oturuyordu: cy=9, r=9 → üst/alt kenar tam 0 ve 18'de,
-        ikinci dairenin sağ kenarı tam 40'ta. Kenar yumuşatması (antialiasing) son
-        piksel şeridini kutunun DIŞINA taşırıyor ve tarayıcı onu kırpıyordu — koyu
-        zeminde beyaz dairenin kenarında görünen "kesik" tam buydu. Şimdi her kenarda
-        1 birim nefes payı var; daireler kutuya değmiyor.
+        ─────────────────────────────────────────────────────────────────────────
+        ÜÇÜNCÜ (VE SON) KURGU — 2026-09-07. Önceki iki denemenin ikisi de aynı
+        şeyi ıskaladı: yayın rengi.
 
-        BAĞ YAYI GERİ GELDİ — ama eski hatasıyla DEĞİL. İlk çizimde daireler üst üste
-        biniyor ve ayrım, zemin rengiyle çizilmiş bir yayla yapılıyordu; koyu temada o
-        yay görünmez olup daireleri tek kütleye dönüştürüyordu (bu yüzden kaldırılmıştı).
-        Yeni yay GERÇEK renkte (vurgu tonu — her zeminde zaten ölçülü) ve dairelerin
-        ARKASINA çiziliyor: uçları noktaların altında kayboluyor, görünen kısım iki
-        düğümü birbirine bağlayan köprü. Daireler ayrık kaldığı için eski bulanıklaşma
-        geri gelmiyor; işaret favicon'daki "bağlı iki akran" fikrini geri kazanıyor.
+          1. deneme  daireler ÜST ÜSTE, ayrım zemin rengiyle çizilmiş yayla.
+                     Doğru fikir, ama yay tek bir renge (açık zemin) sabitlenmişti;
+                     koyu temada görünmez kalıp iki daireyi tek bulanık kütleye
+                     çeviriyordu. Bu yüzden kaldırıldı.
+          2. deneme  daireler AYRIK, aralarına VURGU renginde bir köprü yayı,
+                     üstelik dairelerin ARKASINA çizilmiş. Yay ile birinci daire
+                     aynı renkte olduğu için ikisi kaynaşıyor, yayın sağ ucu
+                     dairelerin arasından bir kuyruk gibi taşıyordu. Kullanılan
+                     boyutlarda (işaret 7–11px) bu bir çizim değil, leke.
+
+        Şimdi ikisinin doğru yanları birleşti: daireler yeniden üst üste biniyor
+        (kilit, iki ayrı top değil) ve ayrım yine zemin rengiyle yapılıyor — AMA
+        yay artık VARYANTA GÖRE zemin rengi (`z.yay`) ve dairelerin ÜSTÜNE, yani
+        son çocuk olarak çiziliyor. 1. denemenin arızası tam olarak bu iki
+        eksikti; renk sabitlenmişti ve boyama sırası şansa bırakılmıştı.
+
+        ⛔ `yay`'ı vurgu tonuna çevirme, sırasını da yukarı taşıma. İkisi de
+        işaretin okunurluğunu YOK EDİYOR ve ikisi de "sadeleştirme" gibi görünüyor.
+
+        Oranlar favicon'la (LogoMark) aynı aileden: r=9, merkezler arası 17.6
+        (d/r≈1.96), yay kalınlığı 2.6 (≈0.29r), yayın tepesi merkez ekseninin 5
+        birim üstünde (≈0.56r). viewBox'ta her kenarda 1 birim pay var — sıfır
+        payda kenar yumuşatması son piksel şeridini kutunun dışına taşırıyor ve
+        tarayıcı onu kırpıyordu (koyu zeminde beyaz dairede görünen "kesik" buydu).
       */}
       <svg
-        viewBox="0 0 42 20"
+        viewBox="0 0 37.6 20"
         role="img"
         aria-label={title}
         className={`${b.isaret} w-auto shrink-0`}
       >
+        <circle cx="10" cy="10" r="9" fill={z.nokta} />
+        <circle cx="27.6" cy="10" r="9" fill={z.ikinciNokta} />
         <path
-          d="M 10 10 Q 21 0, 32 10"
-          stroke={z.nokta}
-          strokeWidth="2.5"
+          d="M 10 10 Q 18.8 0, 27.6 10"
+          stroke={z.yay}
+          strokeWidth="2.6"
           fill="none"
           strokeLinecap="round"
         />
-        <circle cx="10" cy="10" r="9" fill={z.nokta} />
-        <circle cx="32" cy="10" r="9" fill={z.ikinciNokta} />
       </svg>
 
       {/*
@@ -163,17 +216,25 @@ export function Logo({ boyut = 'md', zemin = 'acik', className = '', title = 'de
  * görünmedi çünkü `LogoMark` hiçbir yerden çağrılmıyor; yani derleme de test de bunu
  * yakalayamazdı.
  *
- * GEOMETRİSİ BİLEREK ESKİ HÂLİNDE: favicon.svg ile birebir aynı olmak zorunda
- * (e2e/kaynak-sabitleri.spec.js ikisinin renklerini karşılaştırıyor) ve favicon,
- * kelime markasının yeniden çizilmesinden etkilenmiyor.
+ * GEOMETRİSİ favicon.svg İLE BİREBİR AYNI OLMAK ZORUNDA — ikisi aynı anda
+ * güncellenir (e2e/kaynak-sabitleri.spec.js renklerini karşılaştırıyor).
+ *
+ * 2026-09-07'de ikisi birden düzeltildi:
+ *   • Oranlar yukarıdaki işaretle hizalandı (≈1.96r ara, ≈0.29r kalınlık,
+ *     ≈0.56r tepe). Rozet ile kelime markası farklı oranlardaydı; yan yana
+ *     geldiklerinde iki ayrı logo gibi duruyorlardı.
+ *   • cy 34 → 32. İşaret 64'lük kutuda 2 birim AŞAĞIDAYDI: üstte 23, altta 19
+ *     birim boşluk. Sebebi görünmüyordu ama rozet dikeyde ortalanmamış duruyordu.
+ *   • `opacity="0.95"` kaldırıldı. Amacı belirsizdi, etkisi kesin: koyu düğüm
+ *     zemine karışıp soluyordu.
  */
 export function LogoMark({ className = 'h-8 w-8', title = 'dersmate' }) {
   return (
     <svg viewBox="0 0 64 64" role="img" aria-label={title} className={className}>
       <rect width="64" height="64" fill={BG} rx="14" />
-      <circle cx="23" cy="34" r="11" fill={ACCENT} opacity="0.95" />
-      <circle cx="41" cy="34" r="11" fill={INK} opacity="0.95" />
-      <path d="M 23 34 Q 32 22, 41 34" stroke={BG} strokeWidth="3.5" fill="none" strokeLinecap="round" />
+      <circle cx="21.2" cy="32" r="11" fill={ACCENT} />
+      <circle cx="42.8" cy="32" r="11" fill={INK} />
+      <path d="M 21.2 32 Q 32 19.8, 42.8 32" stroke={BG} strokeWidth="3.2" fill="none" strokeLinecap="round" />
     </svg>
   )
 }
