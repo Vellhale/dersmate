@@ -2,6 +2,7 @@ using MediatR;
 using Microsoft.EntityFrameworkCore;
 using PeerLearn.Application.Abstractions;
 using PeerLearn.Application.Common;
+using PeerLearn.Application.Features.Identity;
 using PeerLearn.Domain.Communication;
 using PeerLearn.Domain.Matchmaking;
 
@@ -46,6 +47,34 @@ public sealed class SendMessageHandler : IRequestHandler<SendMessageCommand, Sen
 
         // YAZMA erişimi: sonlandırılmış eşleşmenin sohbeti okunabilir ama yazılamaz.
         var access = await ConversationAccess.GetForWriteAsync(_db, request.ConversationId, request.SenderUserId, ct);
+
+        /*
+          ⛔ ENGEL, AÇIK SOHBETİ DE KESER — engellemenin asıl işi burada.
+
+          BlockUserHandler yalnızca BEKLEYEN istekleri kapatıyor; kabul edilmiş bir
+          eşleşmeye dokunmuyor ve dokunmamalı (bkz. aşağıda). Bu kontrol olmasaydı
+          engelleme, en çok ihtiyaç duyulduğu durumda çalışmazdı: engellenen kişi
+          çoğu zaman zaten konuştuğun kişidir.
+
+          NEDEN EŞLEŞME "Closed" YAPILMIYOR: CloseMatch, sonuçlanmamış dersi (Booked /
+          AwaitingApproval / Disputed) olan bir eşleşmeyi kapatmayı REDDEDİYOR — kapanan
+          eşleşme, ortada duran bir puan/onay/itiraz işlemini sahipsiz bırakırdı.
+          Engelleme o kapıyı zorlasaydı ekonomiye dokunan bir yan etki üretirdi. Bu
+          yüzden eşleşme olduğu gibi kalıyor, YALNIZCA yazma kesiliyor: taraflar dersi
+          Dersler ekranından iptal edip/itiraz edip bitirebiliyor, ama yazışamıyorlar.
+
+          OKUMA AÇIK KALIYOR (GetForReadAsync'e dokunulmadı) ve bu bilinçli: geçmiş
+          mesajlar bir şikâyetin dayanağı. Engellemenin geçmişi silmesi, tacizciye
+          "engellet, kanıt uçsun" düğmesi vermek olurdu.
+
+          MESAJ NÖTR ve iki tarafa da AYNI: "seni engelledi" demek engellemeyi
+          misillemeye çevirirdi (aynı gerekçe CreateMatchRequestHandler'da).
+        */
+        if (await EngelSorgusu.VarMiAsync(_db, request.SenderUserId, access.OtherUserId, ct))
+        {
+            throw new AppException(ErrorCodes.ConversationAccessDenied,
+                "Bu sohbete yeni mesaj yazılamıyor.", statusCode: 403);
+        }
 
         var message = new Message
         {

@@ -40,14 +40,26 @@ export function kaynakDosyalari(kok) {
  *
  * Anahtar biçimi: "METOT /yol" — yol `startsWith` ile eşleşir (sorgu dizesi serbest).
  */
+/*
+  SÜRÜM SEGMENTİ ELENİYOR — sessizce kırılan bir eşleşmeyi kapatıyor.
+
+  İstemci uçları `/api/v1/...` biçiminde; bu dosyadaki anahtarlar ise `/api/...`
+  yazılmıştı. `startsWith` bu ikisini eşleştirmediği için taklit HİÇ TUTMUYOR, istek
+  aşağıdaki genel 401'e düşüyor ve test "beklenen mesaj görünmedi" diye kırılıyordu —
+  yani hata, sınanan koddaymış gibi görünüyordu. İki anahtarı elle düzeltmek yerine
+  sürüm segmenti ayrıştırma anında düşürülüyor: bir sonraki sürüm artışında aynı tuzak
+  tekrar kurulmasın.
+*/
+const surumsuz = (yol) => yol.replace(/^\/api\/v\d+\//, '/api/')
+
 export async function apiyiTaklitEt(page, yanitlar = {}) {
   await page.route('**/api/**', async (route) => {
     const istek = route.request()
-    const yol = new URL(istek.url()).pathname
+    const yol = surumsuz(new URL(istek.url()).pathname)
 
     const eslesen = Object.entries(yanitlar).find(([k]) => {
       const [metot, onEk] = k.split(' ')
-      return istek.method() === metot && yol.startsWith(onEk)
+      return istek.method() === metot && yol.startsWith(surumsuz(onEk))
     })
 
     if (eslesen) {

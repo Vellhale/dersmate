@@ -325,7 +325,14 @@ export function UniversiteFiltrePaneli({ value, onChange, onReset, resultCount }
  * çekmeceyi görüyor ve orada Esc, kapatmanın standart yolu.
  * ─────────────────────────────────────────────────────────────────────────────
  */
-export function FilterDrawer({ open, onClose, children }) {
+/**
+ * @param baslik  Çekmecenin başlığı ve kapatma düğmesinin metni.
+ *   Varsayılan "Filtreler" ama Keşfet'in "Arkadaş Ekle" sekmesinde çekmecenin içinde
+ *   filtre YOK — engel listesi var. Sabit başlık, açan kişiye olmayan bir şeyi vaat
+ *   ederdi. Bileşenin adı yine FilterDrawer: yaptığı iş "alttan açılan kipsel katman"
+ *   ve onu yeniden adlandırmak, çağıran altı yerin tamamına dokunmayı gerektirirdi.
+ */
+export function FilterDrawer({ open, onClose, baslik = 'Filtreler', kapatMetni = 'Sonuçları göster', children }) {
   /*
     Esc dinleyicisi ve gövde kilidi TEK etkide: ikisinin de ömrü aynı (katman açık
     olduğu süre) ve ikisi de aynı temizliği istiyor. Ayrı efektlere bölmek, birini
@@ -373,7 +380,7 @@ export function FilterDrawer({ open, onClose, children }) {
       <div className="flex max-h-[85dvh] w-full flex-col rounded-t-2xl bg-white">
         <div className="flex shrink-0 items-center justify-between border-b border-slate-200/80 px-5 py-3">
           <h3 id="filtre-cekmecesi-baslik" className="font-semibold text-slate-800">
-            Filtreler
+            {baslik}
           </h3>
           <button
             onClick={onClose}
@@ -388,7 +395,7 @@ export function FilterDrawer({ open, onClose, children }) {
 
         <div className="shrink-0 border-t border-slate-200/80 px-5 py-3">
           <Button className="w-full" onClick={onClose}>
-            Sonuçları göster
+            {kapatMetni}
           </Button>
         </div>
       </div>

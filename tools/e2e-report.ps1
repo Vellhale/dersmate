@@ -101,15 +101,43 @@ $start = [DateTime]::UtcNow.AddHours(3).ToString('yyyy-MM-ddTHH:mm:ss.fffZ')
 $ders = Send Post '/api/sessions' @{ matchId = $matchId; topicId = $topicId; scheduledStartUtc = $start; durationMinutes = 60 } $ogr.Token
 OK "ders rezerve edildi (basılacak puan: $($ders.mintAmount))"
 
-Section 'A. Eski itiraz yolları KAPALI'
+Section 'A. Eski itiraz yolları'
 
-foreach ($u in @(
-    @{ yol = "/api/sessions/$($ders.sessionId)/dispute"; govde = @{ reason = 'SessionNotHeld'; description = 'eski yol denemesi' }; ad = 'itiraz açma' },
-    @{ yol = "/api/sessions/$($ders.sessionId)/dispute-response"; govde = @{ statement = 'savunma yazmaya calisiyorum' }; ad = 'savunma yazma' }
-)) {
-    try { Send Post $u.yol $u.govde $ogr.Token | Out-Null; Fail "$($u.ad) ucu hâlâ çalışıyor" }
-    catch { if ((HataKodu $_) -eq 404) { OK "$($u.ad) ucu kaldırılmış (404)" } else { Fail "$($u.ad): $(HataKodu $_)" } }
+<#
+  ⚠️ `POST {id}/dispute` ARTIK KAPALI DEĞİL — test bu yüzden güncellendi (2026-09-10).
+
+  Şikayet modeline geçilirken bu uç kaldırılmıştı ve buradaki iddia doğruydu. Ama
+  kaldırma YARIM kalmıştı: yönetim tarafı (GetOpenDisputes / ResolveDispute),
+  OpenDisputeHandler ve iki istemcinin Disputed çizimi olduğu yerde duruyordu; eksik
+  olan tek şey OLUŞTURMA yoluydu. Sonuç: itiraz kuyruğu hiç dolmuyor, kanıt inceleme
+  ekranı erişilemez kalıyor ve öğrencinin "sahte kanıt yüklendi" deyip puan basımını
+  durdurmasının bir yolu bulunmuyordu. Uç bilerek GERİ EKLENDİ (gerekçe
+  SessionsController.Dispute'ta).
+
+  Test o kararı fark etmedi ve aylarca KIRMIZI kaldı — 404 bekleyip 409 gördü. 409
+  aslında doğru cevaptı: uç var, ders henüz itiraz edilebilir durumda değil.
+
+  İddia SİLİNMEDİ, DOĞRUSUYLA DEĞİŞTİRİLDİ:
+    • dispute          → var olmalı (404 DÖNMEMELİ). Yapısal iddia: ucun varlığı.
+    • dispute-response  → hâlâ kaldırılmış olmalı (404). Şikayet modelinde savunma
+                          diye bir aşama yok; bu ucun geri gelmesi modeli bozardı.
+#>
+try {
+    Send Post "/api/sessions/$($ders.sessionId)/dispute" @{ reason = 'SessionNotHeld'; description = 'ders daha baslamadi' } $ogr.Token | Out-Null
+    Fail 'itiraz, ders başlamadan önce açılabildi (SessionRules.EnsureCanDispute delinmiş)'
 }
+catch {
+    $kod = HataKodu $_
+    if ($kod -eq 404) { Fail 'itiraz açma ucu kaybolmuş — itiraz kuyruğu bir daha hiç dolmaz' }
+    elseif ($kod -eq 409) { OK 'itiraz açma ucu duruyor, zamansız itirazı reddediyor (409)' }
+    else { Fail "itiraz açma: beklenmedik kod $kod" }
+}
+
+try {
+    Send Post "/api/sessions/$($ders.sessionId)/dispute-response" @{ statement = 'savunma yazmaya calisiyorum' } $ogr.Token | Out-Null
+    Fail 'savunma yazma ucu hâlâ çalışıyor'
+}
+catch { if ((HataKodu $_) -eq 404) { OK 'savunma yazma ucu kaldırılmış (404)' } else { Fail "savunma yazma: $(HataKodu $_)" } }
 
 Section 'B. Şikayet oluşturma ve doğrulama'
 

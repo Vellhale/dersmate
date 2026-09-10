@@ -60,14 +60,19 @@ public sealed class DiscoveryController : ControllerBase
     /// <summary>
     /// Üniversite ağı araması. Sonuç birimi KULLANICI, ilan değil.
     ///
-    /// Yalnızca iki ölçüt alır — üniversite ve bölüm. Ders, konu ve konu seviyesi
+    /// Üç ölçüt alır — üniversite, bölüm ve İSİM. Ders, konu ve konu seviyesi
     /// parametreleri BİLEREK yok: üniversite ağı bu kavramları taşımıyor (gerekçe
     /// SearchUniversityPeersQuery'de).
+    ///
+    /// <c>name</c> verildiğinde üniversite şartı DÜŞÜYOR — "Arkadaş Ekle" akışı bu:
+    /// adını bildiğin ama profilini doldurmamış kişiyi de bulabilmek için. Kapsamın
+    /// açılmasının bedeli engelleme mekanizmasıyla ödendi (bkz. UserBlocks).
     /// </summary>
     [HttpGet("users")]
     public async Task<PagedResult<UniversityPeerDto>> SearchUniversityPeers(
         [FromQuery] string? university,
         [FromQuery] string? department,
+        [FromQuery] string? name,
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20,
         CancellationToken ct = default)
@@ -78,7 +83,8 @@ public sealed class DiscoveryController : ControllerBase
                 University: university,
                 Department: department,
                 Page: page,
-                PageSize: pageSize),
+                PageSize: pageSize,
+                Name: name),
             ct);
     }
 }
