@@ -19,6 +19,20 @@ import { SOZLESME_TARIHI } from '../lib/yasalMetinler'
   ⚠️ Sunucu kaydı ANONİMLEŞTİRİYOR, satırı yok etmiyor: identity.Users'a 23 yabancı
   anahtar bakıyor ve çoğu karşı tarafa ait (ders geçmişi, puanlar, değerlendirmeler).
   Metin bunu gizlemiyor; "her şey silinir" demek yanlış olurdu.
+
+  ⚠️ SÜRÜM ARTIRILMADI (§6'ya isimle aranabilirlik + engelleme paragrafı eklendiğinde).
+  Bunun gerekçesi var ve gözden kaçmasın diye burada:
+
+    • Eklenen paragraf YENİ BİR VERİ KULLANIMI anlatmıyor. §6 zaten "profilinde senin
+      girdiğin bilgiler diğer kullanıcılara açıktır" diyor ve görünen ad o kümede.
+      Arama, açık olan bir bilgiye ulaşmanın yolu — yeni bir ifşa değil, açıklama.
+    • Sürümü artırmak MOBİL BİR YAYIN İŞİ: SOZLESME_SURUMU sunucudaki sabitle birebir
+      eşleşmek zorunda ve mobil uygulama kendi kopyasını PAKETE GÖMÜLÜ taşıyor
+      (bkz. lib/yasalMetinler.js). Tek taraflı artırmak, güncellemeyi almamış her
+      mobil kullanıcıyı kayıt ekranında kilitler.
+
+  Bu bir "artırmayalım" kararı değil, "birlikte artırılmalı" kaydı: metin bir gün
+  gerçekten yeni bir kullanım anlatacak şekilde değişirse sıra mobil → sunucu → web.
 */
 export default function Gizlilik() {
   return (
@@ -144,6 +158,14 @@ export default function Gizlilik() {
           okulun, kendini anlattığın metin, anlatabildiğin konular, aldığın
           değerlendirmeler) platformdaki diğer kullanıcılara açıktır. E-posta adresin,
           telefon numaran ve cihaz kimliğin <strong>hiçbir kullanıcıya gösterilmez</strong>.
+        </p>
+        <p>
+          Görünen adınla <strong>aranabilirsin</strong>: Keşfet’teki “Arkadaş Ekle”
+          bölümünde adını bilen bir kullanıcı seni bulup istek gönderebilir. Bu, profilini
+          doldurmamış olsan da geçerlidir. İstemediğin kişiyi{' '}
+          <strong>engelleyebilirsin</strong> — engellediğin kişi seni aramada göremez,
+          sana istek gönderemez ve açık sohbetinize yazamaz. Engellediğin karşı tarafa
+          bildirilmez.
         </p>
         <p>
           Verini pazarlama amacıyla üçüncü taraflara <strong>aktarmıyoruz</strong> ve

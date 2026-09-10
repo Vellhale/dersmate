@@ -27,7 +27,8 @@ public sealed record SearchUniversityPeersQuery(
     string? University,
     string? Department,
     int Page = 1,
-    int PageSize = 20) : IRequest<PagedResult<UniversityPeerDto>>;
+    int PageSize = 20,
+    string? Name = null) : IRequest<PagedResult<UniversityPeerDto>>;
 
 /// <summary>
 /// Üniversite kartı. Konu/ders alanı YOK — kasıtlı.
@@ -177,9 +178,80 @@ public sealed class SearchUniversityPeersHandler
 
         // Üniversite ağı = üniversite bilgisini GİRMİŞ kullanıcılar. Bilgi girilmemişse
         // kişi bu ağın parçası değildir; boş bir kart göstermek "bölümü yok" gibi okunur.
+        /*
+          ⛔ İSİMLE ARAMADA ÜNİVERSİTE ŞARTI YOK — bilinçli bir kapsam genişlemesi.
+
+          Eskiden bu ağın tanımı "üniversitesini girmiş kullanıcılar" idi: bilgiyi
+          yazmak, görünmeyi seçmek sayılıyordu. Ürün sahibinin kararıyla değişti —
+          adını bildiğin ama profilini doldurmamış bir arkadaşını bulmanın başka yolu
+          yoktu ve "Arkadaş Ekle" tam olarak o ihtiyacı karşılıyor.
+
+          Kapsamın açılmasının bedeli ENGELLEME ile ödendi (identity.UserBlocks); ikisi
+          aynı değişiklikte geldi ve ayrı ayrı sevk edilemez. Gerekçe zinciri
+          MatchRequests'teki eski kapı yorumunda yazılı.
+
+          Üniversite/bölüm filtreleri kullanıldığında eski davranış korunuyor: o alanları
+          boş olan kullanıcılar zaten filtreye takılmıyor.
+        */
+        var isimAramasi = !string.IsNullOrWhiteSpace(request.Name);
+
         var query = _db.Users
             .AsNoTracking()
-            .Where(u => u.Status == UserStatus.Active && u.University != null && u.University != "");
+            .Where(u => u.Status == UserStatus.Active);
+
+        /*
+          ⛔ ENGELLİLER LİSTEDE HİÇ GÖRÜNMÜYOR — ÇİFT YÖNLÜ.
+
+          İstek ucundaki kontrol (EngelSorgusu.VarMiAsync, CreateMatchRequestHandler)
+          engeli zaten kapatıyor; buradaki eleme onun yerine geçmiyor. Sebebi başka:
+          liste engelli kişiyi gösterip düğmeye basıldığında hata verseydi, ürün
+          "bu kişiye ulaşamıyorsun" bilgisini bir hata kutusuyla söylerdi ve engelin
+          varlığı oradan okunurdu. Görünmemek, hata vermekten sessizdir.
+
+          Alt sorgu SAYIMDAN ÖNCE duruyor: totalCount elenmiş kümeyi saymalı, yoksa
+          sayfa çubuğu var olmayan sonuçlar vaat eder.
+
+          ⚠️ İKİ YÖN DE ELENİYOR. Tek yön yazılsaydı (yalnızca "ben onu engelledim")
+          rahatsız eden taraf, engellendiği kişiyi aramaya ve profiline gitmeye devam
+          ederdi. Koşul EngelSorgusu.VarMiAsync ile aynı; ikisi birlikte değişmeli.
+        */
+        if (request.CurrentUserId is Guid ben)
+        {
+            /*
+              KENDİNİ ELEME ARTIK SORGUDA, BELLEKTE DEĞİL.
+
+              Eskiden kullanıcı kendi satırını SAYFALAMADAN SONRA, bellekte eliyordu ve
+              totalCount ham kalıyordu: "2 kişi" yazan bir başlığın altında 1 kart
+              görünüyordu. Katalog aramasında bu fark kayboluyordu (yüzlerce sonuç
+              içinde bir eksik), ama isimle aramada tipik sonuç 1-2 kişi — orada aynı
+              ödün, doğrudan yanlış bir sayı olarak okunuyor.
+
+              Sorguya taşımanın maliyeti yok: aynı WHERE'e bir eşitsizlik daha ekleniyor.
+            */
+            query = query.Where(u => u.Id != ben && !_db.UserBlocks.Any(b =>
+                (b.BlockerUserId == ben && b.BlockedUserId == u.Id) ||
+                (b.BlockerUserId == u.Id && b.BlockedUserId == ben)));
+        }
+
+        if (!isimAramasi)
+        {
+            query = query.Where(u => u.University != null && u.University != "");
+        }
+        else
+        {
+            /* Türkçe katlama yardımcısı AYNEN kullanılıyor (İ/ı/i tuzağı): "İnci"
+               arayan kişi "inci" yazdığında da bulmalı. Kolasyon ve değiştirme zinciri
+               üniversite filtresiyle BİREBİR aynı — ayrışırsa iki alan farklı davranır
+               ve sebebi uzun süre anlaşılmaz. */
+            var ad = AramaIcinKatla(request.Name!);
+            query = query.Where(x =>
+                EF.Functions.Collate(x.DisplayName, IcuKolasyon)
+                    .ToLower()
+                    .Replace(BirlesenNokta, "")
+                    .Replace(BuyukNoktaliI, "i")
+                    .Replace(NoktasizI, "i")
+                    .Contains(ad));
+        }
 
         if (!string.IsNullOrWhiteSpace(request.University))
         {
@@ -248,7 +320,6 @@ public sealed class SearchUniversityPeersHandler
         // çeviremez. Projeksiyonun içinde çağrılırsa sorgu ya istemci tarafı
         // değerlendirmeye düşer ya da çalışma anında patlar.
         var items = rows
-            .Where(r => request.CurrentUserId is null || r.Id != request.CurrentUserId.Value)
             .Select(r => new UniversityPeerDto(
                 r.Id,
                 r.DisplayName,
@@ -261,8 +332,8 @@ public sealed class SearchUniversityPeersHandler
                 r.CreatedAtUtc))
             .ToList();
 
-        // TotalCount ham sayı: kullanıcı kendi kaydına denk gelen sayfada pageSize-1
-        // sonuç görebilir. SearchOffers'ta da aynı ödün verildi; sayfa çubuğunu bozmaz.
+        // totalCount artık gösterilen kümeyi sayıyor: kendini eleme ve engel süzgeci
+        // ikisi de sorguda, yani başlıktaki sayı ile karttaki sayı aynı.
         return new PagedResult<UniversityPeerDto>(items, totalCount, page, pageSize);
     }
 }

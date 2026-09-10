@@ -98,6 +98,50 @@ public sealed class UserPreferenceConfiguration : IEntityTypeConfiguration<UserP
     }
 }
 
+public sealed class UserBlockConfiguration : IEntityTypeConfiguration<UserBlock>
+{
+    public void Configure(EntityTypeBuilder<UserBlock> builder)
+    {
+        builder.ToTable("UserBlocks", "identity", t =>
+            /* Matches tablosundaki CK_Matches_DifferentUsers ile aynı kalıp: kendini
+               engellemek anlamsız ve bir yerde kimlik karıştığının işareti olur. */
+            t.HasCheckConstraint("CK_UserBlocks_DifferentUsers", "\"BlockerUserId\" <> \"BlockedUserId\""));
+
+        builder.HasKey(x => x.Id);
+
+        /* Aynı çift için ikinci bir satır olmasın. FİLTRESİZ tekil — Matches'taki
+           kısmi tekillikten farkı bilinçli: orada "bekleyen" bir durum var ve kayıt
+           yaşam döngüsü boyunca değişiyor; burada satırın kendisi durumdur, engel
+           kaldırılınca satır SİLİNİYOR. Yani "aktif engel" diye ayrı bir bayrak yok
+           ve kısmi filtreye gerek de yok.
+
+           ⚠️ Bayrak yerine silme seçildi çünkü engel kaldırıldıktan sonra o kaydı
+           tutmanın hiçbir işlevi yok ve kişisel veriyi gereksiz saklamak olurdu. */
+        builder.HasIndex(x => new { x.BlockerUserId, x.BlockedUserId }).IsUnique();
+
+        /* "Beni kim engelledi" sorgusu için TERS yönde index. Kontroller çift yönlü
+           olduğu için bu sorgu her istek gönderiminde koşuyor; tersi olmadan
+           BlockedUserId üzerinden arama tabloyu tarardı. */
+        builder.HasIndex(x => x.BlockedUserId);
+
+        builder.Property(x => x.Note).HasMaxLength(500);
+
+        /* Restrict, Cascade DEĞİL — Matches ile aynı gerekçe: hesap silme bu üründe
+           satır silmiyor, anonimleştiriyor. Cascade yazmak var olmayan bir güvence
+           hissi verirdi. Engel kayıtları hesap silindiğinde DeleteAccount akışında
+           elle temizleniyor. */
+        builder.HasOne<User>()
+            .WithMany()
+            .HasForeignKey(x => x.BlockerUserId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne<User>()
+            .WithMany()
+            .HasForeignKey(x => x.BlockedUserId)
+            .OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
 public sealed class RefreshTokenConfiguration : IEntityTypeConfiguration<RefreshToken>
 {
     public void Configure(EntityTypeBuilder<RefreshToken> builder)

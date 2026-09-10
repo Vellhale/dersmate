@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using PeerLearn.Application.Abstractions;
 using PeerLearn.Application.Common;
 using PeerLearn.Application.Features.Community;
+using PeerLearn.Application.Features.Identity;
 using PeerLearn.Domain.Communication;
 using PeerLearn.Domain.Identity;
 using PeerLearn.Domain.Matchmaking;
@@ -24,9 +25,24 @@ public sealed record CreateMatchRequestCommand(
 
 public sealed class CreateMatchRequestHandler : IRequestHandler<CreateMatchRequestCommand, Guid>
 {
-    private readonly IAppDbContext _db;
+    /// <summary>
+    /// Bir kullanıcının 24 saatte gönderebileceği en fazla istek sayısı.
+    /// </summary>
+    /// <remarks>
+    /// Üniversite kapısının yerine gelen fren; gerekçesi <c>Handle</c> içinde. 20, normal
+    /// kullanımın belirgin üstünde (kimse günde 20 kişiye tanışma isteği atmıyor) ama
+    /// toplu mesajı anlamsız kılacak kadar düşük.
+    /// </remarks>
+    public const int GunlukIstekTavani = 20;
 
-    public CreateMatchRequestHandler(IAppDbContext db) => _db = db;
+    private readonly IAppDbContext _db;
+    private readonly IClock _clock;
+
+    public CreateMatchRequestHandler(IAppDbContext db, IClock clock)
+    {
+        _db = db;
+        _clock = clock;
+    }
 
     public async Task<Guid> Handle(CreateMatchRequestCommand request, CancellationToken ct)
     {
@@ -36,20 +52,46 @@ public sealed class CreateMatchRequestHandler : IRequestHandler<CreateMatchReque
         }
 
         /*
-          İKİ TÜR, İKİ AYRI KAPI — ve ikisi de "rastgele kişiye istek" spam'ini kesmek için.
+          ⛔ ENGEL KONTROLÜ — TÜR AYRIMINDAN ÖNCE, ÇİFT YÖNLÜ, HER İKİ TÜR İÇİN.
+
+          Aşağıdaki dallardan birine konsaydı diğeri açık kalırdı: engellediğin kişi sana
+          DERS isteği göndermeye devam ederdi. Engel, isteğin türüne bakmaz.
+
+          Hata mesajı BİLEREK NÖTR ve engelin varlığını söylemiyor — "seni engelledi"
+          demek, engellemeyi misillemeye çevirirdi. Karşı taraf isteğin gitmediğini
+          zaten anlıyor, ama nedenini üründen öğrenmiyor.
+        */
+        if (await EngelSorgusu.VarMiAsync(_db, request.InitiatorUserId, request.ResponderUserId, ct))
+        {
+            throw new AppException(ErrorCodes.MatchNotFound,
+                "Bu kişiye istek gönderilemiyor.", statusCode: 409);
+        }
+
+        /*
+          İKİ TÜR, İKİ AYRI KAPI.
 
           DERS isteğinde kapı: karşı taraf o konuyu gerçekten sunuyor mu. Yani istek,
           karşı tarafın kendi ilan ettiği bir şeye dayanıyor.
 
-          ÜNİVERSİTE AĞI isteğinde konu yok, dolayısıyla o kapı çalışamaz. Yerine konan
-          kapı aynı mantığı taşıyor: karşı taraf üniversite bilgisini GİRMİŞ olmalı.
-          Profiline üniversitesini yazmak, bu ağda görünmeyi seçmektir; yazmayan kişi
-          listede zaten çıkmıyor (bkz. SearchUniversityPeers) ve ona bu yoldan istek de
-          gidemez.
+          ─── ÜNİVERSİTE KAPISI KALDIRILDI (isimle arama ile birlikte) ──────────────
+          Eskiden tanışma isteği için karşı tarafın profiline ÜNİVERSİTESİNİ girmiş
+          olması gerekiyordu; üniversite yazmak "bu ağda görüneyim" onayı sayılıyordu.
+          Buradaki eski yorum kapının gerekçesini şöyle bitiriyordu:
 
-          Bu kapı olmadan uç, "herhangi bir kullanıcıya doğrudan mesaj isteği" hâline
-          gelirdi — bu üründe engelleme/blok mekanizması OLMADIĞI için bunun bedeli
-          yüksek olurdu.
+            "Bu kapı olmadan uç, herhangi bir kullanıcıya doğrudan mesaj isteği hâline
+             gelirdi — bu üründe ENGELLEME/BLOK MEKANİZMASI OLMADIĞI için bunun bedeli
+             yüksek olurdu."
+
+          Kapı, Keşfet'e isimle arama eklendiği için kalktı (ürün sahibi kararı): adını
+          bildiğin ama üniversitesini yazmamış bir arkadaşını bulmanın başka yolu yoktu.
+          Ve o cümlenin şart koştuğu şey aynı değişiklikle geldi: engelleme artık VAR
+          (yukarıdaki kontrol). İkisi ayrı ayrı sevk edilemez — arama engellemesiz
+          açılsaydı, kapının kapattığı zarar açıkta kalırdı.
+
+          ⚠️ KAPININ İÇİNDEKİ AKTİFLİK KONTROLÜ AŞAĞIDA KORUNDU. Eski blok üç şeyi
+          birden sınıyordu: üniversite dolu mu, kullanıcı var mı, VE Status == Active.
+          Blok komple silinseydi üçüncüsü de giderdi ve banlı/askıdaki hesaplara istek
+          gitmesi SESSİZCE mümkün olurdu — hiçbir test bunu yakalamazdı.
         */
         if (request.RequestedTopicId is { } topicId)
         {
@@ -65,15 +107,15 @@ public sealed class CreateMatchRequestHandler : IRequestHandler<CreateMatchReque
         }
         else
         {
-            var agdaMi = await _db.Users.AnyAsync(u =>
+            // Üniversite koşulu kalktı; AKTİFLİK koşulu kaldı (yukarıdaki uyarı).
+            var alabilirMi = await _db.Users.AnyAsync(u =>
                 u.Id == request.ResponderUserId &&
-                u.Status == UserStatus.Active &&
-                u.University != null && u.University != "", ct);
+                u.Status == UserStatus.Active, ct);
 
-            if (!agdaMi)
+            if (!alabilirMi)
             {
                 throw new AppException(ErrorCodes.MatchNotFound,
-                    "Bu kişi üniversite ağında görünmüyor.", statusCode: 409);
+                    "Bu kişiye istek gönderilemiyor.", statusCode: 409);
             }
         }
 
@@ -105,6 +147,40 @@ public sealed class CreateMatchRequestHandler : IRequestHandler<CreateMatchReque
                     ? "Bu kişiye zaten bekleyen bir isteğiniz var."
                     : "Bu kişiye bu konu için zaten bekleyen isteğiniz var.",
                 statusCode: 409);
+        }
+
+        /*
+          ⛔ GÜNLÜK TAVAN — üniversite kapısının yerine gelen fren.
+
+          Kapı kalkmadan önce spam'i üç şey sınırlıyordu: kendine istek yasağı, çift
+          başına TEK bekleyen istek, ve dakikalık genel hız sınırı. Bunların hiçbiri
+          "kaç FARKLI kişiye istek atabilirsin" sorusunu yanıtlamıyor:
+
+            • Bekleyen istek freni yalnızca Status='Pending' iken çalışıyor. Reddedilen
+              ya da süresi dolan bir istekten sonra AYNI kişiye sınırsız yeni istek
+              gidebiliyor.
+            • Genel hız sınırı bir TRAFİK sınırı; "10 farklı kişiye istek" ile "10 sayfa
+              yüklemesi" arasında ayrım yapmıyor ve dakikada 300'de duruyor.
+
+          Üniversite kapısı fiilen bu boşluğu kapatıyordu (hedef havuzu daraltarak).
+          Kaldırıldığına göre yerine açık bir tavan konmalı, yoksa "arkadaş ekle" bir
+          toplu mesaj aracına döner.
+
+          Tavan GÖNDERİLEN isteğe göre ve 24 saatlik kayan pencerede. Kabul edilmiş
+          istekler de sayılıyor: amaç kötüye kullanımı değil, TANIMADIĞIN insanlara
+          seri istek atmayı frenlemek — normal bir kullanıcı günde 20 kişiye istek
+          göndermiyor.
+        */
+        var gunlukEsik = _clock.UtcNow.AddDays(-1);
+        var bugunGonderilen = await _db.Matches.CountAsync(m =>
+            m.InitiatorUserId == request.InitiatorUserId &&
+            m.CreatedAtUtc >= gunlukEsik, ct);
+
+        if (bugunGonderilen >= GunlukIstekTavani)
+        {
+            throw new AppException(ErrorCodes.MintLimitReached,
+                $"Günde en fazla {GunlukIstekTavani} istek gönderebilirsin. Yarın tekrar dene.",
+                statusCode: 429);
         }
 
         var match = new Match
@@ -156,6 +232,28 @@ public sealed class RespondMatchHandler : IRequestHandler<RespondMatchCommand, R
         {
             throw new AppException(ErrorCodes.MatchNotPending,
                 $"İstek zaten yanıtlanmış ({match.Status}).", statusCode: 409);
+        }
+
+        /*
+          ⛔ ENGEL KONTROLÜ BURADA DA GEREKLİ — istek gönderimindekiyle birlikte anlamlı.
+
+          Yalnızca gönderime konsaydı şu boşluk kalırdı: A, B'ye istek gönderir; B (ya da
+          A) sonradan diğerini engeller; ama BEKLEYEN istek ortada durmaya devam eder ve
+          kabul edilince aşağıda Conversation açılır — yani engel, kurulduğu gün sohbetle
+          delinir.
+
+          BlockUser akışı bekleyen istekleri kapatıyor, dolayısıyla buraya normalde
+          düşülmemeli. Bu kontrol ikinci savunma hattı: engelin o adımı bir gün
+          atlanırsa ya da yarış oluşursa sohbet yine açılmasın.
+
+          Yalnızca KABUL engelleniyor; reddetmek serbest. Engellenmiş bir isteği
+          reddedememek, kullanıcıyı kendi gelen kutusunda kilitli bırakırdı.
+        */
+        if (request.Accept &&
+            await EngelSorgusu.VarMiAsync(_db, match.InitiatorUserId, match.ResponderUserId, ct))
+        {
+            throw new AppException(ErrorCodes.MatchNotFound,
+                "Bu istek artık kabul edilemiyor.", statusCode: 409);
         }
 
         match.Status = request.Accept ? MatchStatus.Accepted : MatchStatus.Declined;

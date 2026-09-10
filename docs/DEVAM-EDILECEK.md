@@ -445,3 +445,79 @@ görünen bir rozeti geri almak gerekirdi ve o, hiç vermemekten kötüdür.
 - **Yorum düzenleme/silme yok.** Yazar kendi içeriğini kaldıramıyor; yalnızca moderasyon
   kaldırabiliyor.
 - **Forum bildirimi yok**: gönderine yorum gelince haber verilmiyor.
+
+---
+
+## İsimle arama + engelleme (2026-09-10)
+
+Keşfet'e üçüncü sekme geldi: **Arkadaş Ekle**. Adını bildiğin kişiyi bulup istek
+gönderiyorsun — ders ilanı vermemiş, foruma yazmamış, profilini hiç doldurmamış olsa
+bile.
+
+### İkisi tek karardır, ayrı sevk edilemez
+
+Eskiden kişi araması yalnızca **üniversitesini girmiş** kullanıcıları kapsıyordu ve o
+alanı doldurmak "bu ağda görüneyim" onayı sayılıyordu. Ürün sahibinin kararıyla kapsam
+herkese açıldı (seçenek B). **Engelleme, o açılmanın bedeli olarak aynı değişiklikte
+geldi**: kapsamı açıp engellemeyi ertelemek, istenmeyen temasa karşı hiçbir denetim
+bırakmazdı.
+
+Kaldırılan kapının yerine iki fren kondu:
+
+| eski fren | yerine gelen |
+|---|---|
+| hedef havuzunu daraltan üniversite şartı | günlük **20** istek tavanı (24 saat kayan pencere, `GunlukIstekTavani`) |
+| — | engelleme (`identity.UserBlocks`) |
+
+### Engel dört yerden birden kesiyor
+
+Tek bir kontrol yetmiyordu; dördü **birlikte** "engelleme iletişimi keser" sözünü
+tutuyor ve biri kaldırılırsa engel delinir:
+
+1. **Yeni istek** — `CreateMatchRequestHandler` (409, nötr mesaj)
+2. **İsteği kabul** — `RespondMatchHandler`; yalnızca *kabul* kapalı, reddetmek serbest
+3. **Açık sohbete yazma** — `SendMessageHandler` (403). Bu olmasaydı engelleme en çok
+   ihtiyaç duyulduğu durumda çalışmazdı: engellenen kişi çoğu zaman zaten konuştuğun
+   kişidir.
+4. **Yeni ders rezervasyonu** — `BookSessionHandler` (409). Yazamıyor ama takvimine
+   girebiliyor olsaydı engel en gürültülü şekilde delinirdi.
+
+Ayrıca **bekleyen istekler** engelleme anında `Declined` yazılıyor ve engellenen kişi
+**arama sonuçlarından tamamen düşüyor** (çift yönlü).
+
+### Bilerek yapılmayanlar
+
+- **Kabul edilmiş eşleşme KAPATILMIYOR.** `CloseMatch`, sonuçlanmamış dersi (Booked /
+  AwaitingApproval / Disputed) olan eşleşmeyi kapatmayı reddediyor; engelleme o kapıyı
+  zorlasaydı ortada duran bir puan/onay/itiraz işlemini sahipsiz bırakırdı. Bunun
+  yerine yazma ve yeni rezervasyon kesiliyor, taraflar açık dersi Dersler ekranından
+  bitirebiliyor.
+- **Geçmiş sohbet OKUNABİLİR kalıyor.** Mesajlar bir şikâyetin dayanağı; engellemenin
+  geçmişi silmesi, tacizciye "engellet, kanıt uçsun" düğmesi vermek olurdu.
+- **"Beni kimler engelledi" ucu yok** — ne sunucuda ne arayüzde. O liste engellemeyi
+  misillemeye çevirirdi.
+- **Hata mesajları engelin varlığını söylemiyor.** İki taraf da aynı nötr metni görüyor
+  ("Bu kişiye istek gönderilemiyor"). Test bunu ayrıca sınıyor.
+- **Yönetime bildirilmiyor.** Engelleme kişisel bir tercih, yaptırım değil; denetim izi
+  tutulmuyor. Arayüz bu yüzden engelleme kipinde şikayet yolunu ayrıca hatırlatıyor.
+
+### Açık kalanlar (kabul edilmiş sınırlar)
+
+- **Engellenen kişinin PROFİLİ hâlâ görüntülenebiliyor** doğrudan adresle
+  (`/profil/:userId`). Aramadan düşüyor ama uç 404 dönmüyor. Profil zaten herkese açık
+  bilgi taşıyor ve kapatmak, engelin varlığını 404 üzerinden ele verirdi. Bir gün
+  değişirse, sızdırmayan bir biçim (boş profil) düşünülmeli.
+- **Gizlilik metninin sürümü ARTIRILMADI.** Eklenen paragraf yeni bir veri kullanımı
+  anlatmıyor, mevcut §6'yı açıklıyor. Sürüm artırmak mobil bir yayın işi:
+  `SOZLESME_SURUMU` sunucudaki sabitle birebir eşleşmek zorunda ve mobil uygulama kendi
+  kopyasını pakete gömülü taşıyor — tek taraflı artırmak, güncellemeyi almamış her
+  mobil kullanıcıyı kayıt ekranında kilitler. Gerekçe `Gizlilik.jsx` başındaki notta.
+- **Engel listesinde sayfalama yok.** Liste doğal olarak kısa; gerekirse akıştaki kalıp
+  buraya taşınır.
+
+### Testler
+
+- `tools/e2e-engelleme.ps1` — 44 kontrol, `run-all-tests.ps1` içinde kayıtlı.
+  Her yasak iddianın yanında bir **serbest** iddia var (engel kalkınca aynı çağrı
+  geçiyor); yoksa 409'un engelden mi başka bir sebepten mi geldiği ayırt edilemezdi.
+- Günlük tavan **sınırın iki tarafından** ölçülüyor: 20. istek geçiyor, 21. takılıyor.

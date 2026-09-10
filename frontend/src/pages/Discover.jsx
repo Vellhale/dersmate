@@ -12,7 +12,9 @@ import {
   TakasIkonu,
   YildizIkonu,
 } from '../components/Ikonlar'
+import { formatDate } from '../lib/format'
 import { PersonLink } from '../components/PersonLink'
+import { EngellemeModali } from '../components/EngellemeModali'
 import { CamKart } from '../components/SayfaZemini'
 import { SeviyeRozeti } from '../components/SeviyeRozeti'
 import { YonetimRozeti } from '../components/YonetimRozeti'
@@ -52,9 +54,36 @@ const UNIVERSITE_VARSAYILAN = {
   pageSize: 20,
 }
 
+/*
+  "Arkadaş Ekle" durumu da AYRI tutuluyor, üniversite ağınınkiyle aynı gerekçeyle:
+  üniversite alanına yazılan bir şeyin isim aramasına sızması ya da sekme değişince
+  yazılanın silinmesi, iki durum nesnesi birleştirilir birleştirilmez olurdu.
+*/
+const ARKADAS_VARSAYILAN = {
+  name: '',
+  page: 1,
+  pageSize: 20,
+}
+
+/*
+  En az iki harf. Tek harf, katalogdaki neredeyse herkesi getiren ve hiçbir sorusu
+  olmayan bir sorgu: kullanıcıya rastgele bir kalabalık gösterirdi, sunucuya da her
+  tuş vuruşunda tam tablo taraması yaptırırdı. Alt sınır ARAYÜZDE — sunucu tarafında
+  bir kural değil; oradaki koruma sayfa boyu (50) ve günlük istek tavanı.
+*/
+const ARKADAS_MIN_HARF = 2
+
 const SEKMELER = [
   { key: 'yks', label: 'YKS' },
   { key: 'universite', label: 'Üniversite' },
+  /*
+    ÜÇÜNCÜ SEKME: adını bildiğin kişiyi bulmak. Diğer ikisinden ayrı duruyor çünkü
+    başka bir soru soruyor — YKS "kim anlatabilir", Üniversite "kim benimle aynı
+    yerde okuyor", Arkadaş Ekle ise "şu kişi burada mı". Üniversite sekmesinin
+    içine bir "isim" alanı olarak konsaydı, üniversitesini yazmamış kişiler orada
+    zaten görünmediği için alan çalışmıyor gibi dururdu.
+  */
+  { key: 'arkadas', label: 'Arkadaş Ekle' },
 ]
 
 /**
@@ -79,12 +108,15 @@ export default function Discover() {
   const [term, setTerm] = useState('')
   const [filters, setFilters] = useState(DEFAULT_FILTERS)
   const [uniFiltre, setUniFiltre] = useState(UNIVERSITE_VARSAYILAN)
+  const [arkadasFiltre, setArkadasFiltre] = useState(ARKADAS_VARSAYILAN)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [target, setTarget] = useState(null)
   const [sohbetHedefi, setSohbetHedefi] = useState(null)
+  const [engelHedefi, setEngelHedefi] = useState(null)
   const [notice, setNotice] = useState(null)
 
   const universiteKipi = sekme === 'universite'
+  const arkadasKipi = sekme === 'arkadas'
 
   const debouncedTerm = useDebounced(term)
 
@@ -140,6 +172,41 @@ export default function Discover() {
     [universiteKipi, gecikmeliUniversite, gecikmeliBolum, uniFiltre.page],
   )
 
+  /*
+    İSİMLE ARAMA — üniversite ağıyla AYNI UCU kullanıyor.
+
+    Ayrı bir uç açılmadı çünkü sorulan şey aynı: "şu ölçüte uyan kullanıcılar". Sunucu
+    `name` geldiğinde üniversite şartını düşürüyor (SearchUniversityPeers), dönen kart
+    da aynı kart. İkinci bir uç, aynı sıralamayı, sayfalamayı ve engel elemesini ikinci
+    kez yazmak demekti.
+
+    İki harften kısa sorgu HİÇ ATILMIYOR (Promise.resolve(null)): searchMode ve
+    universiteKipi kalıbının aynısı — koşulu sağlamayan sekmenin/alanın sorgusu koşmaz.
+  */
+  const gecikmeliIsim = useDebounced(arkadasFiltre.name)
+  const isimYeterli = gecikmeliIsim.trim().length >= ARKADAS_MIN_HARF
+
+  const arkadasSonuclar = useAsync(
+    () =>
+      arkadasKipi && isimYeterli
+        ? api.searchUniversityPeers({
+            name: gecikmeliIsim.trim(),
+            page: arkadasFiltre.page,
+            pageSize: arkadasFiltre.pageSize,
+          })
+        : Promise.resolve(null),
+    [arkadasKipi, gecikmeliIsim, isimYeterli, arkadasFiltre.page],
+  )
+
+  /*
+    Engellediklerim listesi yalnızca bu sekmede yükleniyor: her Keşfet açılışında bir
+    istek daha atmanın karşılığı yok, liste yalnızca burada ve mobil çekmecede görünüyor.
+  */
+  const engellilerim = useAsync(
+    () => (arkadasKipi ? api.myBlocks() : Promise.resolve(null)),
+    [arkadasKipi],
+  )
+
   const myOffers = portfolio.data?.filter((entry) => entry.direction === 'Offer') ?? []
   const mySeekCount = portfolio.data?.filter((entry) => entry.direction === 'Seek').length ?? 0
 
@@ -155,6 +222,8 @@ export default function Discover() {
   const uniAktifFiltreSayisi = [uniFiltre.university, uniFiltre.department].filter(
     (v) => (v ?? '').trim() !== '',
   ).length
+
+  const engelSayisi = engellilerim.data?.length ?? 0
 
   function resetAll() {
     setFilters(DEFAULT_FILTERS)
@@ -182,7 +251,26 @@ export default function Discover() {
     mobil çekmecede basılıyor ve ikisinin ayrışması, "Filtre" düğmesinin yanlış sekmenin
     denetimlerini açması demek olurdu.
   */
-  const aktifPanel = universiteKipi ? (
+  /*
+    ARKADAŞ EKLE SEKMESİNDE YAN SÜTUN FİLTRE DEĞİL, ENGELLEDİKLERİM LİSTESİ.
+
+    Bu sekmenin tek ölçütü isim ve o da yukarıdaki kutuda; buraya konacak bir filtre
+    yok. Sütunu boş bırakmak ya da gizlemek yerine engel listesi buraya alındı çünkü
+    engelleme bu sekmenin ikizi: kapsam "herkes aranabilir" diye açıldığında karşılığı
+    olarak geldi. Ayrı bir ayarlar sayfasına konsaydı, engellediğini geri almak isteyen
+    kullanıcı onu aramak zorunda kalırdı.
+  */
+  const aktifPanel = arkadasKipi ? (
+    <EngellilerPaneli
+      liste={engellilerim}
+      onKaldir={async (kisi) => {
+        await api.unblockUser(kisi.userId)
+        setNotice(`${kisi.displayName} için engel kaldırıldı.`)
+        engellilerim.reload({ silent: true })
+        arkadasSonuclar.reload({ silent: true })
+      }}
+    />
+  ) : universiteKipi ? (
     <UniversiteFiltrePaneli
       value={uniFiltre}
       onChange={setUniFiltre}
@@ -224,11 +312,13 @@ export default function Discover() {
         </div>
 
         <p className="mt-3 text-sm text-slate-600">
-          {universiteKipi
-            ? 'Aynı üniversiteden ya da okumak istediğin bölümden öğrencileri bul.'
-            : searchMode
-              ? 'Katalogdaki tüm ders ilanlarında arıyorsun.'
-              : 'Almak istediğin konuları anlatabilen öğrenciler. Karşılıklı takas mümkün olanlar üstte.'}
+          {arkadasKipi
+            ? 'Adını bildiğin birini bul ve arkadaş isteği gönder. Ders ilanı vermemiş, profilini doldurmamış kişiler de burada çıkar.'
+            : universiteKipi
+              ? 'Aynı üniversiteden ya da okumak istediğin bölümden öğrencileri bul.'
+              : searchMode
+                ? 'Katalogdaki tüm ders ilanlarında arıyorsun.'
+                : 'Almak istediğin konuları anlatabilen öğrenciler. Karşılıklı takas mümkün olanlar üstte.'}
         </p>
       </div>
 
@@ -249,29 +339,51 @@ export default function Discover() {
             zeminle aynı düzlemde kalıyordu; kartlarla aynı ince gölge onu da "dokunulur
             bir yüzey" yapıyor. Odak halkası ve yumuşak köşe zaten .input'tan geliyor
             (index.css) — burada yalnızca derinlik ekleniyor, ikinci bir stil dili değil. */}
-        {!universiteKipi && (
+        {/* Arkadaş Ekle sekmesinde kutu YİNE VAR ama başka bir şey arıyor: konu değil
+            İSİM. Aynı `term` durumuna bağlanmadı — bağlansaydı sekme değiştirince
+            yazılan ad ilan aramasına dönüşür ve alakasız sonuçlar dökülürdü. */}
+        {arkadasKipi ? (
           <input
             className="input shadow-sm"
             type="search"
-            placeholder="Konu, ders ya da eğitmen ara…"
-            value={term}
-            onChange={(e) => {
-              setTerm(e.target.value)
-              setFilters((f) => ({ ...f, page: 1 }))
-            }}
-            aria-label="Ara"
+            placeholder="Adını yaz…"
+            value={arkadasFiltre.name}
+            onChange={(e) =>
+              setArkadasFiltre((f) => ({ ...f, name: e.target.value, page: 1 }))
+            }
+            aria-label="İsimle ara"
+            autoComplete="off"
           />
+        ) : (
+          !universiteKipi && (
+            <input
+              className="input shadow-sm"
+              type="search"
+              placeholder="Konu, ders ya da eğitmen ara…"
+              value={term}
+              onChange={(e) => {
+                setTerm(e.target.value)
+                setFilters((f) => ({ ...f, page: 1 }))
+              }}
+              aria-label="Ara"
+            />
+          )
         )}
         {/* ml-auto: arama kutusu düşünce düğme tek başına kalıyor ve sola yapışırdı;
-            filtre denetimi her iki sekmede de sağ kenarda duruyor. */}
+            filtre denetimi her iki sekmede de sağ kenarda duruyor.
+
+            Arkadaş Ekle'de çekmecenin içi filtre değil engel listesi, düğme de onu
+            söylüyor: "Filtre" yazsaydı açan kişi filtre bulamazdı. */}
         <Button
           variant="secondary"
           className="ml-auto shrink-0 lg:hidden"
           onClick={() => setDrawerOpen(true)}
         >
-          {universiteKipi
-            ? `Filtre${uniAktifFiltreSayisi > 0 ? ` (${uniAktifFiltreSayisi})` : ''}`
-            : `Filtre${activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}`}
+          {arkadasKipi
+            ? `Engellediklerim${engelSayisi > 0 ? ` (${engelSayisi})` : ''}`
+            : universiteKipi
+              ? `Filtre${uniAktifFiltreSayisi > 0 ? ` (${uniAktifFiltreSayisi})` : ''}`
+              : `Filtre${activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}`}
         </Button>
       </div>
 
@@ -291,10 +403,19 @@ export default function Discover() {
         </YapiskanFiltreSutunu>
 
         <div className="min-w-0">
-          {universiteKipi ? (
+          {arkadasKipi ? (
+            <ArkadasSonuclari
+              sonuclar={arkadasSonuclar}
+              isimYeterli={isimYeterli}
+              onIstek={setSohbetHedefi}
+              onEngelle={setEngelHedefi}
+              onSayfa={(page) => setArkadasFiltre((f) => ({ ...f, page }))}
+            />
+          ) : universiteKipi ? (
             <UniversiteSonuclari
               sonuclar={uniSonuclar}
               onSohbet={setSohbetHedefi}
+              onEngelle={setEngelHedefi}
               onSayfa={(page) => setUniFiltre((f) => ({ ...f, page }))}
             />
           ) : searchMode ? (
@@ -315,7 +436,14 @@ export default function Discover() {
         </div>
       </div>
 
-      <FilterDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)}>
+      {/* Başlık sekmeye göre: Arkadaş Ekle'de çekmecenin içi filtre değil engel listesi.
+          "Filtreler" yazsaydı açan kişi filtre arar, bulamazdı. */}
+      <FilterDrawer
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        baslik={arkadasKipi ? 'Engellediklerim' : 'Filtreler'}
+        kapatMetni={arkadasKipi ? 'Kapat' : 'Sonuçları göster'}
+      >
         {aktifPanel}
       </FilterDrawer>
 
@@ -337,10 +465,36 @@ export default function Discover() {
       <SohbetIstegiModali
         key={sohbetHedefi?.userId ?? 'sohbet-istegi-yok'}
         kisi={sohbetHedefi}
+        arkadaslik={arkadasKipi}
         onClose={() => setSohbetHedefi(null)}
         onSent={(name) => {
           setSohbetHedefi(null)
-          setNotice(`${name} kişisine sohbet isteği gönderildi. Kabul edilince sohbet açılacak.`)
+          setNotice(
+            arkadasKipi
+              ? `${name} kişisine arkadaş isteği gönderildi. Kabul edilince sohbet açılacak.`
+              : `${name} kişisine sohbet isteği gönderildi. Kabul edilince sohbet açılacak.`,
+          )
+          uniSonuclar.reload({ silent: true })
+          arkadasSonuclar.reload({ silent: true })
+        }}
+      />
+
+      {/* key: SohbetIstegiModali'yle aynı gerekçe — kip kapanınca içindeki not ve hata
+          durumu bir sonraki kişide görünmesin. */}
+      <EngellemeModali
+        key={engelHedefi?.userId ?? 'engel-yok'}
+        kisi={engelHedefi}
+        onClose={() => setEngelHedefi(null)}
+        onEngellendi={(name) => {
+          setEngelHedefi(null)
+          setNotice(`${name} engellendi. Artık birbirinize istek gönderemezsiniz.`)
+          /*
+            ÜÇÜ BİRDEN tazeleniyor: engellenen kişi arama sonuçlarından düşmeli (sunucu
+            onu artık döndürmüyor), engel listesine girmeli. Yalnızca listeyi tazelemek,
+            engellenen kişiyi kartıyla ekranda bırakırdı.
+          */
+          engellilerim.reload({ silent: true })
+          arkadasSonuclar.reload({ silent: true })
           uniSonuclar.reload({ silent: true })
         }}
       />
@@ -527,7 +681,7 @@ function IkonluEtiket({ ikon: Ikon, tone = 'brand', className = '', children }) 
  * ve kullanıcı "sona git" isteyebiliyor. YKS tarafındaki önceki/sonraki ikilisi orada
  * kalmaya devam ediyor — orada sıralama alaka temelli, sayfa numarasının anlamı yok.
  */
-function UniversiteSonuclari({ sonuclar, onSohbet, onSayfa }) {
+function UniversiteSonuclari({ sonuclar, onSohbet, onEngelle, onSayfa }) {
   const veri = sonuclar.data
 
   return (
@@ -547,7 +701,12 @@ function UniversiteSonuclari({ sonuclar, onSohbet, onSayfa }) {
 
           <div className={KART_IZGARASI}>
             {veri.items.map((kisi) => (
-              <UniversiteKarti key={kisi.userId} kisi={kisi} onSohbet={onSohbet} />
+              <UniversiteKarti
+                key={kisi.userId}
+                kisi={kisi}
+                onSohbet={onSohbet}
+                onEngelle={onEngelle}
+              />
             ))}
           </div>
 
@@ -572,7 +731,7 @@ function UniversiteSonuclari({ sonuclar, onSohbet, onSayfa }) {
  * 1–10 genel seviye rozeti BURADA DA VAR: seviye kişiye ait, konuya değil — üniversite
  * ağında da aynı anlamı taşıyor.
  */
-function UniversiteKarti({ kisi, onSohbet }) {
+function UniversiteKarti({ kisi, onSohbet, onEngelle, istekMetni = 'Sohbet isteği gönder' }) {
   return (
     /* Hover dili öneri/arama kartlarıyla birebir aynı — gerekçesi Suggestions'ta. */
     <CamKart className="flex flex-col justify-between transition hover:border-brand-200 hover:shadow-md">
@@ -593,11 +752,26 @@ function UniversiteKarti({ kisi, onSohbet }) {
               <SeviyeRozeti kaynak={{ level: kisi.level }} boyut="sm" ton="acik" />
             </div>
 
-            {kisi.university && (
+            {/*
+              ÜNİVERSİTESİ YOKSA KATILMA TARİHİ. Üniversite sekmesinde bu dal HİÇ
+              çalışmaz (sorgu zaten üniversitesi olanları getiriyor); Arkadaş Ekle'de
+              ise kartın tamamen boş kalabildiği tek durum burası.
+
+              Tarih süs değil, AYIRT EDİCİ: aynı adı taşıyan iki kişi listelendiğinde
+              elde başka hiçbir işaret kalmıyor ve kullanıcı yanlış kişiye istek
+              gönderiyor. "Ne zaman katıldı" çoğu zaman doğru olanı seçtiriyor.
+            */}
+            {kisi.university ? (
               <p className="mt-1.5 flex items-center gap-1.5 text-sm text-slate-600">
                 <BinaIkonu className="h-3.5 w-3.5 shrink-0" />
                 <span className="min-w-0 truncate">{kisi.university}</span>
               </p>
+            ) : (
+              kisi.createdAtUtc && (
+                <p className="mt-1.5 text-sm text-slate-500">
+                  {formatDate(kisi.createdAtUtc)} tarihinde katıldı
+                </p>
+              )
             )}
 
             <PuanSatiri
@@ -619,12 +793,163 @@ function UniversiteKarti({ kisi, onSohbet }) {
         )}
       </div>
 
-      <div className="mt-4">
-        <Button className="w-full" onClick={() => onSohbet(kisi)}>
-          Sohbet isteği gönder
+      {/*
+        ENGELLE İKİNCİL VE DAR: kartın işi tanıştırmak, engelleme oradaki istisna.
+        Eşit ağırlıkta iki düğme, listeyi "bu kişiyi ister misin, istemez misin" gibi
+        bir oylamaya çevirirdi. Yine de kartın ÜZERİNDE duruyor, menüye saklanmadı —
+        rahatsız eden biriyle karşılaşan kullanıcı onu ararken vazgeçmemeli.
+      */}
+      <div className="mt-4 flex gap-2">
+        <Button className="flex-1" onClick={() => onSohbet(kisi)}>
+          {istekMetni}
         </Button>
+        {onEngelle && (
+          <Button
+            variant="secondary"
+            className="shrink-0 hover:border-rose-300 hover:text-rose-700"
+            onClick={() => onEngelle(kisi)}
+            aria-label={`${kisi.displayName} kişisini engelle`}
+          >
+            Engelle
+          </Button>
+        )}
       </div>
     </CamKart>
+  )
+}
+
+/**
+ * Arkadaş Ekle sonuç listesi.
+ *
+ * KARTI YENİDEN YAZMIYOR — UniversiteKarti'yı kullanıyor. İki listede gösterilen şey
+ * aynı: bir kişi. Ayrı bir kart yazılsaydı puan satırı, seviye rozeti ve avatar üç
+ * kez değil dört kez elle kurulmuş olurdu; bu sayfada tam olarak o hata bir kez
+ * yapıldı (bkz. KEŞFET KART DİLİ).
+ *
+ * ÜÇ AYRI BOŞ DURUM var ve üçü farklı şey söylüyor: hiç yazılmamış (davet), iki
+ * harften kısa (kural), sonuç yok (sonuç). Tek bir "bulunamadı" metni, henüz arama
+ * yapmamış kullanıcıya "aradık, yok" derdi.
+ */
+function ArkadasSonuclari({ sonuclar, isimYeterli, onIstek, onEngelle, onSayfa }) {
+  const veri = sonuclar.data
+
+  if (!isimYeterli) {
+    return (
+      <EmptyState
+        title="Aradığın kişinin adını yaz"
+        description={`Adının en az ${ARKADAS_MIN_HARF} harfini yazdığında sonuçlar burada çıkar. Ders ilanı olmayan, profilini doldurmamış kişiler de bulunur.`}
+      />
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      <ErrorBox error={sonuclar.error} onRetry={sonuclar.reload} />
+
+      {sonuclar.loading ? (
+        <Loading label="Aranıyor…" />
+      ) : (veri?.items?.length ?? 0) === 0 ? (
+        <EmptyState
+          title="Kimseyi bulamadık"
+          description="Adı platformda yazdığı şekliyle dene. Kişi henüz kayıtlı olmayabilir."
+        />
+      ) : (
+        <>
+          <SectionTitle>{veri.totalCount} kişi</SectionTitle>
+
+          <div className={KART_IZGARASI}>
+            {veri.items.map((kisi) => (
+              <UniversiteKarti
+                key={kisi.userId}
+                kisi={kisi}
+                onSohbet={onIstek}
+                onEngelle={onEngelle}
+                istekMetni="Arkadaş isteği gönder"
+              />
+            ))}
+          </div>
+
+          <Pagination page={veri.page} totalPages={veri.totalPages} onChange={onSayfa} />
+        </>
+      )}
+    </div>
+  )
+}
+
+/**
+ * Engellediklerim paneli — Arkadaş Ekle sekmesinin yan sütunu.
+ *
+ * YALNIZCA KENDİ ENGELLEDİKLERİ. "Beni kimler engelledi" diye bir liste sunucuda da
+ * yok ve istenmemeli: o liste engellemeyi misillemeye çevirirdi.
+ *
+ * Kaldırma düğmesi ONAY SORMUYOR, engelleme ise soruyor. Asimetri bilinçli: engellemek
+ * bir ilişkiyi kesiyor ve yanlışlıkla yapılırsa karşı taraf sessizce kayboluyor;
+ * kaldırmak yalnızca eski hâle dönüyor ve yanlışsa tek tıkla geri alınabiliyor.
+ */
+function EngellilerPaneli({ liste, onKaldir }) {
+  const [calisan, setCalisan] = useState(null)
+  const [hata, setHata] = useState(null)
+
+  async function kaldir(kisi) {
+    setCalisan(kisi.userId)
+    setHata(null)
+    try {
+      await onKaldir(kisi)
+    } catch (err) {
+      setHata(err)
+    } finally {
+      setCalisan(null)
+    }
+  }
+
+  const kayitlar = liste.data ?? []
+
+  return (
+    <div className="space-y-3">
+      <div>
+        {/* hidden lg:block — mobilde çekmecenin kendi başlığı zaten "Engellediklerim"
+            diyor; aynı başlığın iki satır arayla tekrarı gürültü. Masaüstünde yan
+            sütunun başlığı yok, o yüzden orada duruyor. */}
+        <h2 className="hidden text-sm font-semibold text-slate-800 lg:block">Engellediklerim</h2>
+        <p className="mt-1 text-xs text-slate-500">
+          Engellediğin kişiler aramada çıkmaz, birbirinize istek gönderemezsiniz. Engellendiği
+          karşı tarafa bildirilmez.
+        </p>
+      </div>
+
+      <ErrorBox error={hata ?? liste.error} onRetry={liste.reload} />
+
+      {liste.loading ? (
+        <Loading label="Yükleniyor…" />
+      ) : kayitlar.length === 0 ? (
+        <p className="text-sm text-slate-500">Kimseyi engellemedin.</p>
+      ) : (
+        <ul className="divide-y divide-slate-200">
+          {kayitlar.map((kisi) => (
+            <li key={kisi.userId} className="flex items-center gap-2 py-2">
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium text-slate-800">{kisi.displayName}</p>
+                <p className="text-xs text-slate-500">{formatDate(kisi.blockedAtUtc)}</p>
+                {/* Not YALNIZCA engelleyene görünüyor — karşı taraf ne engellendiğini
+                    ne de not yazıldığını görüyor. */}
+                {kisi.note && (
+                  <p className="mt-0.5 break-words text-xs italic text-slate-500">{kisi.note}</p>
+                )}
+              </div>
+              <Button
+                variant="ghost"
+                className="shrink-0 px-2 text-xs"
+                loading={calisan === kisi.userId}
+                disabled={calisan !== null}
+                onClick={() => kaldir(kisi)}
+              >
+                Kaldır
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   )
 }
 
@@ -636,8 +961,14 @@ function UniversiteKarti({ kisi, onSohbet }) {
  * iki farklı akışı tek gövdede koşullarla yaşatmak olurdu.
  *
  * requestedTopicId null gidiyor — uç konusuz isteği bu şekilde tanıyor (bkz. api.js).
+ *
+ * ⚠️ `arkadaslik` YALNIZCA METNİ değiştiriyor, gönderilen isteği değil: iki sekmeden de
+ * aynı konusuz istek gidiyor. Sunucuda "arkadaşlık" diye ayrı bir tür YOK ve olmamalı —
+ * ikinci bir tür, kabul/ret akışını, sohbet açılışını ve engel kontrolünü ikinci kez
+ * yazmak demekti. Fark kullanıcının kafasındaki niyet: biri "aynı okuldan biriyle
+ * tanışayım", diğeri "şu arkadaşımı ekleyeyim".
  */
-function SohbetIstegiModali({ kisi, onClose, onSent }) {
+function SohbetIstegiModali({ kisi, arkadaslik = false, onClose, onSent }) {
   const [hata, setHata] = useState(null)
   const [busy, setBusy] = useState(false)
 
@@ -659,7 +990,11 @@ function SohbetIstegiModali({ kisi, onClose, onSent }) {
   }
 
   return (
-    <Modal open={Boolean(kisi)} onClose={onClose} title="Sohbet isteği">
+    <Modal
+      open={Boolean(kisi)}
+      onClose={onClose}
+      title={arkadaslik ? 'Arkadaş isteği' : 'Sohbet isteği'}
+    >
       {kisi && (
         <>
           <div className="space-y-3">

@@ -301,12 +301,19 @@ export const api = {
     return request(`/api/v1/discovery/offers?${params.toString()}`)
   },
 
-  /** Üniversite ağı araması. searchOffers ile aynı kural: boş/null filtreler sorguya eklenmez. */
+  /**
+   * Üniversite ağı / isimle kişi araması. searchOffers ile aynı kural: boş/null
+   * filtreler sorguya eklenmez.
+   *
+   * `name` verildiğinde sunucu üniversite şartını düşürüyor ("Arkadaş Ekle" akışı).
+   * Alan listesi BEYAZ LİSTE ve öyle kalmalı: ekranın kendi durumu (sekme adı, seçili
+   * kart, geçici sayaçlar) aynı nesnede taşınıyor ve `...uniFiltre` yayıldığında
+   * sorguya sızardı.
+   */
   searchUniversityPeers: (filters) => {
     const params = new URLSearchParams()
-    // Yalnızca uçun tanıdığı dört alan geçsin; ekrandaki diğer durum sorguya sızmasın.
-    const { university, department, page, pageSize } = filters
-    for (const [key, value] of Object.entries({ university, department, page, pageSize })) {
+    const { university, department, name, page, pageSize } = filters
+    for (const [key, value] of Object.entries({ university, department, name, page, pageSize })) {
       if (value === null || value === undefined || value === '') continue
       params.set(key, String(value))
     }
@@ -318,6 +325,20 @@ export const api = {
   addPortfolioEntry: (payload) => request('/api/v1/portfolio/entries', { method: 'POST', body: payload }),
   removePortfolioEntry: (id) => request(`/api/v1/portfolio/entries/${id}`, { method: 'DELETE' }),
   suggestions: (limit = 20) => request(`/api/v1/portfolio/suggestions?limit=${limit}`),
+
+  // --- Engelleme ---
+  /*
+    Yönetim yaptırımlarından (ban/askı) AYRI bir kavram: kişisel bir tercih, kimseye
+    bildirilmiyor ve denetim izi tutulmuyor. Uç `api/blocks` altında, moderasyon
+    uçlarının yanında DEĞİL — karıştırılması, kullanıcıya "şikayet ettim" sandırırdı.
+
+    "Beni kimler engelledi" diye bir çağrı YOK ve eklenmemeli (sunucuda da yok):
+    o liste engellemeyi misillemeye çevirirdi.
+  */
+  blockUser: (userId, note = null) =>
+    request('/api/v1/blocks', { method: 'POST', body: { userId, note } }),
+  unblockUser: (userId) => request(`/api/v1/blocks/${userId}`, { method: 'DELETE' }),
+  myBlocks: () => request('/api/v1/blocks'),
 
   myMatches: () => request('/api/v1/matches'),
   // Konusuz (üniversite ağı) istekte requestedTopicId null gönderilebilir.

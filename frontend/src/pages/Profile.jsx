@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom'
 import { api } from '../lib/api'
 import { useAuth } from '../state/AuthContext'
 import { useAsync } from '../state/useAsync'
+import { EngellemeModali } from '../components/EngellemeModali'
 import { UserProfileView } from '../components/UserProfileView'
 import { AvatarPicker } from '../components/AvatarPicker'
 import { Button, ErrorBox, Field, Modal, Notice } from '../components/ui'
@@ -21,6 +22,10 @@ export default function Profile() {
   const [notice, setNotice] = useState(null)
   // Alt bileşenleri yeniden kurmak için: avatar/profil değişince taze veri okunsun.
   const [version, setVersion] = useState(0)
+  /* Başkasının profilindeki eylem düğmeleri kişinin ADINI istiyor ("X engellendi").
+     Ad yalnızca UserProfileView'ın çektiği veride var; ikinci bir istek atmamak için
+     oradan geri veriliyor (bkz. onYuklendi). */
+  const [kisi, setKisi] = useState(null)
 
   const isSelf = targetId === session?.userId
 
@@ -71,6 +76,21 @@ export default function Profile() {
               <Button onClick={() => setDialog('edit')}>Profili düzenle</Button>
             </div>
           )}
+
+          {/*
+            BAŞKASININ PROFİLİNDE: arkadaş ekle + engelle.
+
+            Buraya konması, "Arkadaş Ekle" sekmesinin kendisi kadar önemli: kişiyi
+            forumda, bir yorumda ya da ders listesinde görüp adına tıklayan kullanıcı
+            Keşfet'e dönüp adını yeniden aramak zorunda kalmamalı. Engelleme de aynı
+            sebeple burada — rahatsız eden biriyle karşılaşılan yer çoğu zaman burası.
+
+            `kisi` beklendiği için düğmeler profil YÜKLENDİKTEN sonra beliriyor: var
+            olmayan bir kullanıcıya istek gönderme düğmesi hiç görünmüyor.
+          */}
+          {!isSelf && kisi && (
+            <BaskaKisiIslemleri kisi={kisi} onNotice={setNotice} />
+          )}
         </div>
 
         {notice && (
@@ -79,7 +99,11 @@ export default function Profile() {
           </Notice>
         )}
 
-        <UserProfileView key={`${targetId}-${version}`} userId={targetId} />
+        <UserProfileView
+          key={`${targetId}-${version}`}
+          userId={targetId}
+          onYuklendi={setKisi}
+        />
 
         {/*
           HESABI SİL — Google Play, hesap açtıran uygulamalarda silmeyi uygulama içinde
@@ -136,6 +160,126 @@ export default function Profile() {
   )
 }
 
+/**
+ * Başkasının profilindeki iki eylem: arkadaş ekle ve engelle.
+ *
+ * ─── NEDEN BURADA DA VAR ──────────────────────────────────────────────────────
+ * Keşfet'teki "Arkadaş Ekle" sekmesi kadar önemli: kişiyi forumda, bir yorumda ya
+ * da ders listesinde görüp adına tıklayan kullanıcı, istek göndermek için Keşfet'e
+ * dönüp adını yeniden aramak zorunda kalmamalı. Engelleme de aynı sebeple burada —
+ * rahatsız eden biriyle karşılaşılan yer çoğu zaman profil sayfası.
+ *
+ * ─── NEDEN ENGEL DURUMU AYRI BİR İSTEKLE OKUNUYOR ─────────────────────────────
+ * Profil ucuna (UserProfileDto) "bu kişiyi engelledim mi" alanı EKLENMEDİ ve bu
+ * bilinçli: o uç forumda ve ders listelerinde de çağrılıyor, herkesin gördüğü bir
+ * sözleşmeye yalnızca bu ekranın kullandığı bir alan koymak her profil
+ * görüntülemesine bir sorgu daha bindirirdi. Engel listesi kısa ve tek tablo.
+ *
+ * ─── KARŞI TARAF BENİ ENGELLEDİYSE ────────────────────────────────────────────
+ * Bu bileşen bunu BİLMİYOR ve bilmemeli — "seni engelledi" demek engellemeyi
+ * misillemeye çevirirdi. Düğme görünür, basıldığında sunucu nötr bir hatayla
+ * ("Bu kişiye istek gönderilemiyor") reddeder. Gerekçe sunucuda da yazılı
+ * (CreateMatchRequestHandler).
+ */
+function BaskaKisiIslemleri({ kisi, onNotice }) {
+  const engeller = useAsync(() => api.myBlocks(), [])
+  const [kipAcik, setKipAcik] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [hata, setHata] = useState(null)
+
+  const engelli = (engeller.data ?? []).some((e) => e.userId === kisi.userId)
+
+  async function istekGonder() {
+    setBusy(true)
+    setHata(null)
+    /* Önceki başarı bildirimi de siliniyor: ikinci tıklama hata verdiğinde ekranda
+       "gönderildi" ve "zaten bekleyen isteğin var" YAN YANA duruyordu ve hangisinin
+       şu ana ait olduğu okunmuyordu. */
+    onNotice(null)
+    try {
+      /* Konusuz istek — Keşfet'teki "Arkadaş isteği" ile AYNI çağrı. Sunucuda
+         arkadaşlık diye ayrı bir tür yok; kabul edilince sohbet açılıyor. */
+      await api.createMatch({
+        responderUserId: kisi.userId,
+        requestedTopicId: null,
+        offeredTopicId: null,
+      })
+      onNotice(
+        `${kisi.displayName} kişisine arkadaş isteği gönderildi. Kabul edilince sohbet açılacak.`,
+      )
+    } catch (err) {
+      setHata(err)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function engelKaldir() {
+    setBusy(true)
+    setHata(null)
+    try {
+      await api.unblockUser(kisi.userId)
+      onNotice(`${kisi.displayName} için engel kaldırıldı.`)
+      engeller.reload({ silent: true })
+    } catch (err) {
+      setHata(err)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="flex flex-col items-stretch gap-2 sm:items-end">
+      <div className="flex flex-wrap gap-2">
+        {engelli ? (
+          <>
+            {/* Engelliyken "Arkadaş ekle" HİÇ GÖSTERİLMİYOR: basılsa sunucu zaten
+                reddederdi ve kullanıcı kendi koyduğu engeli bir hata kutusundan
+                hatırlardı. Önce engeli kaldırmak, tek anlamlı sıra. */}
+            <span className="inline-flex items-center text-sm font-medium text-rose-700">
+              Bu kişiyi engelledin
+            </span>
+            <Button variant="secondary" loading={busy} onClick={engelKaldir}>
+              Engeli kaldır
+            </Button>
+          </>
+        ) : (
+          <>
+            <Button
+              variant="secondary"
+              className="hover:border-rose-300 hover:text-rose-700"
+              onClick={() => setKipAcik(true)}
+            >
+              Engelle
+            </Button>
+            <Button loading={busy} onClick={istekGonder}>
+              Arkadaş ekle
+            </Button>
+          </>
+        )}
+      </div>
+
+      {/* Hata başlığın altında, profil kartının içinde değil: istek reddedildiğinde
+          (zaten bekleyen istek, günlük tavan, engel) sebep düğmenin yanında okunmalı. */}
+      <ErrorBox error={hata} />
+
+      {kipAcik && (
+        <EngellemeModali
+          kisi={kisi}
+          onClose={() => setKipAcik(false)}
+          onEngellendi={(ad) => {
+            setKipAcik(false)
+            // Eski hata kutusu da kapanıyor: engelleme öncesindeki "zaten bekleyen
+            // isteğin var" uyarısı ekranda kalınca yeni durumla çelişiyordu.
+            setHata(null)
+            onNotice(`${ad} engellendi. Artık birbirinize istek gönderemezsiniz.`)
+            engeller.reload({ silent: true })
+          }}
+        />
+      )}
+    </div>
+  )
+}
 /*
   HESABI SİL — geri alınamaz olduğu için iki kapı var: ne olacağını AÇIKÇA yazan bir metin
   ve parolanın yeniden girilmesi. Parola sunucuda da doğrulanıyor; buradaki alan güvenliği

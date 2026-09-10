@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { api } from '../lib/api'
 import { useAsync } from '../state/useAsync'
 import { formatDateTime } from '../lib/format'
@@ -32,10 +32,24 @@ import { seviyeEtiketi, seviyeHesapla, seviyeIlerlemeMetni } from '../lib/seviye
   Sunucu etiketleri toplamaya ve döndürmeye devam ediyor — yalnızca gösterim kalktı.
 */
 
-export function UserProfileView({ userId }) {
+/**
+ * @param onYuklendi  Profil verisi gelince BİR KEZ çağrılır. Sayfa başlığındaki
+ *   eylem düğmeleri (arkadaş ekle / engelle) kişinin adına ihtiyaç duyuyor ve o ad
+ *   yalnızca burada, bu istekte var. Alternatif, Profile.jsx'in aynı ucu ikinci kez
+ *   çağırmasıydı — profil ucu birkaç toplama sorgusu koşuyor (bkz. ProfileQueries),
+ *   yani ikinci istek ölçülebilir bir israf olurdu.
+ */
+export function UserProfileView({ userId, onYuklendi }) {
   const profile = useAsync(() => api.userProfile(userId), [userId])
   const [reviewPage, setReviewPage] = useState(1)
   const reviews = useAsync(() => api.userReviews(userId, reviewPage), [userId, reviewPage])
+
+  /* Kanca ERKEN DÖNÜŞLERDEN ÖNCE: aşağıdaki `if (profile.loading) return` satırları
+     koşullu kanca çağrısı üretirdi. Bağımlılıkta veri kimliği var, çağıran ise kararlı
+     bir setState geçiyor — döngü yok. */
+  useEffect(() => {
+    if (profile.data && onYuklendi) onYuklendi(profile.data)
+  }, [profile.data, onYuklendi])
 
   if (profile.loading) return <Loading />
   if (profile.error) return <ErrorBox error={profile.error} onRetry={profile.reload} />

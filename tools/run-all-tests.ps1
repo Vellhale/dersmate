@@ -82,6 +82,13 @@ try {
     # Yerine yeni akışın testi + o paketten kurtarılan ban/değişmez bölümleri.
     Betik 'Şikayet (tek yönlü)' 'e2e-report.ps1'
     Betik 'Ban ve değişmezler' 'e2e-ban.ps1'
+
+    # Engelleme ban'ın HEMEN ARDINDAN, bilerek: ikisi sürekli karıştırılıyor ve
+    # özette yan yana durmaları farkı görünür kılıyor. Ban bir yönetim yaptırımı,
+    # engelleme kişisel bir tercih — aynı paket olsalardı biri diğerinin gerekçesini
+    # devralırdı. Paket isimle aramayı da kapsıyor: keşif kapsamının açılması ve
+    # engelleme aynı değişiklikte geldi, ayrı sınanamazlar.
+    Betik 'İsimle arama ve engelleme' 'e2e-engelleme.ps1'
     Betik 'Yönetim puan düzeltmesi' 'e2e-admin-credits.ps1'
     Betik 'Arka plan işleri' 'e2e-jobs.ps1'
 

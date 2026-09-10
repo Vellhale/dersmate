@@ -4,6 +4,7 @@ using Microsoft.Extensions.Options;
 using PeerLearn.Application.Abstractions;
 using PeerLearn.Application.Common;
 using PeerLearn.Application.Economy;
+using PeerLearn.Application.Features.Identity;
 using PeerLearn.Application.Options;
 using PeerLearn.Application.Scheduling;
 using PeerLearn.Domain.Matchmaking;
@@ -74,6 +75,28 @@ public sealed class BookSessionHandler : IRequestHandler<BookSessionCommand, Boo
         if (match.InitiatorUserId != request.StudentUserId && match.ResponderUserId != request.StudentUserId)
         {
             throw new AppException(ErrorCodes.NotMatchParticipant, "Bu eşleşmenin tarafı değilsiniz.", statusCode: 403);
+        }
+
+        /*
+          ⛔ ENGEL, YENİ DERSİ DE DURDURUR.
+
+          Engelleme kabul edilmiş eşleşmeyi kapatmıyor (gerekçe SendMessage'ta:
+          kapanış, sonuçlanmamış dersi olan eşleşmede ekonomiyi bozardı). Dolayısıyla
+          engelledikten sonra eşleşme "Accepted" olarak duruyor ve bu muhafız olmasaydı
+          engellenen kişi karşı tarafa DERS REZERVE EDEBİLİRDİ — yazışamıyor ama takvimine
+          giriyor. Engellemenin en gürültülü şekilde delindiği yol bu olurdu.
+
+          Devam eden dersler etkilenmiyor: yalnızca YENİ rezervasyon kapanıyor. Ortada
+          duran bir ders iptal/onay/itiraz yollarından bitirilebilmeli.
+        */
+        var karsiTaraf = match.InitiatorUserId == request.StudentUserId
+            ? match.ResponderUserId
+            : match.InitiatorUserId;
+
+        if (await EngelSorgusu.VarMiAsync(_db, request.StudentUserId, karsiTaraf, ct))
+        {
+            throw new AppException(ErrorCodes.MatchNotAccepted,
+                "Bu eşleşme üzerinden ders rezerve edilemiyor.", statusCode: 409);
         }
 
         /*
