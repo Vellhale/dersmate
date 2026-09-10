@@ -54,7 +54,7 @@ export default function Portfolio() {
           <PortfolioColumn
             title="Almak istediğim konular"
             tone="brand"
-            aciklama="Ücretsizdir; eşleşme önerileri için sinyaldir."
+            aciklama="Ücretsizdir; ders önerileri için sinyaldir."
             emptyText="İhtiyacın olan konuları ekle; sana anlatabilecek öğrenciler önerilsin."
             entries={seeks}
             onAdd={() => setModalDirection('Seek')}
@@ -278,7 +278,7 @@ function AddEntryModal({ direction, konular, konularYukleniyor, onClose, onSaved
           label={isOffer ? 'Bu konudaki seviyen' : 'Mevcut seviyen'}
           hint={
             isOffer
-              ? 'Öz değerlendirme. Eşleşme sıralamasında dikkate alınır.'
+              ? 'Öz değerlendirme. Öneri sıralamasında dikkate alınır.'
               : 'Anlatacak kişiye nereden başlayacağını gösterir.'
           }
         >

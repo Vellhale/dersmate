@@ -64,17 +64,17 @@ public sealed class BookSessionHandler : IRequestHandler<BookSessionCommand, Boo
 
         var match = await _db.Matches.AsNoTracking()
                         .SingleOrDefaultAsync(m => m.Id == request.MatchId, ct)
-                    ?? throw new AppException(ErrorCodes.MatchNotFound, "Eşleşme bulunamadı.", statusCode: 404);
+                    ?? throw new AppException(ErrorCodes.MatchNotFound, "Arkadaş kaydı bulunamadı.", statusCode: 404);
 
         if (match.Status != MatchStatus.Accepted)
         {
             throw new AppException(ErrorCodes.MatchNotAccepted,
-                "Ders yalnızca kabul edilmiş eşleşme üzerinden rezerve edilebilir.", statusCode: 409);
+                "Ders yalnızca arkadaş olduğun kişiden rezerve edilebilir.", statusCode: 409);
         }
 
         if (match.InitiatorUserId != request.StudentUserId && match.ResponderUserId != request.StudentUserId)
         {
-            throw new AppException(ErrorCodes.NotMatchParticipant, "Bu eşleşmenin tarafı değilsiniz.", statusCode: 403);
+            throw new AppException(ErrorCodes.NotMatchParticipant, "Bu arkadaşlığın tarafı değilsiniz.", statusCode: 403);
         }
 
         /*
@@ -96,7 +96,7 @@ public sealed class BookSessionHandler : IRequestHandler<BookSessionCommand, Boo
         if (await EngelSorgusu.VarMiAsync(_db, request.StudentUserId, karsiTaraf, ct))
         {
             throw new AppException(ErrorCodes.MatchNotAccepted,
-                "Bu eşleşme üzerinden ders rezerve edilemiyor.", statusCode: 409);
+                "Bu kişiden ders rezerve edilemiyor.", statusCode: 409);
         }
 
         /*
@@ -127,13 +127,13 @@ public sealed class BookSessionHandler : IRequestHandler<BookSessionCommand, Boo
         if (match.RequestedTopicId is null)
         {
             throw new AppException(ErrorCodes.InvalidBooking,
-                "Bu eşleşme üniversite ağı üzerinden kuruldu; ders rezervasyonu içermiyor.",
+                "Bu arkadaşlık üniversite ağı üzerinden kuruldu; ders rezervasyonu içermiyor.",
                 statusCode: 409);
         }
 
         if (request.TopicId != match.RequestedTopicId && request.TopicId != match.OfferedTopicId)
         {
-            throw new AppException(ErrorCodes.InvalidBooking, "Konu bu eşleşmenin kapsamında değil.");
+            throw new AppException(ErrorCodes.InvalidBooking, "Konu bu arkadaşlığın kapsamında değil.");
         }
 
         // Rezervasyonu yapan taraf ÖĞRENCİDİR; eğitmen karşı taraftır.

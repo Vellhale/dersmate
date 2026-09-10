@@ -521,3 +521,130 @@ Ayrıca **bekleyen istekler** engelleme anında `Declined` yazılıyor ve engell
   Her yasak iddianın yanında bir **serbest** iddia var (engel kalkınca aynı çağrı
   geçiyor); yoksa 409'un engelden mi başka bir sebepten mi geldiği ayırt edilemezdi.
 - Günlük tavan **sınırın iki tarafından** ölçülüyor: 20. istek geçiyor, 21. takılıyor.
+
+---
+
+## Arkadaşlar: profil bölümü + genel yeniden adlandırma (2026-09-10)
+
+Profile bir **Arkadaşlar** bölümü geldi ve ürün genelinde "Eşleşme" sözcüğü
+**"Arkadaş"** oldu. Yeni bir kavram İCAT EDİLMEDİ: arkadaş = kabul edilmiş eşleşme
+(`matchmaking."Matches"`, `Status='Accepted'`). Ayrı bir Friendship tablosu açmak aynı
+gerçeği iki yerde tutmak ve ikisinin bir gün çelişmesi olurdu.
+
+### Görünürlük (ürün sahibinin kararı)
+
+| yüzey | kim görür | kaynak |
+|---|---|---|
+| arkadaş **sayısı** | herkes | sahibin arkadaşları − sahibin engelleri − aktif olmayanlar |
+| **tam liste** | yalnızca sahibi | sayıyla BİREBİR aynı süzgeç |
+| **ortak arkadaşlar** | başkasının profilinde | sahibin kümesi ∩ bakanın kümesi (her ikisi de kendi engelleriyle süzülmüş) |
+
+Instagram'ın açık takipçi listesi **REDDEDİLDİ**: platformda 18 yaş altı var ve açık bir
+sosyal graf, engellediği kişinin çevresine ulaşmak isteyene hazır liste verirdi —
+engelleme sonradan bunu geri alamaz, graf zaten görülmüştür.
+
+### ⚠️ Aynı çift arasında birden fazla `Accepted` satırı olabilir
+
+Bu bir bozukluk değil, tasarımın sonucu: tekillik indeksleri **yalnızca**
+`Status='Pending'` üzerinde ve yön+konu bazlı. Yani A→B "Matematik" kabul + A→B "Fizik"
+kabul + B→A konusuz kabul = aynı çift için **üç satır**. Ham bir `COUNT(*)` o kişiyi üç
+arkadaş sayardı.
+
+Çözüm iki bacağın **UNION**'u (`ArkadasSorgusu.Idler`) — SQL UNION küme birleşimidir,
+tekilleştirmeyi kendisi yapar. Ayrıca her bacak `(InitiatorUserId, Status)` /
+`(ResponderUserId, Status)` indekslerinin birebir öneki; yeni indeks gerekmedi.
+
+**Bu hata sessizdir**: tek eşleşmeli test kullanıcılarıyla bakılırsa hiç görünmez.
+`e2e-arkadaslar.ps1` C bölümü aynı çifte ikinci bir kabul satırı yazıp sayının
+değişmediğini sınıyor.
+
+### Engel artık SEKİZ yerden kesiyor
+
+2026-09-10'daki ilk listeye dört madde daha eklendi. Engelleme kabul edilmiş eşleşmeyi
+**kapatmıyor** (bilinçli sınır — kapatmak, sonuçlanmamış dersi olan eşleşmede ekonomiyi
+sahipsiz bırakırdı), yani `Status` `'Accepted'` kalıyor ve arkadaş sorguları engeli
+**ayrıca** elemek zorunda:
+
+1. yeni istek — `CreateMatchRequestHandler` (409)
+2. isteği kabul — `RespondMatchHandler` (409)
+3. açık sohbete yazma — `SendMessageHandler` (403)
+4. yeni ders rezervasyonu — `BookSessionHandler` (409)
+5. isimle arama sonuçları — `SearchUniversityPeers`
+6. **arkadaş sayısı / tam liste / ortak arkadaşlar** — `GetProfileFriendsHandler`
+7. **ilan araması** — `SearchOffers` (önbellekten SONRA, bellekte)
+8. **eşleşme önerileri** — `GetMatchSuggestions`
+
+Biri unutulursa engel tam o yüzeyden delinir ve bu bir hata mesajıyla değil, **sessizce
+görünen bir kartla** olur.
+
+### Sayı = liste (kâhin kontrolü)
+
+Sayı ile listenin ayrışması yalnızca çirkin değil, tehlikeli: "Ortak arkadaşlar (3)"
+yazıp 2 kart göstermek, izleyiciye *"seninle bu kişi arasında gizlenmiş biri var"* der —
+yani engel ilişkisinin varlığını üçüncü bir kişinin profilinde ilan eder. Nötr hata
+mesajlarıyla korunan gizlilik tek hamlede yok olurdu. İkisi de aynı süzgeçli sorgudan
+geliyor ve test her okumada bunu ayrıca kontrol ediyor.
+
+### Neden ayrı bir uç (`GET api/users/{id}/friends`)
+
+`UserProfileDto`'ya alan **eklenmedi**. Mobil uygulama ayrı bir depoda ve
+ayrıştırıcısının bilinmeyen JSON anahtarını yok sayıp saymadığı buradan doğrulanamıyor;
+yok saymıyorsa (kotlinx.serialization varsayılanı) mevcut profil yanıtına alan eklemek
+mağazadaki sürümde profil ekranını komple beyaza düşürürdü. Ayrı uç bu riski taşımıyor:
+eski istemci onu hiç çağırmaz. Yan fayda: profil kartı 5 sorguda kalıyor.
+
+### Arayüz kararları
+
+- **Sayaç şeridine beşinci kutu KONMADI.** Şerit `grid-cols-2 lg:grid-cols-4` ve o
+  kırılım 689px'te ölçülerek seçilmiş; beşinci sütun tam lg'de hücreyi ~141px'e, yani
+  ölçülen kırılma eşiğinin altına indiriyor. Sayı bölümün kendi başlığında.
+- **Bölüm konu panelleri ile değerlendirmeler arasında**: sayfa "kim → ne yapmış → ne
+  yapabilir → başkaları ne diyor" diye okunuyor ve arkadaş listesi bir yetenek beyanı
+  değil, sosyal kanıt.
+- **Bölüm her profilde AYNI şekilde çiziliyor.** Engelli bir profilde gizlenmiyor:
+  yokluk üzerinden çıkarım yapılabilirdi. Tekdüzelik sızdırmaz, istisna sızdırır.
+- Sekmenin dar ekran adı **"Arkadaş"** — "Arkadaşlar" 375px'te sayaçla birlikte
+  sığmıyordu (tarayıcıda yeniden ölçüldü).
+
+### Rota
+
+`/arkadaslar` asıl adres; `/eslesmeler` **kalıcı yönlendirme olarak duruyor**. Yer
+imleri, paylaşılmış bağlantılar ve mobilin derin bağlantıları kırılmasın diye
+kaldırılmamalı.
+
+### ⚠️ AÇIK BORÇ: sözleşme sürümü
+
+Arkadaş sayısı ve ortak arkadaşlar, Gizlilik §6'nın herkese açık saydığı kümede **yok**
+("adın, fotoğrafın, okulun, kendini anlattığın metin, anlatabildiğin konular, aldığın
+değerlendirmeler"). Kiminle arkadaş olduğun bugüne kadar yalnızca iki tarafa
+görünüyordu — bu **yeni bir ifşadır** ve `SOZLESME_SURUMU`'nun artması gerekir.
+
+Sürüm **artırılmadı** ve sebebi hukuki değil işletimsel: artırmak bir **mobil yayın
+kapısıdır**. Sabit sunucudakiyle birebir eşleşmek zorunda, mobil kendi kopyasını pakete
+gömülü taşıyor; tek taraflı artırmak güncellemeyi almamış her mobil kullanıcıyı kayıt
+ekranında kilitler. Metnin sürümden bir adım önde olması ise yalnızca bir kayıt
+gecikmesi.
+
+**Kapatma sırası:** mobil `yasalMetinler.js` artır → APK yayınla → `LegalDocuments
+.CurrentVersion` + web sabitini artır → dağıt. Gerekçe `Gizlilik.jsx` başında da yazılı.
+
+### Açık kalanlar
+
+- ~~`SearchOffers` ve `GetMatchSuggestions` engeli elemiyor~~ — **aynı turda kapatıldı.**
+  Boşluk gerçekti: 2026-09-10'da engelleme sevk edilirken yalnızca isim araması eliyordu,
+  ilan kartları ve öneriler elemiyordu. Öneriler sorgunun içinde (NOT EXISTS), ilan
+  araması ise **önbellekten sonra bellekte** eliyor — anahtar kullanıcıdan bağımsız
+  olduğu için süzgeç sorguya konamazdı: ya isabet oranı sıfıra inerdi ya da bir
+  kullanıcının engellisi başkasına servis edilirdi. `e2e-engelleme.ps1` F2 bölümü
+  ikisini de sınıyor (önbellekten gelen sayfa süzülmezse kırılır).
+- **"Arkadaşlıktan çıkar" tek satırı kapatıyor.** Çiftin başka `Accepted` satırı varsa
+  arkadaşlık sürüyor. Test bunu yapısal olarak sabitliyor; davranış değişecekse orası
+  kırılır ve karar yeniden konuşulur.
+- **Listede sayfalama yok**; tam liste 100, ortak liste 12 kişiyle tavanlı ve aşıldığında
+  "ve N kişi daha" yazıyor. Sessiz kesme yok.
+
+### Testler
+
+`tools/e2e-arkadaslar.ps1` — `run-all-tests.ps1` içinde, engelleme paketinin hemen
+ardından kayıtlı. Her okumada sayı=liste değişmezini ayrıca sınıyor; her yasak iddianın
+yanında bir **serbest** iddia var (engel/askı kalkınca kişi geri geliyor).

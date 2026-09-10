@@ -20,19 +20,38 @@ import { SOZLESME_TARIHI } from '../lib/yasalMetinler'
   anahtar bakıyor ve çoğu karşı tarafa ait (ders geçmişi, puanlar, değerlendirmeler).
   Metin bunu gizlemiyor; "her şey silinir" demek yanlış olurdu.
 
-  ⚠️ SÜRÜM ARTIRILMADI (§6'ya isimle aranabilirlik + engelleme paragrafı eklendiğinde).
-  Bunun gerekçesi var ve gözden kaçmasın diye burada:
+  ⚠️⚠️ SÜRÜM BORCU — OKUNMADAN GEÇİLMEMELİ (2026-09-10)
 
-    • Eklenen paragraf YENİ BİR VERİ KULLANIMI anlatmıyor. §6 zaten "profilinde senin
-      girdiğin bilgiler diğer kullanıcılara açıktır" diyor ve görünen ad o kümede.
-      Arama, açık olan bir bilgiye ulaşmanın yolu — yeni bir ifşa değil, açıklama.
-    • Sürümü artırmak MOBİL BİR YAYIN İŞİ: SOZLESME_SURUMU sunucudaki sabitle birebir
-      eşleşmek zorunda ve mobil uygulama kendi kopyasını PAKETE GÖMÜLÜ taşıyor
-      (bkz. lib/yasalMetinler.js). Tek taraflı artırmak, güncellemeyi almamış her
-      mobil kullanıcıyı kayıt ekranında kilitler.
+  §6'ya İKİ AYRI TURDA paragraf eklendi ve ikisinin yasal ağırlığı AYNI DEĞİL:
 
-  Bu bir "artırmayalım" kararı değil, "birlikte artırılmalı" kaydı: metin bir gün
-  gerçekten yeni bir kullanım anlatacak şekilde değişirse sıra mobil → sunucu → web.
+   1. İSİMLE ARANABİLİRLİK + ENGELLEME. Sürüm ARTIRILMADI ve bu doğruydu: §6 zaten
+      "profilinde senin girdiğin bilgiler diğer kullanıcılara açıktır" diyor, görünen
+      ad o kümede. Arama, açık olan bir bilgiye ulaşmanın YOLU — yeni ifşa değil,
+      açıklama.
+
+   2. ARKADAŞ SAYISI + ORTAK ARKADAŞLAR. Bu FARKLI ve gerekçe (1)'den DEVRALINAMAZ.
+      §6'nın herkese açık saydığı küme sayılı: "adın, fotoğrafın, okulun, kendini
+      anlattığın metin, anlatabildiğin konular, aldığın değerlendirmeler". KİMİNLE
+      ARKADAŞ OLDUĞUN o kümede YOK — bugüne kadar yalnızca iki tarafa görünüyordu.
+      Sosyal grafın bir parçasını üçüncü kişiye açmak YENİ BİR İFŞADIR ve sözleşme
+      sürümünün ARTMASI gerekir.
+
+  SÜRÜM YİNE DE ARTIRILMADI ve sebebi hukuki değil, işletimsel: artırmak MOBİL BİR
+  YAYIN KAPISIDIR. SOZLESME_SURUMU sunucudaki sabitle birebir eşleşmek zorunda, mobil
+  uygulama kendi kopyasını PAKETE GÖMÜLÜ taşıyor ve AYRI BİR DEPODA yazılıyor. Tek
+  taraflı artırmak, güncellemeyi almamış her mobil kullanıcıyı KAYIT EKRANINDA
+  KİLİTLER — canlı, kullanıcıya dokunan bir kırılma. Metnin sürümden bir adım önde
+  olması ise yalnızca bir kayıt gecikmesi.
+
+  YAPILACAK SIRA (ürün sahibinin mobil tarafla eşgüdümü gerekiyor):
+    1. mobil depodaki src/lib/yasalMetinler.js sürümünü artır
+    2. yeni APK'yı yayınla (mağaza incelemesi dahil)
+    3. LegalDocuments.CurrentVersion + web yasalMetinler.js'i artır
+    4. sunucuyu dağıt
+
+  Bu adımlar tamamlanana kadar §6'daki arkadaş paragrafı YÜRÜRLÜKTEKİ metni doğru
+  anlatıyor ama sürüm numarası onu yansıtmıyor. Borç burada kayıtlı; kapanınca bu
+  not da sadeleştirilmeli.
 */
 export default function Gizlilik() {
   return (
@@ -66,7 +85,7 @@ export default function Gizlilik() {
           kazandığın puan, aldığın değerlendirmeler, son giriş zamanın.
         </p>
         <p>
-          <strong>İçerik:</strong> eşleştiğin kişilerle yazıştığın mesajlar ve dersin
+          <strong>İçerik:</strong> arkadaşlarınla yazıştığın mesajlar ve dersin
           yapıldığını gösteren kanıt görselleri.
         </p>
         <p>
@@ -86,7 +105,7 @@ export default function Gizlilik() {
             olmadan giriş yapamazsın.
           </li>
           <li>
-            <strong>Eşleşme ve ders için:</strong> profil bilgilerin ve konu tercihlerin
+            <strong>Arkadaşlık ve ders için:</strong> profil bilgilerin ve konu tercihlerin
             — kimin kime ders anlatabileceğini bunlar belirliyor.
           </li>
           <li>
@@ -158,6 +177,12 @@ export default function Gizlilik() {
           okulun, kendini anlattığın metin, anlatabildiğin konular, aldığın
           değerlendirmeler) platformdaki diğer kullanıcılara açıktır. E-posta adresin,
           telefon numaran ve cihaz kimliğin <strong>hiçbir kullanıcıya gösterilmez</strong>.
+        </p>
+        <p>
+          <strong>Arkadaş sayın</strong> profilinde herkese görünür. Tam arkadaş listeni
+          yalnızca sen görürsün; başka bir kullanıcı profiline baktığında yalnızca
+          <strong>ortak arkadaşlarınızı</strong> — yani zaten ikinizin de arkadaşı olan
+          kişileri — görür. Engellediğin kişiler bu sayıya ve listelere hiç girmez.
         </p>
         <p>
           Görünen adınla <strong>aranabilirsin</strong>: Keşfet’teki “Arkadaş Ekle”

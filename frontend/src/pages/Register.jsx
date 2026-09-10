@@ -53,7 +53,7 @@ export default function Register() {
         <div className="space-y-4">
           <Notice tone="info">
             <strong>6 haneli doğrulama kodu</strong> <strong>{form.email}</strong> adresine
-            gönderildi. Kodu girince hesabın <strong>etkinleşir</strong> ve eşleşme isteği
+            gönderildi. Kodu girince hesabın <strong>etkinleşir</strong> ve arkadaş isteği
             gönderebilirsin.
           </Notice>
 

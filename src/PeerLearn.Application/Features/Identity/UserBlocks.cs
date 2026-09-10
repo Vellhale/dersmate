@@ -24,6 +24,28 @@ public static class EngelSorgusu
         db.UserBlocks.AnyAsync(
             x => (x.BlockerUserId == a && x.BlockedUserId == b) ||
                  (x.BlockerUserId == b && x.BlockedUserId == a), ct);
+
+    /// <summary>
+    /// Bir kullanıcı kimliği akışından, <paramref name="bakan"/> ile arasında HERHANGİ BİR
+    /// YÖNDE engel olanları eler. Sonuç yine <c>IQueryable</c> — süzgeç SORGUYA giriyor.
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ <see cref="VarMiAsync"/> BURADA KULLANILAMAZ ve bu ayrım hayati: o metot
+    /// <c>Task&lt;bool&gt;</c> döndürüyor, yani BİR SORGU KOŞUYOR. Bir listenin her
+    /// satırı için çağrılırsa 50 arkadaş 50 sorgu demektir — doğrudan N+1. Bu yüzden
+    /// aynı çift yönlü koşul burada bir ifade ağacı olarak duruyor: EF onu korele bir
+    /// NOT EXISTS'e çeviriyor ve tek sorguda kalıyor.
+    ///
+    /// Koşul ikisinde de AYNI olmak zorunda. Ayrışırlarsa engelleme bir yolda çift
+    /// yönlü, diğerinde tek yönlü davranır ve bunun hiçbir belirtisi olmaz.
+    ///
+    /// İndeksler iki bacağı da karşılıyor: UNIQUE (BlockerUserId, BlockedUserId) ve
+    /// ters yön için (BlockedUserId) — ikisi de IdentityConfigurations'ta.
+    /// </remarks>
+    public static IQueryable<Guid> Engelsiz(IAppDbContext db, IQueryable<Guid> idler, Guid bakan) =>
+        idler.Where(id => !db.UserBlocks.Any(x =>
+            (x.BlockerUserId == bakan && x.BlockedUserId == id) ||
+            (x.BlockerUserId == id && x.BlockedUserId == bakan)));
 }
 
 public sealed record BlockUserCommand(Guid BlockerUserId, Guid BlockedUserId, string? Note)

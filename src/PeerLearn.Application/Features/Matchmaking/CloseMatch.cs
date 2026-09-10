@@ -49,12 +49,12 @@ public sealed class CloseMatchHandler : IRequestHandler<CloseMatchCommand, Close
     public async Task<CloseMatchResult> Handle(CloseMatchCommand request, CancellationToken ct)
     {
         var match = await _db.Matches.SingleOrDefaultAsync(m => m.Id == request.MatchId, ct)
-                    ?? throw new AppException(ErrorCodes.MatchNotFound, "Eşleşme bulunamadı.", statusCode: 404);
+                    ?? throw new AppException(ErrorCodes.MatchNotFound, "Arkadaş kaydı bulunamadı.", statusCode: 404);
 
         if (match.InitiatorUserId != request.ActorUserId && match.ResponderUserId != request.ActorUserId)
         {
             throw new AppException(ErrorCodes.NotMatchParticipant,
-                "Bu eşleşmeyi yalnızca tarafları sonlandırabilir.", statusCode: 403);
+                "Bu arkadaşlığı yalnızca tarafları sonlandırabilir.", statusCode: 403);
         }
 
         /*
@@ -70,7 +70,7 @@ public sealed class CloseMatchHandler : IRequestHandler<CloseMatchCommand, Close
         if (match.Status != MatchStatus.Accepted)
         {
             throw new AppException(ErrorCodes.MatchNotAccepted,
-                $"Yalnızca kabul edilmiş bir eşleşme sonlandırılabilir (şu an: {match.Status}).",
+                $"Yalnızca kabul edilmiş bir arkadaşlık sonlandırılabilir (şu an: {match.Status}).",
                 statusCode: 409);
         }
 
@@ -80,7 +80,7 @@ public sealed class CloseMatchHandler : IRequestHandler<CloseMatchCommand, Close
         if (acikDers > 0)
         {
             throw new AppException(ErrorCodes.MatchHasActiveSessions,
-                $"Bu eşleşmede sonuçlanmamış {acikDers} ders var. Eşleşmeyi kapatmadan önce " +
+                $"Bu arkadaşlıkta sonuçlanmamış {acikDers} ders var. Arkadaşlığı sonlandırmadan önce " +
                 "o dersleri tamamla, onayla ya da iptal et.",
                 statusCode: 409);
         }

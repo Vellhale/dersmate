@@ -77,7 +77,20 @@ export default function App() {
         <Route index element={<Navigate to="/kesfet" replace />} />
         <Route path="/portfolio" element={<Portfolio />} />
         <Route path="/kesfet" element={<Discover />} />
-        <Route path="/eslesmeler" element={<Matches />} />
+        <Route path="/arkadaslar" element={<Matches />} />
+        {/*
+          ESKİ ADRES YÖNLENDİRME OLARAK DURUYOR — kaldırılmamalı.
+
+          Sayfa "Eşleşmeler"den "Arkadaşlar"a döndü ve adres de onunla birlikte değişti.
+          Ama /eslesmeler adresi kullanıcıların yer imlerinde, birbirlerine gönderdikleri
+          bağlantılarda ve muhtemelen mobil uygulamanın derin bağlantılarında duruyor.
+          Rotayı silmek onların hepsini "sayfa bulunamadı"ya düşürürdü — üstelik sessizce,
+          çünkü kimse kırılan bir yer imini bildirmez.
+
+          `replace`: geri düğmesi kullanıcıyı eski adrese geri atıp sonsuz döngüye
+          sokmasın.
+        */}
+        <Route path="/eslesmeler" element={<Navigate to="/arkadaslar" replace />} />
         <Route path="/sohbet" element={<Chat />} />
         <Route path="/sohbet/:conversationId" element={<Chat />} />
         <Route path="/dersler" element={<Sessions />} />

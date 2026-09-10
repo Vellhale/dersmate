@@ -121,7 +121,7 @@ public static class ConversationAccess
         if (access.IsClosed)
         {
             throw new AppException(ErrorCodes.ConversationAccessDenied,
-                "Bu eşleşme sonlandırıldı; sohbete yeni mesaj yazılamaz.", statusCode: 403);
+                "Bu arkadaşlık sonlandırıldı; sohbete yeni mesaj yazılamaz.", statusCode: 403);
         }
 
         return access;

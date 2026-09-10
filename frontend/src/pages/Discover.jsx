@@ -453,7 +453,7 @@ export default function Discover() {
         onClose={() => setTarget(null)}
         onSent={(name) => {
           setTarget(null)
-          setNotice(`${name} kişisine eşleşme isteği gönderildi. Kabul edilince sohbet açılacak.`)
+          setNotice(`${name} kişisine arkadaş isteği gönderildi. Kabul edilince sohbet açılacak.`)
           suggestions.reload()
           results.reload()
         }}
@@ -1043,7 +1043,7 @@ function Suggestions({ suggestions, mySeekCount, portfolioLoading, onRequest }) 
         <Loading />
       ) : (suggestions.data?.length ?? 0) === 0 ? (
         <EmptyState
-          title="Şimdilik eşleşme yok"
+          title="Şimdilik öneri yok"
           description="Almak istediğin konuları genişlet ya da yukarıdaki arama kutusundan katalogda ara."
         />
       ) : (
@@ -1114,7 +1114,7 @@ function Suggestions({ suggestions, mySeekCount, portfolioLoading, onRequest }) 
 
               <div className="mt-4">
                 <Button className="w-full" onClick={() => onRequest(person)}>
-                  Eşleşme isteği gönder
+                  Arkadaş isteği gönder
                 </Button>
               </div>
             </CamKart>
@@ -1236,7 +1236,7 @@ function SearchResults({ results, onRequest, onClearFilters, onPage }) {
                       })
                     }
                   >
-                    Eşleşme isteği gönder
+                    Arkadaş isteği gönder
                   </Button>
                 </div>
               </CamKart>
@@ -1334,7 +1334,7 @@ function RequestModal({ person, myOffers, onClose, onSent }) {
   }
 
   return (
-    <Modal open={Boolean(person)} onClose={onClose} title="Eşleşme isteği">
+    <Modal open={Boolean(person)} onClose={onClose} title="Arkadaş isteği">
       {person && (
         <>
           <form onSubmit={submit} id="match-form" className="space-y-4">

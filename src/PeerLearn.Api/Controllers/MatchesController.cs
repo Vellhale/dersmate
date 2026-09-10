@@ -14,7 +14,7 @@ public sealed class MatchesController : ControllerBase
 
     public MatchesController(IMediator mediator) => _mediator = mediator;
 
-    /// <summary>Eşleşmelerim: gelen bekleyen, gönderdiğim bekleyen ve aktif eşleşmeler.</summary>
+    /// <summary>Arkadaşlarım: gelen bekleyen, gönderdiğim bekleyen istekler ve arkadaşlar.</summary>
     [HttpGet]
     public async Task<MyMatchesDto> GetMine(CancellationToken ct)
         => await _mediator.Send(new GetMyMatchesQuery(User.GetUserId()), ct);
@@ -41,7 +41,7 @@ public sealed class MatchesController : ControllerBase
         => await _mediator.Send(new RespondMatchCommand(matchId, User.GetUserId(), request.Accept), ct);
 
     /// <summary>
-    /// Eşleşmeyi sonlandır. Tek taraflı; sohbet salt okunur olur, yeni ders rezerve edilemez.
+    /// Arkadaşlığı sonlandır. Tek taraflı; sohbet salt okunur olur, yeni ders rezerve edilemez.
     /// Sonuçlanmamış ders varken reddedilir (409).
     /// </summary>
     [HttpPost("{matchId:guid}/close")]

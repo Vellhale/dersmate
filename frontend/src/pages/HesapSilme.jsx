@@ -71,7 +71,7 @@ export default function HesapSilme() {
           <strong>“Silinmiş kullanıcı”</strong> görünüyor; kim olduğun anlaşılmıyor.
         </p>
         <Maddeler>
-          <li>Ders oturumları, eşleşmeler ve mesaj kayıtları</li>
+          <li>Ders oturumları, arkadaşlıklar ve mesaj kayıtları</li>
           <li>Kredi defteri (puanların basıldığı kayıtlar)</li>
           <li>
             Şikayet, itiraz ve yaptırım kayıtları — bunlar hesap verebilirlik kaydıdır ve

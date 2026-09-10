@@ -6,7 +6,7 @@ using PeerLearn.Domain.Matchmaking;
 namespace PeerLearn.Application.Features.Matchmaking;
 
 /// <summary>
-/// Eşleşme ekranının üç sekmesi: bana gelen bekleyen istekler, gönderdiğim bekleyen istekler,
+/// Arkadaşlar ekranının üç sekmesi: bana gelen bekleyen istekler, gönderdiğim bekleyen istekler,
 /// aktif (kabul edilmiş) eşleşmeler. (InitiatorUserId, Status) ve (ResponderUserId, Status)
 /// index'leri her iki bacağı da karşılar.
 /// </summary>

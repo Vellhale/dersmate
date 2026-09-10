@@ -5,7 +5,7 @@ import { Link } from 'react-router-dom'
  *
  * NEDEN AYRI BİLEŞEN: sosyal profil (rozet vitrini, puan dağılımı, etiket histogramı,
  * doğrulanmış yorumlar) "bu kişiyle ders yapar mıyım" sorusunu yanıtlamak için yazıldı
- * ve o karar Keşfet, Eşleşmeler, Sohbet ve Derslerim'de veriliyor. Bağlantı bu ekranların
+ * ve o karar Keşfet, Arkadaşlar, Sohbet ve Derslerim'de veriliyor. Bağlantı bu ekranların
  * hepsine ayrı ayrı elle serpilseydi biri unutulur, biri farklı stille yazılırdı; tek yer
  * olunca "ad görünen her yerde profile gidilir" kuralı kendiliğinden korunuyor.
  *

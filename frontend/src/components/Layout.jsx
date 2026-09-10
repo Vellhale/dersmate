@@ -57,15 +57,15 @@ import {
 const NAV = [
   { to: '/kesfet', label: 'Keşfet', tour: 'discover', Ikon: AramaIkonu },
   { to: '/portfolio', label: 'Ders Portföyü', tour: 'portfolio', Ikon: KitapIkonu },
-  // matches / chat çıpaları rehber altı adıma çıkarken eklendi (2026-08-24): eşleşme ve
+  // matches / chat çıpaları rehber altı adıma çıkarken eklendi (2026-08-24): arkadaşlık ve
   // sohbet eskiden tek bir "kanıt ve onay" paragrafının içinde geçiyordu, kendi adımları
   // yoktu. Adım ekleyip çıpa eklememek, adımı sessizce ekranın ortasına düşürürdü.
-  { to: '/eslesmeler', label: 'Eşleşmeler', tour: 'matches', Ikon: KisilerIkonu },
+  { to: '/arkadaslar', label: 'Arkadaşlar', tour: 'matches', Ikon: KisilerIkonu },
   { to: '/sohbet', label: 'Sohbet', tour: 'chat', Ikon: MesajIkonu },
   { to: '/dersler', label: 'Derslerim', tour: 'sessions', Ikon: KepIkonu },
   /*
     TOPLULUK — Derslerim'in hemen altı. Menü bir dersin baştan sona akışını izliyor
-    (keşfet → portföy → eşleşme → sohbet → ders); Topluluk o zincirin sonrası, tekil
+    (keşfet → portföy → arkadaş → sohbet → ders); Topluluk o zincirin sonrası, tekil
     bir dersin dışında kalan ortak alan.
 
     ─── BİR SÜRE MENÜDEN ÇIKARILMIŞTI (2026-08-27) ────────────────────────────

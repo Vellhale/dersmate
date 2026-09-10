@@ -60,7 +60,7 @@ Savunma katmanları (sırayla):
 ### 2.3 SignalR Chat (ChatHub)
 
 - Erişim kuralı tek yerde: `ConversationAccess` — kullanıcı, konuşmanın bağlı olduğu
-  **Accepted** eşleşmenin tarafı olmalı. Hub yalnızca taşıma katmanı; persist + yetki
+  **Accepted** arkadaşlığın tarafı olmalı. Hub yalnızca taşıma katmanı; persist + yetki
   MediatR komutunda.
 - JWT, websocket'lerde `access_token` query parametresiyle taşınır (yalnızca `/hubs` path'i).
 - Redis yapılandırılırsa hem lock provider hem SignalR backplane otomatik devreye girer

@@ -192,8 +192,8 @@ export default function Chat() {
       ) : conversations.data?.length === 0 ? (
         <EmptyState
           title="Henüz sohbetin yok"
-          description="Sohbet, bir eşleşme isteği kabul edildiğinde otomatik açılır."
-          action={<Button onClick={() => navigate('/kesfet')}>Eşleşme bul</Button>}
+          description="Sohbet, bir arkadaş isteği kabul edildiğinde otomatik açılır."
+          action={<Button onClick={() => navigate('/kesfet')}>Arkadaş bul</Button>}
         />
       ) : (
         /* ANA-DETAY: lg altında ekrana yalnızca biri sığar. Sohbet seçilmemişse liste,
@@ -281,7 +281,7 @@ export default function Chat() {
                     </div>
                     <p className="text-xs text-slate-500">
                       {active?.isClosed
-                        ? 'Bu eşleşme sonlandırıldı — geçmiş okunabilir, yeni mesaj yazılamaz.'
+                        ? 'Bu arkadaşlık sonlandırıldı — geçmiş okunabilir, yeni mesaj yazılamaz.'
                         : 'Ders linkini (Zoom / Google Meet / Discord) buradan paylaşabilirsin.'}
                     </p>
                   </div>
@@ -327,7 +327,7 @@ export default function Chat() {
                       {/* Kapalı sohbette "ilk mesajı sen yaz" demek, yapılamayacak bir şeyi
                           önermek olurdu — yazma alanı zaten kaldırılmış durumda. */}
                       {active?.isClosed
-                        ? 'Bu sohbette hiç mesaj yazılmadan eşleşme sonlandırıldı.'
+                        ? 'Bu sohbette hiç mesaj yazılmadan arkadaşlık sonlandırıldı.'
                         : 'İlk mesajı sen yaz. Ders saatini kararlaştırıp toplantı linkini paylaşın.'}
                     </p>
                   ) : (
@@ -346,7 +346,7 @@ export default function Chat() {
                     sunucuya reddettirmek, kullanıcıya mesajını yazdırıp sonra kaybettirirdi. */}
                 {active?.isClosed ? (
                   <div className="shrink-0 border-t border-slate-200/80 p-3 text-center text-sm text-slate-500">
-                    Bu eşleşme sonlandırıldı. Geçmişi okuyabilirsin ama yeni mesaj gönderemezsin.
+                    Bu arkadaşlık sonlandırıldı. Geçmişi okuyabilirsin ama yeni mesaj gönderemezsin.
                   </div>
                 ) : (
                   <form onSubmit={send} className="shrink-0 border-t border-slate-200/80 p-3">
