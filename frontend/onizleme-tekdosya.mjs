@@ -37,7 +37,19 @@ import { fileURLToPath } from 'node:url'
 
 const KOK = resolve(fileURLToPath(import.meta.url), '..')
 const GECICI = join(KOK, '.onizleme-gecici')
-const CIKTI = join(KOK, 'dersmate-onizleme.html')
+
+/*
+  ⚠️ ÇIKTI DEPO KÖKÜNE YAZILIYOR, BU DOSYANIN YANINA DEĞİL.
+
+  Depoda izlenen önizleme `dersmate-onizleme.html` KÖKTE duruyor; üreteç ise kendi
+  klasörüne (frontend/) yazıyordu. İkisi 2026-08-22'den beri ayrışmıştı: her yeniden
+  üretim frontend/ altında izlenmeyen bir kopya bırakıyor, depodaki dosya ise eski
+  kalmaya devam ediyordu. Kimse fark etmedi çünkü betik "✓ yazıldı" diyor ve YAZIYOR
+  da — yalnızca yanlış yere.
+
+  Yol buradan türetiliyor ki bir daha ayrışmasın.
+*/
+const CIKTI = resolve(KOK, '..', 'dersmate-onizleme.html')
 
 function calistir(komut, argumanlar, env = {}) {
   return new Promise((tamam, hata) => {

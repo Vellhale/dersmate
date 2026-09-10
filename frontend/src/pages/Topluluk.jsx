@@ -630,7 +630,7 @@ export default function Topluluk() {
         <h1 className="text-2xl font-bold text-slate-900">Topluluk</h1>
         <p className="mt-3 max-w-2xl text-sm leading-relaxed text-slate-600">
           Sınav stresinden soru çözümüne, kaynak tartışmasından tercih kararına — herkesin aynı
-          sıralarda olduğu ortak alan. Ders almak için eşleşmene gerek yok; buraya yazıp
+          sıralarda olduğu ortak alan. Ders almak için arkadaş olmana gerek yok; buraya yazıp
           topluluğa sorabilirsin.
         </p>
       </header>

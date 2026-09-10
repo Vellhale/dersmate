@@ -282,7 +282,7 @@ export default function Sessions() {
       ) : hicDersYok ? (
         <EmptyState
           title="Henüz dersin yok"
-          description="Kabul edilmiş bir eşleşmen varsa hemen ders saati belirleyebilirsin."
+          description="Bir arkadaşın varsa hemen ders saati belirleyebilirsin."
           action={<Button onClick={() => setBookOpen(true)}>Ders rezerve et</Button>}
         />
       ) : (
@@ -331,7 +331,7 @@ export default function Sessions() {
             {groups.action.length + groups.upcoming.length === 0 && (
               <BosSutun
                 baslik="Yaklaşan ders yok"
-                metin="Eşleşmelerinden birine ders saati belirleyerek başla."
+                metin="Arkadaşlarından birine ders saati belirleyerek başla."
               />
             )}
           </Sutun>
@@ -1441,19 +1441,19 @@ function BookModal({ matches, onClose, onBooked }) {
     <Modal open onClose={onClose} title="Ders rezerve et">
       {matches.length === 0 ? (
         <EmptyState
-          title="Kabul edilmiş eşleşmen yok"
+          title="Henüz arkadaşın yok"
           description="Önce Keşfet sayfasından istek gönder ve karşı tarafın kabul etmesini bekle."
         />
       ) : bookable.length === 0 ? (
         <EmptyState
-          title="Bu eşleşmelerde sana anlatılacak konu yok"
-          description="Aktif eşleşmelerinde ders anlatan taraf sensin. Ders almak için Keşfet'ten yeni bir istek gönder."
+          title="Arkadaşlarında sana anlatılacak konu yok"
+          description="Mevcut arkadaşlarında ders anlatan taraf sensin. Ders almak için Keşfet'ten yeni bir istek gönder."
         />
       ) : (
         <>
           <form onSubmit={submit} id="book-form" className="space-y-4">
             {/*
-              1. GRUP — eşleşme ve konu. Modal üç katlı bir hiyerarşi anlatıyor: önce
+              1. GRUP — arkadaş ve konu. Modal üç katlı bir hiyerarşi anlatıyor: önce
               KİMDEN/NE (bu grup), sonra NE ZAMAN (alttaki grup), en altta da kararın
               tamamını tek bakışta doğrulatan özet şeridi. Grup başlığındaki ikon çipi
               (bg-brand-50) süs değil yön işareti: kutunun konusunu metinden önce söylüyor.
@@ -1464,7 +1464,7 @@ function BookModal({ matches, onClose, onBooked }) {
                   <KepIkonu className="h-5 w-5" />
                 </span>
                 <div>
-                  <p className="text-sm font-semibold text-slate-800">Eşleşme ve konu</p>
+                  <p className="text-sm font-semibold text-slate-800">Arkadaş ve konu</p>
                   <p className="text-xs text-slate-600">
                     Dersi alan taraf sensin; listelenen konu karşı tarafın sana anlatacağı konudur.
                   </p>
@@ -1477,7 +1477,7 @@ function BookModal({ matches, onClose, onBooked }) {
               */}
               <select
                 className="input"
-                aria-label="Eşleşme"
+                aria-label="Arkadaş"
                 value={matchId}
                 onChange={(e) => {
                   setMatchId(e.target.value)
@@ -1581,7 +1581,7 @@ function BookModal({ matches, onClose, onBooked }) {
                     {selected ? (
                       selected.topicName
                     ) : (
-                      <span className="font-normal text-brand-700/70">Eşleşme seçilmedi</span>
+                      <span className="font-normal text-brand-700/70">Arkadaş seçilmedi</span>
                     )}
                   </dd>
                 </div>

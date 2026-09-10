@@ -94,7 +94,7 @@ Bilinçli olarak React Query/Redux **yok**: bu ölçekte `useAsync` + bağlam ye
 | Kayıt → Doğrula | Modül 1.3 — doğrulama sonrası tek seferlik hoş geldin kredisi (arayüz krediyi ve ömrünü gösterir) |
 | Portföyüm | Modül 1.1 — iki yönlü portföy (Verebileceğim / Almak istediğim), 1-5 seviye |
 | Keşfet | Modül 1.2 — çapraz eşleşme; karşılıklı takas olanlar **"Karşılıklı takas"** rozetiyle üstte |
-| Eşleşmeler | İstek gönder/kabul/reddet; kabulde sohbet otomatik açılır |
+| Arkadaşlar | İstek gönder/kabul/reddet; kabulde sohbet otomatik açılır |
 | Sohbet | Modül 2.1/2.2 — SignalR canlı mesaj; toplantı linkleri tıklanabilir (kanal bağımsızlığı) |
 | Derslerim | Modül 2.3 + 3 — rezervasyon, **Time-Lock geri sayımı**, doğrulama kodu, kanıt yükleme, onay, itiraz |
 | Cüzdan | Modül 4 — kullanılabilir/bloke bakiye, kredi partileri, **vade uyarısı**, hesap hareketleri |
@@ -144,7 +144,7 @@ kodda tek tek elle doğrulandı; gerçek çıkanlar düzeltildi:
 
 ## 6. Bu Aşamada Düzeltilen Backend Hataları
 
-1. **Eksik sorgu endpoint'leri:** Arayüzün ihtiyaç duyduğu "portföyüm", "eşleşmelerim" ve
+1. **Eksik sorgu endpoint'leri:** Arayüzün ihtiyaç duyduğu "portföyüm", "arkadaşlarım" ve
    "derslerim" listeleri backend'de **yoktu**; üçü de eklendi (`GetMyPortfolio`, `GetMyMatches`,
    `GetMySessions`).
 2. **Production modunda başlama:** `launchSettings.json` eksikti → migration/seed/Swagger hiç
@@ -183,7 +183,7 @@ Betik iki kullanıcı yaratıp tüm yolculuğu gerçek API + gerçek PostgreSQL 
 | 2 | HWID ile giriş; bakiye 1 kredi |
 | 3 | İki yönlü portföy; mükerrer giriş `PORTFOLIO_DUPLICATE` ile engelleniyor |
 | 4 | Çapraz eşleşme algoritması karşılıklı takası (`isCrossMatch`) buluyor |
-| 5 | Eşleşme kabulünde sohbet otomatik açılıyor |
+| 5 | Arkadaş isteği kabulünde sohbet otomatik açılıyor |
 | 6 | Mesajlaşma + okunmamış sayacı |
 | 7 | Rezervasyonda kredi bloke; ikinci rezervasyon `INSUFFICIENT_CREDITS` (**çifte harcama yok**) |
 | 8 | **TIME-LOCK**: ders bitmeden tamamlama `TIME_LOCK_ACTIVE` ile reddediliyor |
@@ -220,7 +220,7 @@ Denemek için hazır hesaplar (`tools/seed-demo.ps1`, şifre `Demo12345`):
 
 | Hesap | İçerik |
 |---|---|
-| `ayse@demo.dev` / `berk@demo.dev` | Eşleşme, sohbet, rezerve ders (Time-Lock geri sayımı) |
+| `ayse@demo.dev` / `berk@demo.dev` | Arkadaşlık, sohbet, rezerve ders (Time-Lock geri sayımı) |
 | `ali@demo.dev` / `veli@demo.dev` | Karar bekleyen itiraz |
 | `admin@demo.dev` | Yönetim paneli |
 

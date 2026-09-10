@@ -114,7 +114,7 @@ export default function VerifyEmail() {
       {result ? (
         <div className="space-y-4">
           <Notice tone="success">
-            E-postan doğrulandı 🎉 Artık eşleşme isteği gönderebilir ve ders rezerve edebilirsin.
+            E-postan doğrulandı 🎉 Artık arkadaş isteği gönderebilir ve ders rezerve edebilirsin.
           </Notice>
           <Link to="/giris">
             <Button className="w-full">Giriş yap</Button>

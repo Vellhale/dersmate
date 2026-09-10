@@ -320,7 +320,7 @@ export const api = {
     return request(`/api/v1/discovery/users?${params.toString()}`)
   },
 
-  // --- Portföy & eşleştirme ---
+  // --- Portföy & arkadaşlık ---
   myPortfolio: () => request('/api/v1/portfolio/entries'),
   addPortfolioEntry: (payload) => request('/api/v1/portfolio/entries', { method: 'POST', body: payload }),
   removePortfolioEntry: (id) => request(`/api/v1/portfolio/entries/${id}`, { method: 'DELETE' }),
@@ -408,6 +408,17 @@ export const api = {
 
   // --- Profil ve değerlendirmeler ---
   userProfile: (userId) => request(`/api/v1/users/${userId}/profile`),
+
+  /*
+    Arkadaş bölümü AYRI UÇTA, bilerek: profil yanıtına alan eklemek mobil uygulamanın
+    ayrıştırıcısını kırabilirdi (bilinmeyen JSON anahtarında istisna atan ayarlar var)
+    ve mobil ayrı bir depoda olduğu için buradan doğrulanamıyor. Ayrı uç eski istemci
+    tarafından hiç çağrılmaz. Gerekçenin tamamı ProfileController.GetFriends'te.
+
+    Dönen: { friendCount, isSelf, friends[], mutualCount, mutualFriends[] }
+    friends yalnızca kendi profilinde dolu — bu kural SUNUCUDA, istemcide değil.
+  */
+  userFriends: (userId) => request(`/api/v1/users/${userId}/friends`),
 
   /** Oturumdaki kullanıcının profili — çağıranların userId taşımasını gerektirmez. */
   myProfile: () => {

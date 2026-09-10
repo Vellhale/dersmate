@@ -12,12 +12,14 @@ import { PersonLink } from '../components/PersonLink'
 
   Uzun adlar telefonda üç sekmeye bölününce sığmıyordu. 375px'te bir sekmeye ~109px
   düşüyor ve "Aktif eşleşmeler (62)" tek satıra sığmayıp İKİ SATIRA kırılıyordu:
+  (Sekme 2026-09-10'da "Arkadaşlarım" oldu; kısa ad "Arkadaş" seçildi ve 375px'te
+  TARAYICIDA YENİDEN ÖLÇÜLDÜ — "Arkadaşlar" sayaçla birlikte sığmıyordu.)
   komşuları tek satırdı, şerit tırtıklı görünüyordu. 320px'te daha kötüsü oluyordu —
   metin kendi sekmesinden taşıp yanındakinin üstüne biniyordu.
 
   Sayaç kırılmayı tetikleyen şeydi ama sayaç bilgi taşıyor; atılacak olan uzun ad.
   "Gelen / Giden / Aktif" bağlamda tek başına anlaşılıyor: sayfanın başlığı zaten
-  "Eşleşmeler" ve altında ne olduğunu anlatan bir satır var.
+  "Arkadaşlar" ve altında ne olduğunu anlatan bir satır var.
 
   Kısa ad yalnızca yer açmıyor, PUNTOYU DA GERİ GETİRİYOR: şerit mobilde text-xs
   (12px) kullanmak zorunda kalmıştı — sırf uzun adlar sığsın diye. Kısa adla text-sm
@@ -26,7 +28,7 @@ import { PersonLink } from '../components/PersonLink'
 const TABS = [
   { key: 'incoming', label: 'Gelen istekler', kisa: 'Gelen' },
   { key: 'outgoing', label: 'Gönderdiklerim', kisa: 'Giden' },
-  { key: 'active', label: 'Aktif eşleşmeler', kisa: 'Aktif' },
+  { key: 'active', label: 'Arkadaşlarım', kisa: 'Arkadaş' },
 ]
 
 export default function Matches() {
@@ -42,7 +44,7 @@ export default function Matches() {
       ─────────────────────────────────────────────────────────────────────────
       EKRANA SABİT KABUK (2026-08-24) — Sessions.jsx'teki kanıtlanmış düzenin aynısı.
 
-      Uzun bir aktif eşleşme listesi SAYFANIN TAMAMINI kaydırıyordu: başlık ve sekme
+      Uzun bir arkadaş listesi SAYFANIN TAMAMINI kaydırıyordu: başlık ve sekme
       çubuğu ekrandan çıkıyor, sekme değiştirmek için en yukarı dönmek gerekiyordu.
       Artık lg üstünde sayfa sabit; yalnızca sekme içeriği kendi panelinde kayar
       (bir sohbet penceresi gibi), başlık ve sekmeler hep görünür kalır.
@@ -60,7 +62,7 @@ export default function Matches() {
     */
     <div className="flex flex-col gap-6 lg:h-[calc(100dvh-10.5rem)] lg:min-h-[520px] lg:overflow-hidden">
       <div className="shrink-0">
-        <h1 className="text-2xl font-bold text-slate-900">Eşleşmeler</h1>
+        <h1 className="text-2xl font-bold text-slate-900">Arkadaşlar</h1>
         <p className="mt-1 text-sm text-slate-600">
           İstek kabul edildiğinde sohbet otomatik açılır ve ders rezerve edebilirsin.
         </p>
@@ -197,7 +199,7 @@ function EmptyStateForTab({ tab }) {
 
   return (
     <EmptyState
-      title="Aktif eşleşmen yok"
+      title="Henüz arkadaşın yok"
       description="Bir istek kabul edildiğinde burada görünür ve sohbet açılır."
     />
   )
@@ -214,7 +216,7 @@ function MatchCard({ match, tab, onChanged }) {
     setError(null)
     try {
       await api.closeMatch(match.matchId)
-      onChanged(`${match.otherDisplayName} ile eşleşme sonlandırıldı. Sohbet geçmişin duruyor.`)
+      onChanged(`${match.otherDisplayName} ile arkadaşlığın sonlandırıldı. Sohbet geçmişin duruyor.`)
     } catch (err) {
       setError(err)
     } finally {
@@ -230,7 +232,7 @@ function MatchCard({ match, tab, onChanged }) {
       await api.respondMatch(match.matchId, accept)
       onChanged(
         accept
-          ? `${match.otherDisplayName} ile eşleştiniz. Sohbet açıldı — ders saatini kararlaştırın.`
+          ? `${match.otherDisplayName} ile arkadaş oldunuz. Sohbet açıldı — ders saatini kararlaştırın.`
           : 'İstek reddedildi.',
       )
     } catch (err) {
@@ -241,7 +243,7 @@ function MatchCard({ match, tab, onChanged }) {
   }
 
   /*
-    CamKart (2026-08-25): eşleşme kartı listenin ana yüzeyi ve kabuktaki yeni zeminle
+    CamKart (2026-08-25): arkadaş kartı listenin ana yüzeyi ve kabuktaki yeni zeminle
     uyumlu olması gereken şey de bu. İçerideki onay kutusu (amber) ve ErrorBox opak
     kaldı — ikisi de DİKKAT çağıran yüzeyler; saydamlaşınca kartın kendisinden ayrışmayı
     bırakırlar, oysa "geri alınamaz" uyarısının kart zemininden ayrışması işin özü.
@@ -335,8 +337,8 @@ function MatchCard({ match, tab, onChanged }) {
       {confirmClose && (
         <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
           <p className="text-sm text-amber-900">
-            <strong>{match.otherDisplayName}</strong> ile eşleşme sonlandırılsın mı? Sohbet geçmişin
-            durur ama yeni mesaj yazamazsın ve bu eşleşmeden ders rezerve edilemez. Geri alınamaz.
+            <strong>{match.otherDisplayName}</strong> ile arkadaşlığın sonlandırılsın mı? Sohbet geçmişin
+            durur ama yeni mesaj yazamazsın ve bu arkadaşlıktan ders rezerve edilemez. Geri alınamaz.
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
             <Button variant="danger" loading={busy === 'close'} onClick={close}>

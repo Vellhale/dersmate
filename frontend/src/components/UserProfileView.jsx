@@ -6,6 +6,7 @@ import { Avatar } from './Avatar'
 import { Badge, Button, EmptyState, ErrorBox, Loading } from './ui'
 import { CamKart } from './SayfaZemini'
 import { GrafikIkonu, KepIkonu, TakvimIkonu, YildizIkonu } from './Ikonlar'
+import { ArkadaslarBolumu } from './ArkadaslarBolumu'
 import { SubjectBadges } from './SubjectBadges'
 import { UniversiteRozetleri } from './UniversiteRozetleri'
 import { ToplulukRozetleri } from './ToplulukRozetleri'
@@ -124,6 +125,25 @@ export function UserProfileView({ userId, onYuklendi }) {
           emptyText="Henüz konu eklenmemiş."
         />
       </div>
+
+      {/*
+        ARKADAŞLAR — konu panelleri ile değerlendirmeler ARASINDA.
+
+        Sayfanın sıralaması bir soruyu yukarıdan aşağıya yanıtlıyor: kim → ne yapmış →
+        ne yapabilir → BAŞKALARI NE DİYOR. Arkadaş listesi bir yetenek beyanı değil,
+        sosyal kanıt; en yakın akrabası değerlendirmeler bloğu ve onunla yan yana
+        durması o son katmanı tek yerde topluyor. Rozet şeritlerinin arasına sokulsaydı
+        "üç rozet şeridi, arkadaşlar, bir rozet şeridi daha" gibi okunur ve blok
+        grupları dağılırdı.
+
+        SAYAÇ ŞERİDİNE BEŞİNCİ KUTU OLARAK KONMADI ve bu ölçülmüş bir karar: şerit
+        `grid-cols-2 lg:grid-cols-4` ve o kırılım 689px'te ölçülerek seçilmiş. Tam
+        lg'de (1024px) beşinci sütun hücreyi ~141px'e indiriyor, yani ölçülen kırılma
+        eşiğinin altına — "N değerlendirme" ve seviye ilerleme metni yeniden sarmaya
+        başlıyor. Dar ekranda ise 2+2+1 öksüz bir satır kalıyor. Sayı bu yüzden
+        bölümün kendi başlığında.
+      */}
+      <ArkadaslarBolumu userId={userId} kendiProfilim={p.isSelf} ad={p.displayName} />
 
       <ReviewsSection reviews={reviews} page={reviewPage} onPage={setReviewPage} />
     </div>

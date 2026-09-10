@@ -48,7 +48,7 @@ public sealed class CreateMatchRequestHandler : IRequestHandler<CreateMatchReque
     {
         if (request.InitiatorUserId == request.ResponderUserId)
         {
-            throw new AppException(ErrorCodes.SelfMatch, "Kendinizle eşleşemezsiniz.");
+            throw new AppException(ErrorCodes.SelfMatch, "Kendinize arkadaş isteği gönderemezsiniz.");
         }
 
         /*
@@ -220,7 +220,7 @@ public sealed class RespondMatchHandler : IRequestHandler<RespondMatchCommand, R
     public async Task<RespondMatchResult> Handle(RespondMatchCommand request, CancellationToken ct)
     {
         var match = await _db.Matches.SingleOrDefaultAsync(m => m.Id == request.MatchId, ct)
-                    ?? throw new AppException(ErrorCodes.MatchNotFound, "Eşleşme bulunamadı.", statusCode: 404);
+                    ?? throw new AppException(ErrorCodes.MatchNotFound, "Arkadaş isteği bulunamadı.", statusCode: 404);
 
         if (match.ResponderUserId != request.ResponderUserId)
         {

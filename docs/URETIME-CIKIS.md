@@ -171,7 +171,7 @@ içine düşer, yani o anda **birden fazla instance çalıştırmak güvenli de�
 | İş | Sıklık | Ne yapar | Elle tetikleme |
 |---|---|---|---|
 | Kredi vade süpürmesi | 15 dk | 30 günü dolan lotları yakar | `POST /api/admin/jobs/credit-expiry` |
-| Oturum süpürmesi | 10 dk | Otomatik onay, düşen rezervasyon, yanıtsız eşleşme isteği, biten askı | `POST /api/admin/jobs/session-sweep` |
+| Oturum süpürmesi | 10 dk | Otomatik onay, düşen rezervasyon, yanıtsız arkadaş isteği, biten askı | `POST /api/admin/jobs/session-sweep` |
 | Depo bakımı | 24 saat | Saklama süresi dolan kanıt görselleri + artık dosyalar | `POST /api/admin/jobs/storage-cleanup` (yalnızca Admin) |
 
 Saklama kararları (hepsi `CleanupStorage.cs` içinde sabit):

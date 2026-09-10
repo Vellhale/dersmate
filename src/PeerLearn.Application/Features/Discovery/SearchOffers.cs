@@ -153,15 +153,43 @@ public sealed class SearchOffersHandler : IRequestHandler<SearchOffersQuery, Pag
             innerCt => QueryAsync(request, categoryIds, page, pageSize, innerCt),
             ct);
 
-        if (request.CurrentUserId is null)
+        if (request.CurrentUserId is not Guid bakan)
         {
             return cached;
         }
 
-        var visible = cached.Items.Where(i => i.TutorUserId != request.CurrentUserId.Value).ToList();
+        /*
+          ⛔ ENGELLİLERİN İLANLARI DA DÜŞÜYOR — ve bu süzgeç ÖNBELLEKTEN SONRA olmak
+          ZORUNDA.
 
-        // TotalCount önbellekteki ham sayı: kendi ilanları düşülünce en fazla birkaç
-        // birim sapar, sayfa çubuğunu bozmaz.
+          Önbellek anahtarı kullanıcıdan bağımsız (yukarıdaki gerekçe). Engel süzgeci
+          sorgunun içine konsaydı sonuç kullanıcıya özel olurdu ve ya anahtara
+          CurrentUserId girerdi (isabet oranı sıfıra iner) ya da bir kullanıcının engelli
+          listesi BAŞKA bir kullanıcıya servis edilirdi — ikincisi sessiz ve çok daha
+          kötü. Bu yüzden aynı yerde, "kendini listede görme" kuralının yanında, bellekte
+          uygulanıyor.
+
+          BEDELİ: giriş yapmış her aramada bir küçük sorgu daha. UserBlocks'un iki yönü de
+          indeksli ve dönen küme küçük; ölçülen bir sorun çıkarsa oturum başına
+          önbelleklenebilir.
+
+          Bu boşluk 2026-09-10'da engelleme sevk edilirken AÇIK KALMIŞTI: isim araması
+          eliyordu, ilan araması ve öneriler elemiyordu. "Engel her sosyal yüzeyde eler"
+          sözü o gün belgeye yazılmıştı ama ilan kartlarında doğru değildi.
+        */
+        var engelliler = (await _db.UserBlocks
+                .AsNoTracking()
+                .Where(b => b.BlockerUserId == bakan || b.BlockedUserId == bakan)
+                .Select(b => b.BlockerUserId == bakan ? b.BlockedUserId : b.BlockerUserId)
+                .ToListAsync(ct))
+            .ToHashSet();
+
+        var visible = cached.Items
+            .Where(i => i.TutorUserId != bakan && !engelliler.Contains(i.TutorUserId))
+            .ToList();
+
+        // TotalCount önbellekteki ham sayı: kendi ilanları ve engellediklerinin ilanları
+        // düşülünce en fazla birkaç birim sapar, sayfa çubuğunu bozmaz.
         return cached with { Items = visible };
     }
 

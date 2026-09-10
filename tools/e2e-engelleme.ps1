@@ -308,6 +308,52 @@ if ($ders2.sessionId) { OK 'engel kalkınca aynı rezervasyon başarılı (409 e
 else { Fail 'engel kalktıktan sonra da rezerve edilemedi' }
 
 # ---------------------------------------------------------------------------
+Step 'F2. İlan araması ve öneriler de eliyor'
+
+<#
+  BU BOŞLUK 2026-09-10'DA AÇIK KALMIŞTI. Engelleme sevk edilirken yalnızca İSİM ARAMASI
+  engeli eliyordu; ilan araması (SearchOffers) ve eşleşme önerileri (GetMatchSuggestions)
+  elemiyordu. Yani engellediğin kişi Keşfet'in ana listelerinde görünmeye devam ediyordu
+  ve kartına basınca hata alıyordun — "görünmemek, hata vermekten sessizdir" kuralının
+  tam tersi.
+
+  İlan aramasında süzgeç ÖNBELLEKTEN SONRA uygulanıyor (anahtar kullanıcıdan bağımsız),
+  bu yüzden burada AYRICA sınanıyor: önbellekten gelen sayfa süzülmezse iddia kırılır.
+#>
+$konuIlan = [Guid]::NewGuid().ToString()
+Sql @"
+INSERT INTO catalog."Topics" ("Id","SubjectId","Name","SortOrder","IsActive","CreatedAtUtc")
+SELECT '$konuIlan', s."Id", 'E2E EngelIlan $stamp', 99, TRUE, now()
+FROM catalog."Subjects" s WHERE s."Name" = 'Fizik' LIMIT 1;
+"@ | Out-Null
+
+# Cem ilan açıyor, Deniz arıyor: önce görünüyor, engelden sonra görünmüyor.
+Api POST '/api/portfolio/entries' @{ topicId = $konuIlan; direction = 'Offer'; selfAssessedLevel = 4; note = $null } $cem.Token | Out-Null
+$arama = Api GET "/api/discovery/offers?search=EngelIlan $stamp" $null $den.Token
+$oncesi = @($arama.items | Where-Object { $_.tutorUserId -eq $cem.UserId }).Count
+Esit 'engelden ÖNCE ilan aramada görünüyor' $oncesi 1
+
+Api POST '/api/blocks' @{ userId = $cem.UserId; note = $null } $den.Token | Out-Null
+$arama = Api GET "/api/discovery/offers?search=EngelIlan $stamp" $null $den.Token
+$sonrasi = @($arama.items | Where-Object { $_.tutorUserId -eq $cem.UserId }).Count
+Esit 'engelden SONRA ilan aramada YOK' $sonrasi 0
+
+# SERBEST İDDİA: engel kalkınca aynı arama yine buluyor — süzgecin sebebi engel.
+Api DELETE "/api/blocks/$($cem.UserId)" $null $den.Token | Out-Null
+$arama = Api GET "/api/discovery/offers?search=EngelIlan $stamp" $null $den.Token
+Esit 'engel kalkınca ilan geri geldi' (@($arama.items | Where-Object { $_.tutorUserId -eq $cem.UserId }).Count) 1
+
+# Öneriler: Deniz o konuyu ÖĞRENMEK istediğini beyan edince Cem önerilmeli.
+Api POST '/api/portfolio/entries' @{ topicId = $konuIlan; direction = 'Seek'; selfAssessedLevel = 1; note = $null } $den.Token | Out-Null
+$oneri = @(Api GET '/api/portfolio/suggestions?limit=50' $null $den.Token)
+Esit 'engelsizken Cem öneriliyor' (@($oneri | Where-Object { $_.userId -eq $cem.UserId }).Count) 1
+
+Api POST '/api/blocks' @{ userId = $cem.UserId; note = $null } $den.Token | Out-Null
+$oneri = @(Api GET '/api/portfolio/suggestions?limit=50' $null $den.Token)
+Esit 'engelliyken Cem ÖNERİLMİYOR' (@($oneri | Where-Object { $_.userId -eq $cem.UserId }).Count) 0
+Api DELETE "/api/blocks/$($cem.UserId)" $null $den.Token | Out-Null
+
+# ---------------------------------------------------------------------------
 Step 'G. Sınırlar'
 
 $hk = ApiHata POST '/api/blocks' @{ userId = $ada.UserId; note = $null } $ada.Token

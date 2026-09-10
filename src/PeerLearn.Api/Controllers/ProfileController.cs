@@ -217,6 +217,28 @@ public sealed class ProfileController : ControllerBase
         => await _mediator.Send(new GetUserProfileQuery(userId, User.GetUserId()), ct);
 
     /// <summary>
+    /// Profilin arkadaş bölümü: sayı herkese, TAM LİSTE yalnızca kendi profilinde,
+    /// başkasınınkinde ortak arkadaşlar.
+    /// </summary>
+    /// <remarks>
+    /// PROFİL UCUNA EKLENMEDİ, AYRI TUTULDU — rozet şeridiyle aynı gerekçenin daha
+    /// sert bir hâli. Rozet ucunda sebep maliyetti; burada sebep SÖZLEŞME: mobil
+    /// uygulama ayrı bir depoda ve ayrıştırıcısının bilinmeyen JSON alanını yok sayıp
+    /// saymadığı buradan doğrulanamıyor. Yok saymıyorsa (kotlinx.serialization
+    /// varsayılanı) mevcut profil yanıtına alan eklemek, mağazadaki sürümde profil
+    /// ekranını komple beyaza düşürürdü. Yeni uç bu riski taşımıyor: eski istemci onu
+    /// hiç çağırmaz.
+    ///
+    /// Görünürlük kuralı UÇTA DEĞİL handler'da: userId parametresi alınıyor çünkü
+    /// başkasının profili de bu ucu çağırıyor (ortak arkadaşlar için). "Tam listeyi
+    /// yalnızca sahibi görür" kararı GetProfileFriendsHandler'da, sayıyla listeyi
+    /// aynı süzgeçten geçiren kodun yanında duruyor.
+    /// </remarks>
+    [HttpGet("users/{userId:guid}/friends")]
+    public async Task<ProfileFriendsDto> GetFriends(Guid userId, CancellationToken ct)
+        => await _mediator.Send(new GetProfileFriendsQuery(userId, User.GetUserId()), ct);
+
+    /// <summary>
     /// Branş rozetleri + branş bazlı anlatım saatleri. Profil ekranındaki rozet şeridi.
     /// </summary>
     /// <remarks>

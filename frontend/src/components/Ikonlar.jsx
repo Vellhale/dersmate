@@ -382,7 +382,7 @@ export function ArtiIkonu(props) {
  * tek balon BİREBİR konuşma (Sohbet), iki balon ÇOK KİŞİLİ tartışma (Topluluk).
  * Kullanıcı ikisini yan yana gördüğünde farkı okuyabiliyor.
  *
- * KisilerIkonu (insan siluetleri) bilerek kullanılmadı: o zaten Eşleşmeler'in ikonu ve
+ * KisilerIkonu (insan siluetleri) bilerek kullanılmadı: o zaten Arkadaşlar'ın ikonu ve
  * "topluluk = insanlar" çizimi menüde iki satırı birbirinin kopyası gibi gösterirdi.
  * Buradaki iş insanları değil, KONUŞMAYI göstermek.
  */

@@ -89,6 +89,11 @@ try {
     # devralırdı. Paket isimle aramayı da kapsıyor: keşif kapsamının açılması ve
     # engelleme aynı değişiklikte geldi, ayrı sınanamazlar.
     Betik 'İsimle arama ve engelleme' 'e2e-engelleme.ps1'
+
+    # Arkadaş yüzeyleri engellemenin HEMEN ARDINDAN: paketin iddialarının yarısı
+    # engelin arkadaş sayısından/listesinden/ortak listeden elenmesini sınıyor ve
+    # engelleme paketi kırmızıysa buradaki kırmızının nedeni de orada aranmalı.
+    Betik 'Profil arkadaş bölümü' 'e2e-arkadaslar.ps1'
     Betik 'Yönetim puan düzeltmesi' 'e2e-admin-credits.ps1'
     Betik 'Arka plan işleri' 'e2e-jobs.ps1'
 

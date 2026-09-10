@@ -16,7 +16,7 @@
  *     ilerlemiyordu.
  *
  * Adım sayısı 4'ten 6'ya çıktı. Eskiden dördüncü adım sohbeti, kanıtı, onayı ve itirazı
- * TEK paragrafta anlatıyordu — turun en yoğun ve en atlanan yeriydi. Şimdi eşleşme,
+ * TEK paragrafta anlatıyordu — turun en yoğun ve en atlanan yeriydi. Şimdi arkadaşlık,
  * sohbet ve kanıt ayrı adımlar; her biri kendi menü öğesinin üstünde duruyor.
  *
  * BAŞLIKLARDA EMOJİ YOK. İlk adım "Ders almak ücretsiz 🌱" idi. Aynı gerekçe rozetlerde
@@ -83,12 +83,12 @@ export const TOUR_STEPS = [
   {
     id: 'matches',
     selector: '[data-tour="matches"]',
-    title: 'Eşleşmeler — istek gönder ve al',
+    title: 'Arkadaşlar — istek gönder ve al',
     body: 'Gönderdiğin ve sana gelen ders istekleri bu sayfada toplanır.',
     points: [
       'Gelen bir isteği kabul ya da reddedersin.',
       'Kabul edilen istekte sohbet kendiliğinden açılır.',
-      'Eşleşmeyi istediğin an sonlandırabilirsin.',
+      'Arkadaşlığı istediğin an sonlandırabilirsin.',
     ],
   },
   {
