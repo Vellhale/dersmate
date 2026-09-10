@@ -85,9 +85,25 @@ public sealed class GetMatchSuggestionsHandler
           Hash Semi Join seçiyor ve tekilleştirme maliyeti kalkıyor.
           Ölçüm (10.062 aday): 12,5 ms -> 8,1 ms.
         */
+        /*
+          ⛔ ENGELLİLER ÖNERİLMİYOR — çift yönlü.
+
+          Engelleme kabul edilmiş eşleşmeyi kapatmıyor ve portföy kayıtlarına hiç
+          dokunmuyor (bilinçli, gerekçe UserBlocks.cs). Bu süzgeç olmasaydı engellediğin
+          kişi Keşfet'in ÖNERİ listesinde çıkmaya devam ederdi: kartına basıp istek
+          göndermeye çalışınca sunucu reddederdi, yani kullanıcı kendi koyduğu engeli bir
+          hata kutusundan öğrenirdi. Aynı gerekçe isim aramasında da yazılı
+          (SearchUniversityPeers) — "görünmemek, hata vermekten sessizdir".
+
+          Aday kümesi ZATEN daraltılıyor (limit×3); süzgeç aynı WHERE'e bir NOT EXISTS
+          ekliyor ve UserBlocks'un iki yönü de indeksli.
+        */
         var topUserIds = await _db.Users.AsNoTracking()
             .Where(user => user.Status == UserStatus.Active
                            && user.Id != me
+                           && !_db.UserBlocks.Any(b =>
+                               (b.BlockerUserId == me && b.BlockedUserId == user.Id) ||
+                               (b.BlockerUserId == user.Id && b.BlockedUserId == me))
                            && _db.PortfolioEntries.Any(offer =>
                                offer.UserId == user.Id
                                && offer.IsActive
