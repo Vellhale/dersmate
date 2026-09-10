@@ -15,15 +15,51 @@ $psql   = 'C:\Program Files\PostgreSQL\17\bin\psql.exe'
 $root   = Split-Path $PSScriptRoot -Parent
 $script = Join-Path $PSScriptRoot 'temizlik-test-hesaplari.sql'
 
-if (-not (Test-Path $psql))   { throw "psql bulunamadi: $psql" }
+<#
+  psql UC YOLDAN aranir; ilk bulunan kullanilir. e2e paketlerinin tamami bu uclusu
+  tasiyor, bu betik tasimiyordu:
+
+    1. Windows kurulumu   — gelistiricinin makinesinde tipik yol
+    2. PATH uzerinde psql — Linux/macOS ve CI kosuculari
+    3. docker compose     — makinede psql yok ama compose yigini ayakta
+
+  UCUNCU YOL OLMADAN bu betik, docs/GELISTIRME-ORTAMI.md'nin tarif ettigi DOCKER
+  kurulumunda HIC KOSAMIYORDU: ilk satirda "psql bulunamadi" diye oluyordu. Yani
+  temizlik "yapilmadi" degil, DENENEMEDI — ve bu, basarisiz olmasindan daha sinsi:
+  kimse temizligin kosmadigini fark etmez, veritabani sessizce sisar.
+#>
+if (-not (Test-Path $psql)) {
+    $psqlCmd = Get-Command psql -ErrorAction SilentlyContinue
+    $bulunan = if ($psqlCmd) { $psqlCmd.Source } else { $null }
+    if ($bulunan) { $psql = $bulunan } else { $psql = $null }
+}
 if (-not (Test-Path $script)) { throw "SQL betigi bulunamadi: $script" }
+
+$compose = Join-Path $root 'docker-compose.yml'
+if (-not $psql -and -not (Test-Path $compose)) {
+    throw "Ne psql bulundu ne docker-compose.yml — temizlik kosamaz."
+}
 
 $env:PGPASSWORD = 'PeerLearnDev2026'
 
+# Docker yolunda sorgu/betik STDIN'den gecer: -f ile dosya yolu vermek konteynerin
+# icinde aranir ve bulunamaz.
+function PsqlDosya($yol, $ekArgumanlar) {
+    if ($psql) {
+        & $psql -h localhost -U peerlearn -d peerlearn @ekArgumanlar -f $yol
+        return
+    }
+    Get-Content -Raw -Encoding UTF8 $yol |
+        docker compose -f $compose exec -T db psql -U peerlearn -d peerlearn @ekArgumanlar
+}
+
 function Say($q) {
-    $f = Join-Path $env:TEMP "peerlearn-say.sql"
-    [IO.File]::WriteAllText($f, $q, [Text.UTF8Encoding]::new($false))
-    (& $psql -h localhost -U peerlearn -d peerlearn -t -A -f $f) -join ''
+    if ($psql) {
+        $f = Join-Path $env:TEMP "peerlearn-say.sql"
+        [IO.File]::WriteAllText($f, $q, [Text.UTF8Encoding]::new($false))
+        return (& $psql -h localhost -U peerlearn -d peerlearn -t -A -f $f) -join ''
+    }
+    return ($q | docker compose -f $compose exec -T db psql -U peerlearn -d peerlearn -t -A) -join ''
 }
 
 <#
@@ -45,13 +81,13 @@ $oncesiKonu      = Say 'SELECT COUNT(*) FROM catalog."Topics";'
 Write-Host "Once  : $oncesiKullanici kullanici, $oncesiKonu konu" -ForegroundColor Cyan
 
 Write-Host "`n[1/2] Hesaplar ve bagli kayitlar..." -ForegroundColor Yellow
-& $psql -h localhost -U peerlearn -d peerlearn -v ON_ERROR_STOP=1 -f $script
+PsqlDosya $script @('-v', 'ON_ERROR_STOP=1')
 $kod1 = $LASTEXITCODE
 
 $kod2 = 0
 if ($kod1 -eq 0) {
     Write-Host "`n[2/2] Katalog artiklari (kategori/ders/konu)..." -ForegroundColor Yellow
-    & $psql -h localhost -U peerlearn -d peerlearn -v ON_ERROR_STOP=1 -f $katalog
+    PsqlDosya $katalog @('-v', 'ON_ERROR_STOP=1')
     $kod2 = $LASTEXITCODE
 } else {
     Write-Host "`n[2/2] ATLANDI: hesap asamasi basarisiz oldu." -ForegroundColor Red

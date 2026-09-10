@@ -215,6 +215,44 @@ $durum2 = Tek "SELECT ""Status"" FROM matchmaking.""Matches"" WHERE ""Id"" = '$m
 Esit 'engellemeden önce gönderilmiş BEKLEYEN istek kapandı' $durum2 'Declined'
 
 # ---------------------------------------------------------------------------
+Step 'C2. İKİNCİ SAVUNMA HATTI: bekleyen istek kabul EDİLEMİYOR'
+
+<#
+  BU KAPI TESTTE HİÇ UYARILMIYORDU — kaldırılsaydı tüm takım yeşil kalırdı.
+
+  RespondMatchHandler'daki engel kontrolü ikinci savunma hattı: normal akışta
+  BlockUserHandler bekleyen istekleri zaten Declined yapıyor, dolayısıyla oraya
+  düşülmemesi gerekiyor. Ama "gerekiyor" bir test değil. Kapı şu durumlarda tek
+  koruma olarak kalıyor:
+    • yarış — istek INSERT'ü ile engelin bekleyenleri okuması çakışırsa (ReadCommitted
+      altında henüz görünmeyen satır kapatılmaz), istek Pending kalır
+    • engelin o adımı bir gün atlanır ya da yeniden yazılırken bozulursa
+
+  Bu iddia o durumu ELDE KURUYOR: engel satırı DOĞRUDAN veritabanına yazılıyor, yani
+  BlockUserHandler hiç çalışmıyor ve bekleyen istek Pending kalıyor. Kabul denendiğinde
+  409 dönmeli. Kapı silinirse burası kırılır — mutasyon kanıtı budur.
+#>
+$mid2 = Api POST '/api/matches' @{ responderUserId = $cem.UserId } $den.Token
+$durumOnce = Tek "SELECT ""Status"" FROM matchmaking.""Matches"" WHERE ""Id"" = '$mid2';"
+Esit 'kurulum: istek Pending' $durumOnce 'Pending'
+
+# Engeli HANDLER'I ATLAYARAK yaz — bekleyen istek kapanmasın.
+Sql "INSERT INTO identity.""UserBlocks"" (""Id"",""BlockerUserId"",""BlockedUserId"",""Note"",""CreatedAtUtc"") VALUES (gen_random_uuid(), '$($cem.UserId)', '$($den.UserId)', NULL, now());" | Out-Null
+$halaPending = Tek "SELECT ""Status"" FROM matchmaking.""Matches"" WHERE ""Id"" = '$mid2';"
+Esit 'kurulum: engel yazıldı ama istek HÂLÂ Pending' $halaPending 'Pending'
+
+$hk2 = ApiHata POST "/api/matches/$mid2/respond" @{ accept = $true } $cem.Token
+Esit 'engelli isteğin KABULÜ reddedildi (409)' $hk2.status 409
+
+# REDDETMEK SERBEST kalmalı: engellenmiş bir isteği reddedememek, kullanıcıyı kendi
+# gelen kutusunda kilitli bırakırdı (kodun kendi gerekçesi).
+Api POST "/api/matches/$mid2/respond" @{ accept = $false } $cem.Token | Out-Null
+$durumSonra = Tek "SELECT ""Status"" FROM matchmaking.""Matches"" WHERE ""Id"" = '$mid2';"
+Esit 'reddetmek engelliyken de çalışıyor' $durumSonra 'Declined'
+
+Sql "DELETE FROM identity.""UserBlocks"" WHERE ""BlockerUserId"" = '$($cem.UserId)' AND ""BlockedUserId"" = '$($den.UserId)';" | Out-Null
+
+# ---------------------------------------------------------------------------
 Step 'D. Aramada görünmeme (çift yönlü)'
 
 $ara1 = Api GET "/api/discovery/users?name=Zqx$stamp" $null $ada.Token
