@@ -39,10 +39,21 @@ CREATE TEMP TABLE s_lot ON COMMIT DROP AS
   WHERE "WalletId" IN (SELECT "Id" FROM s_cuzdan) OR "SourceSessionId" IN (SELECT "Id" FROM s_ders);
 CREATE INDEX ON s_lot ("Id");
 
-CREATE TEMP TABLE s_hold ON COMMIT DROP AS
-  SELECT "Id" FROM economy."CreditHolds"
-  WHERE "WalletId" IN (SELECT "Id" FROM s_cuzdan) OR "SessionId" IN (SELECT "Id" FROM s_ders);
-CREATE INDEX ON s_hold ("Id");
+/*
+  ESCROW ARTIKLARI KALDIRILDI (2026-09-10).
+
+  Bu betik escrow (bloke kredi) doneminde yazildi ve economy."CreditHolds" tablosuyla
+  economy."Wallets"."LockedBalance" kolonunu kullaniyordu. Ikisi de URUNDEN KALKTI:
+  ders almak ucretsiz, puan onayda tek bacakli olarak basiliyor (CLAUDE.md). Tablo ve
+  kolon gocle silindi ama bu betik guncellenmedi.
+
+  SONUCU: betik ilk CreditHolds satirinda "relation does not exist" ile duruyordu, yani
+  TEMIZLIK ESCROW KALKTIGI GUNDEN BERI HIC KOSMADI. Tek transaction oldugu icin hicbir
+  sey silinmiyor, ekrana da yalnizca bir SQL hatasi dusuyordu.
+
+  Kaldirilan dort blok: s_hold gecici tablosu, CreditHolds silmesi, LockedBalance
+  yeniden turetmesi ve "locked = SUM(aktif hold)" degismezi.
+*/
 
 CREATE TEMP TABLE s_degerlendirme ON COMMIT DROP AS
   SELECT "Id" FROM scheduling."SessionReviews"
@@ -51,17 +62,29 @@ CREATE TEMP TABLE s_degerlendirme ON COMMIT DROP AS
      OR "RevieweeUserId" IN (SELECT "Id" FROM s_user);
 CREATE INDEX ON s_degerlendirme ("Id");
 
+/*
+  TUKETIM SATIRLARI — iki kolon daha eskimisti.
+
+  "IsReversal" ve "CreditHoldId" kolonlari da escrow ile birlikte kalkti (gercek semaya
+  bakildi: CreditLotConsumptions bugun Id, CreditLotId, Amount, CreditTransactionId,
+  CreatedAtUtc tasiyor). Geri alma artik ayri bir bayrakla degil, kendi tuketim satiriyla
+  degil, CreditTransactions uzerinden yurutuluyor.
+
+  IADE MANTIGI KORUNDU ve bu onemli: silinen tuketim satirlarinin tuketttigi miktar,
+  HAYATTA KALAN lotlara geri yazilmali. Atlanirsa test hesaplarinin tuketttigi kredi
+  gercek kullanicilarin lotlarindan buharlasir — onceki bir temizlikte tam bu olmus ve
+  betigin kendi notu bunu soyluyor. Yalnizca CASE ifadesi sadelestirildi: ters bayrak
+  olmadigi icin toplam dogrudan SUM("Amount").
+*/
 CREATE TEMP TABLE s_tuketim ON COMMIT DROP AS
-  SELECT "Id", "CreditLotId", "Amount", "IsReversal" FROM economy."CreditLotConsumptions"
+  SELECT "Id", "CreditLotId", "Amount" FROM economy."CreditLotConsumptions"
   WHERE "CreditTransactionId" IN (SELECT "Id" FROM s_hareket)
-     OR "CreditHoldId"        IN (SELECT "Id" FROM s_hold)
      OR "CreditLotId"         IN (SELECT "Id" FROM s_lot);
 
 -- Hayatta kalan lotlara iade (bkz. onceki temizlik: atlanirsa kredi buharlasir).
 UPDATE economy."CreditLots" l
 SET "RemainingAmount" = l."RemainingAmount" + x.iade
-FROM (SELECT "CreditLotId" AS lot,
-             SUM(CASE WHEN "IsReversal" THEN -"Amount" ELSE "Amount" END) AS iade
+FROM (SELECT "CreditLotId" AS lot, SUM("Amount") AS iade
       FROM s_tuketim GROUP BY "CreditLotId") x
 WHERE l."Id" = x.lot AND l."Id" NOT IN (SELECT "Id" FROM s_lot);
 
@@ -69,11 +92,24 @@ WHERE l."Id" = x.lot AND l."Id" NOT IN (SELECT "Id" FROM s_lot);
 DELETE FROM economy."CreditLotConsumptions" WHERE "Id" IN (SELECT "Id" FROM s_tuketim);
 DELETE FROM economy."CreditTransactions"    WHERE "Id" IN (SELECT "Id" FROM s_hareket);
 DELETE FROM economy."CreditLots"            WHERE "Id" IN (SELECT "Id" FROM s_lot);
-DELETE FROM economy."CreditHolds"           WHERE "Id" IN (SELECT "Id" FROM s_hold);
 
 -- --- Ders ve cevresi ---
 DELETE FROM moderation."Disputes"          WHERE "SessionId" IN (SELECT "Id" FROM s_ders)
                                               OR "RaisedByUserId" IN (SELECT "Id" FROM s_user);
+/*
+  SIKAYETLER — betige sonradan eklenen tablo, silme sirasina girmemisti.
+
+  moderation."Reports" iki yonlu itiraz yerine gelen TEK YONLU sikayet kaydi (2026-09).
+  Hem LessonSessions'a hem Users'a (iki kez: sikayet eden ve edilen) FK'si var, ucu de
+  RESTRICT. Betikte olmadigi icin ders silmesi "FK_Reports_LessonSessions_SessionId"
+  ihlaliyle duruyordu.
+
+  Sikayet forum icerigine de baglanabiliyor (CommunityPostId / CommunityCommentId) ama
+  o iki bag topluluk temizligine ait; burada ders ve kullanici baglari kesiliyor.
+*/
+DELETE FROM moderation."Reports"           WHERE "SessionId" IN (SELECT "Id" FROM s_ders)
+                                              OR "ReporterUserId" IN (SELECT "Id" FROM s_user)
+                                              OR "ReportedUserId" IN (SELECT "Id" FROM s_user);
 DELETE FROM scheduling."SessionReviewTags" WHERE "ReviewId" IN (SELECT "Id" FROM s_degerlendirme);
 DELETE FROM scheduling."SessionReviews"    WHERE "Id" IN (SELECT "Id" FROM s_degerlendirme);
 DELETE FROM scheduling."SessionProofs"     WHERE "SessionId" IN (SELECT "Id" FROM s_ders)
@@ -94,6 +130,26 @@ DELETE FROM moderation."AdminActionLogs"       WHERE "ActorUserId" IN (SELECT "I
 DELETE FROM identity."UserDevices"             WHERE "UserId" IN (SELECT "Id" FROM s_user);
 DELETE FROM identity."UserPreferences"         WHERE "UserId" IN (SELECT "Id" FROM s_user);
 DELETE FROM identity."TeacherCandidateProfiles" WHERE "UserId" IN (SELECT "Id" FROM s_user);
+
+/*
+  ENGEL KAYITLARI — IKI YON DE.
+
+  UserBlocks'un IKI yabanci anahtari da RESTRICT (IdentityConfigurations). Yani bir test
+  hesabi baska birini engellemis ya da baskasi tarafindan engellenmisse, asagidaki
+  "DELETE FROM Users" hata verir ve TUM temizlik islemi geri alinir. Betik tek bir
+  transaction oldugu icin hicbir sey silinmez — yani "temizlik kostu" sanilir ama
+  veritabani oldugu gibi kalir.
+
+  BU BETIK ENGELLEME OZELLIGINDEN ONCE YAZILDI (engelleme 2026-09-10). Tablo eklendiginde
+  buraya satir eklenmedi ve e2e-engelleme.ps1 her kosumda engel satiri birakiyor —
+  yani temizlik ozelligin ilk gununden beri kirikti.
+
+  ⚠️ YENI BIR identity TABLOSU EKLEYEN HERKES BURAYA BAKMALI: Users'a RESTRICT ile bagli
+  her tablo, silmeden ONCE bosaltilmak zorunda.
+*/
+DELETE FROM identity."UserBlocks"
+  WHERE "BlockerUserId" IN (SELECT "Id" FROM s_user)
+     OR "BlockedUserId" IN (SELECT "Id" FROM s_user);
 DELETE FROM community."UserBadges"             WHERE "UserId" IN (SELECT "Id" FROM s_user);
 
 /*
@@ -115,19 +171,32 @@ DELETE FROM identity."Users" WHERE "Id" IN (SELECT "Id" FROM s_user);
 -- --- Defteri yeniden turet ---
 UPDATE economy."Wallets" w SET
   "AvailableBalance" = COALESCE((SELECT SUM(l."RemainingAmount") FROM economy."CreditLots" l WHERE l."WalletId" = w."Id"), 0),
-  "LockedBalance"    = COALESCE((SELECT SUM(h."Amount") FROM economy."CreditHolds" h WHERE h."WalletId" = w."Id" AND h."Status" = 'Active'), 0),
   "UpdatedAtUtc"     = now();
 
+/*
+  ⚠️ UNVAN SAYACI: LessonEarning + CommunityReward — İKİSİ BİRDEN.
+
+  Degismez 2026-08-29'da GENISLEDI: forum katkisi da unvan sayacina giriyor (300 net oy
+  -> 100 puan). Bu betik yalnizca LessonEarning'i topluyordu ve yeniden turetme SESSIZCE
+  VERI BOZUYORDU: forum katkisi olan her kullanicinin sayaci temizlikten sonra dusuyordu.
+  Asagidaki degismez sinavi da ayni eski formulu kullandigi icin hatayi YAKALAYAMIYORDU —
+  betik "BASARILI" diyor, dort test paketi ertesi kosumda kiriliyordu.
+
+  AdminAdjustment BILEREK disarida: yonetim eliyle unvan dagitilamaz (e2e-ban.ps1'in
+  kendi notu da bunu soyluyor). Yani tur listesi buradaki ile testteki BIREBIR AYNI
+  olmali; ayrisirlarsa temizlik ile sinav birbirini yalanlar.
+*/
 UPDATE identity."Users" u SET "TotalEarnedCredits" = COALESCE((
   SELECT SUM(t."Amount") FROM economy."CreditTransactions" t
   JOIN economy."Wallets" w ON w."Id" = t."WalletId"
-  WHERE w."UserId" = u."Id" AND t."Type" = 'LessonEarning'), 0);
+  WHERE w."UserId" = u."Id" AND t."Type" IN ('LessonEarning', 'CommunityReward')), 0);
 
 -- --- DEGISMEZ SINAVI ---
 DO $$
 DECLARE c bigint; d bigint; n int;
 BEGIN
-  SELECT COALESCE(SUM("AvailableBalance"+"LockedBalance"),0) INTO c FROM economy."Wallets";
+  -- LockedBalance kaldirildi (escrow yok): cuzdanin tamami AvailableBalance.
+  SELECT COALESCE(SUM("AvailableBalance"),0) INTO c FROM economy."Wallets";
   SELECT COALESCE(SUM("Amount"),0) INTO d FROM economy."CreditTransactions";
   IF c <> d THEN RAISE EXCEPTION 'IPTAL: global defter % <> %', c, d; END IF;
 
@@ -138,19 +207,13 @@ BEGIN
   IF n > 0 THEN RAISE EXCEPTION 'IPTAL: % cuzdanda available <> SUM(lot)', n; END IF;
 
   SELECT COUNT(*) INTO n FROM (
-    SELECT w."Id" FROM economy."Wallets" w
-    LEFT JOIN economy."CreditHolds" h ON h."WalletId"=w."Id" AND h."Status"='Active'
-    GROUP BY w."Id", w."LockedBalance"
-    HAVING w."LockedBalance" <> COALESCE(SUM(h."Amount"),0)) z;
-  IF n > 0 THEN RAISE EXCEPTION 'IPTAL: % cuzdanda locked <> SUM(aktif hold)', n; END IF;
-
-  SELECT COUNT(*) INTO n FROM (
     SELECT u."Id" FROM identity."Users" u
     LEFT JOIN economy."Wallets" w ON w."UserId"=u."Id"
-    LEFT JOIN economy."CreditTransactions" t ON t."WalletId"=w."Id" AND t."Type"='LessonEarning'
+    LEFT JOIN economy."CreditTransactions" t ON t."WalletId"=w."Id"
+                                            AND t."Type" IN ('LessonEarning', 'CommunityReward')
     GROUP BY u."Id", u."TotalEarnedCredits"
     HAVING u."TotalEarnedCredits" <> COALESCE(SUM(t."Amount"),0)) z;
-  IF n > 0 THEN RAISE EXCEPTION 'IPTAL: % kullanicida sayac <> SUM(LessonEarning)', n; END IF;
+  IF n > 0 THEN RAISE EXCEPTION 'IPTAL: % kullanicida sayac <> SUM(LessonEarning+CommunityReward)', n; END IF;
 
   -- Oksuz kayit taramasi
   SELECT COUNT(*) INTO n FROM economy."Wallets" w
