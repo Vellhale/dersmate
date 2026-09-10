@@ -1,7 +1,9 @@
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using PeerLearn.Application.Abstractions;
 using PeerLearn.Application.Common;
+using PeerLearn.Application.Options;
 using PeerLearn.Application.Features.Community;
 using PeerLearn.Application.Features.Identity;
 using PeerLearn.Domain.Communication;
@@ -37,11 +39,17 @@ public sealed class CreateMatchRequestHandler : IRequestHandler<CreateMatchReque
 
     private readonly IAppDbContext _db;
     private readonly IClock _clock;
+    private readonly IDistributedLockProvider _locks;
+    private readonly EconomyOptions _economy;
 
-    public CreateMatchRequestHandler(IAppDbContext db, IClock clock)
+    public CreateMatchRequestHandler(
+        IAppDbContext db, IClock clock,
+        IDistributedLockProvider locks, IOptions<EconomyOptions> economy)
     {
         _db = db;
         _clock = clock;
+        _locks = locks;
+        _economy = economy.Value;
     }
 
     public async Task<Guid> Handle(CreateMatchRequestCommand request, CancellationToken ct)
@@ -171,6 +179,27 @@ public sealed class CreateMatchRequestHandler : IRequestHandler<CreateMatchReque
           seri istek atmayı frenlemek — normal bir kullanıcı günde 20 kişiye istek
           göndermiyor.
         */
+        /*
+          ⛔ KİLİT — "say, sonra yaz" arasını serileştirmek zorunda.
+
+          Tavan kilitsiz sayılırken FİİLEN ETKİSİZDİ: kullanıcı 20 farklı kişiye paralel
+          istek gönderdiğinde hepsi sayımı aynı anda okur, hepsi tavanın altında görür ve
+          hepsi yazılır. Bu projede aynı hata bir kez daha yapıldı ve ölçüldü — MintGuard'ın
+          eğitmen tavanı çift bazında kilitlendiği için 12 paralel istek 12 kabul almıştı
+          (LockKeys.Tutor notu). Oradaki ders burada da geçerli: anahtar, SAYIMIN GRUPLADIĞI
+          şeyi kapsamalı; sayım InitiatorUserId'ye baktığı için kilit de orada.
+
+          Kilit sayımdan ÖNCE alınıyor ve isteğin yazılması bitene kadar tutuluyor —
+          `await using` metodun sonuna kadar yaşıyor. Sayımla yazma arasında bırakılan her
+          aralık tavanı yeniden delerdi.
+
+          EconomyOptions.LockTimeoutSeconds paylaşılıyor: ayrı bir ayar açmak, aynı Redis
+          kilidi için ikinci bir zaman aşımı kavramı üretirdi.
+        */
+        await using var istekKilidi = await _locks.AcquireAsync(
+            LockKeys.IstekGonderen(request.InitiatorUserId),
+            TimeSpan.FromSeconds(_economy.LockTimeoutSeconds), ct);
+
         var gunlukEsik = _clock.UtcNow.AddDays(-1);
         var bugunGonderilen = await _db.Matches.CountAsync(m =>
             m.InitiatorUserId == request.InitiatorUserId &&

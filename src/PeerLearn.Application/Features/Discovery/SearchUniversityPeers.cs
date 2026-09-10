@@ -59,6 +59,12 @@ public sealed class SearchUniversityPeersHandler
 {
     private const int MaxPageSize = 50;
 
+    /// <summary>
+    /// İsim aramasının en az harf sayısı. Arayüzdeki ARKADAS_MIN_HARF ile aynı;
+    /// ikisi ayrışırsa arayüz göndermediği için fark uzun süre fark edilmez.
+    /// </summary>
+    private const int IsimEnAzHarf = 2;
+
     /*
       ─── TÜRKÇE ARAMA: İKİ AYRI TUZAK, İKİ AYRI ÇARE ─────────────────────────────
 
@@ -193,7 +199,20 @@ public sealed class SearchUniversityPeersHandler
           Üniversite/bölüm filtreleri kullanıldığında eski davranış korunuyor: o alanları
           boş olan kullanıcılar zaten filtreye takılmıyor.
         */
-        var isimAramasi = !string.IsNullOrWhiteSpace(request.Name);
+        /*
+          İSİM İÇİN ALT SINIR SUNUCUDA DA VAR.
+
+          Arayüz iki harften kısa sorguyu hiç göndermiyor (ARKADAS_MIN_HARF) ama bu bir
+          KOLAYLIK, güvence değil: uç doğrudan çağrılabiliyor. Tek harflik bir sorgu
+          Users tablosunu ICU kolasyonu + üç Replace zinciriyle baştan sona tarar ve
+          neredeyse herkesi döndürür — hem anlamsız bir sonuç hem de ucuz bir yük aracı.
+
+          Kısa sorgu HATA VERMİYOR, isim ölçütü YOK SAYILIYOR: hata döndürmek, arayüzün
+          zaten göndermediği bir durum için kullanıcıya anlaşılmaz bir uyarı çıkarırdı.
+          Yok sayınca sorgu üniversite/bölüm ölçütlerine düşüyor; ikisi de boşsa sonuç
+          "üniversitesini girmiş kullanıcılar" oluyor — yani eski davranış.
+        */
+        var isimAramasi = (request.Name ?? string.Empty).Trim().Length >= IsimEnAzHarf;
 
         var query = _db.Users
             .AsNoTracking()

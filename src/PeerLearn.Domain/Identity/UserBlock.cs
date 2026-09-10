@@ -43,6 +43,18 @@ namespace PeerLearn.Domain.Identity;
 /// </remarks>
 public class UserBlock : BaseEntity
 {
+    /// <summary>
+    /// Notun en fazla uzunluğu.
+    /// </summary>
+    /// <remarks>
+    /// SUNUCUDA DA DOĞRULANIYOR (BlockUserHandler) ve yapılandırmadaki
+    /// <c>HasMaxLength(500)</c> ile AYNI olmak zorunda. Ayrışırlarsa iki kötü sonuçtan
+    /// biri olur: ya kolon sınırına çarpılıp kullanıcıya 500 Internal Server Error döner
+    /// (girdi hatası sunucu hatası gibi görünür), ya da geçerli bir not boşuna reddedilir.
+    /// Arayüzdeki <c>maxLength</c> bir kolaylık, güvence değil — uç doğrudan çağrılabiliyor.
+    /// </remarks>
+    public const int NotEnFazla = 500;
+
     /// <summary>Engelleyen (kaydı oluşturan) kullanıcı.</summary>
     public Guid BlockerUserId { get; set; }
 

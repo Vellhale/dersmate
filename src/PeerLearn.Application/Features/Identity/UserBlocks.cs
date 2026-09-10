@@ -89,6 +89,23 @@ public sealed class BlockUserHandler : IRequestHandler<BlockUserCommand, Unit>
             throw new AppException(ErrorCodes.SelfMatch, "Kendini engelleyemezsin.");
         }
 
+        /*
+          NOT UZUNLUĞU SUNUCUDA DA SINIRLI.
+
+          Arayüzdeki maxLength=500 bir KOLAYLIK, güvence değil: uç doğrudan çağrılabiliyor.
+          Kontrol olmadan 500 karakteri aşan not, kolon sınırına (HasMaxLength(500))
+          veritabanı katmanında çarpıyor ve kullanıcıya 500 Internal Server Error olarak
+          dönüyordu — yani girdi hatası sunucu hatası gibi görünüyordu. 400 doğru cevap.
+
+          Kırpmak yerine REDDETMEK: sessizce kısaltılan bir not, kullanıcının yazdığını
+          yazdığını sanmasına yol açardı.
+        */
+        if (request.Note is { Length: > UserBlock.NotEnFazla })
+        {
+            throw new AppException(ErrorCodes.ValidationFailed,
+                $"Not en fazla {UserBlock.NotEnFazla} karakter olabilir.", statusCode: 400);
+        }
+
         var hedef = await _db.Users
             .AnyAsync(u => u.Id == request.BlockedUserId && u.Status != UserStatus.Deleted, ct);
 
