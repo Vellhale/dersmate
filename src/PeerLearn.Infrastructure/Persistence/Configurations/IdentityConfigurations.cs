@@ -98,6 +98,65 @@ public sealed class UserPreferenceConfiguration : IEntityTypeConfiguration<UserP
     }
 }
 
+public sealed class RefreshTokenConfiguration : IEntityTypeConfiguration<RefreshToken>
+{
+    public void Configure(EntityTypeBuilder<RefreshToken> builder)
+    {
+        builder.ToTable("RefreshTokens", "identity", t =>
+        {
+            // Süresi kendinden önce dolan bir token, bir yerde saatin ya da ömür
+            // hesabının bozulduğunun işareti olur ve sessiz kalmamalı.
+            t.HasCheckConstraint(
+                "CK_RefreshTokens_Expiry",
+                "\"ExpiresAtUtc\" > \"CreatedAtUtc\"");
+        });
+
+        builder.HasKey(x => x.Id);
+
+        /* SHA-256 hex = tam 64 karakter; sınır da tam bu. Daha genişi, yanlışlıkla HAM
+           token'ın yazılmasını fark ettirmezdi — kolon sessizce kabul ederdi. */
+        builder.Property(x => x.TokenHash)
+            .HasMaxLength(RefreshTokenRules.HashLength)
+            .IsRequired();
+
+        /* FİLTRESİZ tekil index: doğrulama sorgusunun TEK girişi bu. Kısmi yapılmadı
+           çünkü iptal edilmiş satırlar da aranabilmeli — yeniden kullanım tespiti tam
+           olarak "iptal edilmiş bir token yeniden sunuldu mu" sorusuna dayanıyor.
+           Kısmi olsaydı iptal edilmiş satır index'te bulunmaz, hırsızlık sessizce
+           "geçersiz token" olarak görünürdü. */
+        builder.HasIndex(x => x.TokenHash).IsUnique();
+
+        /* "Bu kullanıcının aktif token'ları" sorgusu — toplu iptalde ve temizlikte
+           kullanılıyor.
+
+           ⚠️ Filtre yalnızca RevokedAtUtc üzerinde. Süre koşulu (ExpiresAtUtc > now())
+           kısmi index'e KONULAMAZ: now() immutable değil, PostgreSQL reddeder. Süre
+           kontrolü uygulama katmanında kalıyor.
+
+           ⚠️ Bu index'in kullanılması için sorgunun WHERE'i filtreyi BİREBİR içermeli:
+           `RevokedAtUtc == null`. Başka bir ifadeyle yazılırsa index sessizce devreden
+           çıkar; sonuç doğru döner, tablo taranır. */
+        builder.HasIndex(x => new { x.UserId, x.ExpiresAtUtc })
+            .HasFilter("\"RevokedAtUtc\" IS NULL")
+            .HasDatabaseName("IX_RefreshTokens_AktifKullanici");
+
+        builder.Property(x => x.RevokeReason).HasConversion<string>().HasMaxLength(20);
+
+        // UserDevices.HwidHash ile AYNI uzunluk — aynı değerin kopyası, ayrışmasın.
+        builder.Property(x => x.DeviceHwidHash).HasMaxLength(128);
+
+        /* Cascade YAZILDI ama ona GÜVENİLMİYOR: hesap silme bu üründe satır SİLMİYOR,
+           anonimleştiriyor (Status=Deleted). Yani DeleteAccount akışında token iptali
+           ELLE yapılmak zorunda — aksi halde silinmiş hesabın yenileme token'ı çalışmaya
+           devam eder ve taze erişim token'ı üretir. Cascade yalnızca gerçek bir satır
+           silmede (ör. test temizliği) devreye girer. */
+        builder.HasOne<User>()
+            .WithMany()
+            .HasForeignKey(x => x.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
 public sealed class UserDeviceConfiguration : IEntityTypeConfiguration<UserDevice>
 {
     public void Configure(EntityTypeBuilder<UserDevice> builder)

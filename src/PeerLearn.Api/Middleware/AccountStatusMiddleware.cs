@@ -1,6 +1,8 @@
+using System.IdentityModel.Tokens.Jwt;
 using Microsoft.EntityFrameworkCore;
 using PeerLearn.Api.Controllers;
 using PeerLearn.Application.Abstractions;
+using PeerLearn.Application.Identity;
 using PeerLearn.Domain.Identity;
 
 namespace PeerLearn.Api.Middleware;
@@ -42,9 +44,11 @@ public sealed class AccountStatusMiddleware
             return;
         }
 
+        /* TokensValidFromUtc AYNI PROJEKSİYONA eklendi — ek sorgu YOK. "Her yerden çıkış"
+           bu yüzden burada yaşıyor: satır zaten her kimlikli istekte okunuyor. */
         var hesap = await db.Users.AsNoTracking()
             .Where(u => u.Id == userId.Value)
-            .Select(u => new { u.Status, u.SuspendedUntilUtc })
+            .Select(u => new { u.Status, u.SuspendedUntilUtc, u.TokensValidFromUtc })
             .SingleOrDefaultAsync(context.RequestAborted);
 
         // Kullanıcı silinmişse token'ı geçerli saymayız.
@@ -70,6 +74,35 @@ public sealed class AccountStatusMiddleware
                 $"Hesabınız geçici olarak askıya alındı. Bitiş: {bitis:dd.MM.yyyy HH:mm} UTC.",
                 StatusCodes.Status403Forbidden);
             return;
+        }
+
+        /*
+          ⛔ "HER YERDEN ÇIKIŞ" DAMGASI.
+
+          Parola değişimi, hesap silme ve yaptırım akışları User.TokensValidFromUtc'yi
+          ileri alıyor; o andan ÖNCE üretilmiş her erişim token'ı burada ölüyor. JWT
+          durumsuz olduğu için başka bir yerde öldürülemezdi — imzalandığı andaki bilgiyi
+          taşıyor ve ömrü dolana kadar geçerli.
+
+          ⚠️ iat CLAIM'İ YOKSA TOKEN REDDEDİLİYOR (fail-closed). Bu sürümden önce üretilmiş
+          token'larda claim yok; onlar geçersiz sayılıyor ve kullanıcı bir kez daha giriş
+          yapıyor. Alternatif — "claim yoksa geçir" — damgayı işlevsiz kılardı: saldırgan
+          eski biçimli bir token sunarak kontrolü atlardı. Tek seferlik bir yeniden giriş,
+          kalıcı bir bypass'a yeğdir.
+        */
+        if (hesap.TokensValidFromUtc is not null)
+        {
+            var iat = context.User.FindFirst(JwtRegisteredClaimNames.Iat)?.Value;
+
+            if (!long.TryParse(iat, out var unix) ||
+                RefreshTokenService.TokenDamgadanEski(
+                    DateTimeOffset.FromUnixTimeSeconds(unix).UtcDateTime,
+                    hesap.TokensValidFromUtc))
+            {
+                await Reddet(context, "SESSION_REVOKED",
+                    "Oturumun sonlandırıldı, tekrar giriş yap.", StatusCodes.Status401Unauthorized);
+                return;
+            }
         }
 
         await _next(context);

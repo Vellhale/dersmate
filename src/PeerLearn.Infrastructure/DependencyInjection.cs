@@ -101,6 +101,7 @@ public static class DependencyInjection
         services.AddHostedService<SessionSweepJob>();
         services.AddHostedService<StorageCleanupJob>();
         services.AddHostedService<CommunityRewardJob>();
+        services.AddHostedService<RefreshTokenCleanupJob>();
 
         return services;
     }

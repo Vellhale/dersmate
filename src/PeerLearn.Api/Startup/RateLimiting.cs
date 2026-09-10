@@ -25,6 +25,42 @@ public static class RateLimiting
     /// <summary>Kimlik uçlarına uygulanan politika adı (controller'da [EnableRateLimiting]).</summary>
     public const string AuthPolicy = "auth";
 
+    /// <summary>
+    /// Oturum yenileme ucuna özel politika. <see cref="AuthPolicy"/>'den AYRI olması
+    /// bilinçli ve bir arızayı önlüyor.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ YENİLEME UCU AuthController'A KONULSAYDI CGNAT ARIZASI GERİ GELİRDİ.
+    ///
+    /// AuthController sınıf düzeyinde <c>[EnableRateLimiting(AuthPolicy)]</c> taşıyor ve o
+    /// politika IP başına bölümlüyor — üretimde dakikada 10. Yenileme isteği ise tanımı
+    /// gereği ÖLMÜŞ bir erişim token'ıyla gelir, yani <c>HttpContext.User</c> boştur ve
+    /// hangi politikaya girerse girsin IP kovasına düşer. Mobil operatörlerde binlerce
+    /// abone tek bir genel IPv4 paylaştığı için (CGNAT) o kova dakikalar içinde dolar.
+    ///
+    /// Bu, 2026-09-05'te genel sınır için kapatılan arızanın ta kendisi — yalnızca bu kez
+    /// yenileme yolunda. Ve sessiz olurdu: sunucu sağlıklı görünür, kullanıcıların bir
+    /// kısmı çalışır bir kısmı çalışmazdı.
+    ///
+    /// ⚠️ NEDEN YİNE DE IP BAŞINA: bölümlemeyi kullanıcıya taşımak mümkün değil (kimlik
+    /// yok) ve token'a taşımak, gövdeyi model bağlamadan önce okumayı gerektirirdi.
+    /// Bunun yerine sınır, kaba kuvvetin tehdit OLMADIĞI gerçeğine dayanarak yükseltildi:
+    /// yenileme token'ı 256 bit kriptografik rastgelelik, tahmin edilemez. Buradaki
+    /// sınırın işi parola denemesini yavaşlatmak değil, sel kapağı olmak.
+    ///
+    /// Ölçek kontrolü: erişim token'ı 120 dakika yaşadığı için bir oturum saatte ~0,5 kez
+    /// yeniliyor. Tek bir operatör IP'sinin arkasındaki 1000 kullanıcı ~8 istek/dakika
+    /// üretir — aşağıdaki sınırın çok altında.
+    /// </remarks>
+    public const string RefreshPolicy = "refresh";
+
+    /// <summary>
+    /// Yenileme ucunun IP başına dakikalık sınırı. Kaba kuvvet tehdit olmadığı için
+    /// (256 bit token) cömert; CGNAT arkasındaki normal trafiği boğmayacak kadar yüksek,
+    /// sel kapağı işlevini görecek kadar sonlu.
+    /// </summary>
+    public const int RefreshPerMinute = 300;
+
     public static IServiceCollection AddPeerLearnRateLimiter(
         this IServiceCollection services, IConfiguration configuration)
     {
@@ -108,6 +144,22 @@ public static class RateLimiting
               aynı kovaya girip 429 almamalı — aksi halde yoğunlukta sağlıklı instance
               "ölü" sayılıp havuzdan düşerdi.
             */
+            /* Yenileme ucu: AuthPolicy'den AYRI. Gerekçe RefreshPolicy'nin yanında —
+               özetle, AuthPolicy'nin IP başına 10/dk'sı CGNAT arkasındaki mobil
+               kullanıcılarda dakikalar içinde dolardı. */
+            limiter.AddPolicy(RefreshPolicy, context =>
+            {
+                var key = context.Connection.RemoteIpAddress?.ToString() ?? "bilinmeyen";
+
+                return RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = RefreshPerMinute,
+                    Window = TimeSpan.FromMinutes(1),
+                    QueueLimit = options.QueueLimit,
+                    QueueProcessingOrder = QueueProcessingOrder.OldestFirst
+                });
+            });
+
             limiter.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(context =>
             {
                 if (context.Request.Path.StartsWithSegments("/health"))

@@ -24,6 +24,7 @@ public interface IAppDbContext
 
     DbSet<User> Users { get; }
     DbSet<UserDevice> UserDevices { get; }
+    DbSet<RefreshToken> RefreshTokens { get; }
     DbSet<UserPreference> UserPreferences { get; }
 
     DbSet<PortfolioEntry> PortfolioEntries { get; }
