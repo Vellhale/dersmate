@@ -124,12 +124,27 @@ public sealed class UserBlockConfiguration : IEntityTypeConfiguration<UserBlock>
            BlockedUserId üzerinden arama tabloyu tarardı. */
         builder.HasIndex(x => x.BlockedUserId);
 
-        builder.Property(x => x.Note).HasMaxLength(500);
+        builder.Property(x => x.Note).HasMaxLength(UserBlock.NotEnFazla);
 
         /* Restrict, Cascade DEĞİL — Matches ile aynı gerekçe: hesap silme bu üründe
            satır silmiyor, anonimleştiriyor. Cascade yazmak var olmayan bir güvence
-           hissi verirdi. Engel kayıtları hesap silindiğinde DeleteAccount akışında
-           elle temizleniyor. */
+           hissi verirdi.
+
+           ⚠️ DÜZELTME: burada eskiden "engel kayıtları hesap silindiğinde DeleteAccount
+           akışında elle temizleniyor" yazıyordu. YAZMIYOR — DeleteAccountHandler'da
+           UserBlocks hiç geçmiyor (arandı). İddia yanlıştı ve yanlış yönlendiriyordu:
+           bir sonraki okuyan, temizliğin yapıldığını varsayıp kendi kodunda ona
+           yaslanabilirdi.
+
+           Pratikte Restrict HİÇ TETİKLENMİYOR çünkü hesap silme Users SATIRINI SİLMİYOR,
+           anonimleştiriyor (23 yabancı anahtar bakıyor, çoğu karşı tarafa ait). Yani
+           engel kaydı silinmiş hesapla arasında DURUYOR ve bu doğru davranış: engellenen
+           kişi hesabını silip yeniden açsa bile eski engel yeni hesaba geçmez, ama eski
+           satır da rastgele bir kullanıcıya bağlanmaz.
+
+           GERÇEKTEN TEMİZLEYEN TEK YER test hesabı betiği (tools/temizlik-test-hesaplari
+           .sql) ve orası Users SATIRINI siliyor — bu yüzden UserBlocks'u boşaltmak
+           zorunda. */
         builder.HasOne<User>()
             .WithMany()
             .HasForeignKey(x => x.BlockerUserId)

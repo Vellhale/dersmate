@@ -88,8 +88,24 @@ export default function Profile() {
             `kisi` beklendiği için düğmeler profil YÜKLENDİKTEN sonra beliriyor: var
             olmayan bir kullanıcıya istek gönderme düğmesi hiç görünmüyor.
           */}
-          {!isSelf && kisi && (
-            <BaskaKisiIslemleri kisi={kisi} onNotice={setNotice} />
+          {/*
+            ⚠️ `kisi.userId === targetId` KONTROLÜ — YANLIŞ KİŞİYE İŞLEM YAPMAYI ÖNLÜYOR.
+
+            `kisi` bir üst durumda tutuluyor ve adresteki kişi değiştiğinde HEMEN
+            sıfırlanmıyor: UserProfileView yeniden monte olup yeni profili çekene kadar
+            elde ESKİ kişinin verisi kalıyor. O pencerede düğmeler görünür durumda ve
+            basılabilir — "Engelle" bir önceki kişiyi engellerdi, üstelik onay kipi de
+            onun adını yazdığı için kullanıcı yanlışı fark etmezdi.
+
+            Pencere kısa ama gerçek: forumda iki profil arasında hızlı gezinen biri tam
+            oraya denk gelebilir ve engelleme geri alınabilir olsa da SESSİZ bir yanlış
+            eylemdir.
+
+            `key` de targetId'ye bağlı: kişi değişince bileşen yeniden kuruluyor, yani
+            önceki kişiye ait hata kutusu ve açık kip de taşınmıyor.
+          */}
+          {!isSelf && kisi && kisi.userId === targetId && (
+            <BaskaKisiIslemleri key={targetId} kisi={kisi} onNotice={setNotice} />
           )}
         </div>
 
@@ -260,8 +276,16 @@ function BaskaKisiIslemleri({ kisi, onNotice }) {
       </div>
 
       {/* Hata başlığın altında, profil kartının içinde değil: istek reddedildiğinde
-          (zaten bekleyen istek, günlük tavan, engel) sebep düğmenin yanında okunmalı. */}
-      <ErrorBox error={hata} />
+          (zaten bekleyen istek, günlük tavan, engel) sebep düğmenin yanında okunmalı.
+
+          onRetry KUTUYU DA KAPATIYOR: ErrorBox'ın "Tekrar dene" düğmesi yalnızca verilen
+          işlevi çağırıyor, hatayı kendisi temizlemiyor. Temizlenmezse başarılı bir ikinci
+          denemeden sonra bile eski hata ekranda kalır ve kullanıcı işlemin yine
+          başarısız olduğunu sanar. */}
+      <ErrorBox
+        error={hata}
+        onRetry={hata ? () => { setHata(null); if (engelli) { engelKaldir() } else { istekGonder() } } : undefined}
+      />
 
       {kipAcik && (
         <EngellemeModali

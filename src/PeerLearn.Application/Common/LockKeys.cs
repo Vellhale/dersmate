@@ -58,4 +58,23 @@ public static class LockKeys
     /// kilit süreç içi yarışı, xmin iki instance arasındaki çakışmayı kapatır.
     /// </summary>
     public static string ForumContent(Guid contentId) => $"lock:forum:{contentId}";
+
+    /// <summary>
+    /// Arkadaş isteği günlük tavanı: İSTEK GÖNDEREN bazında.
+    /// </summary>
+    /// <remarks>
+    /// ANAHTAR SORGUNUN GRUPLADIĞI ŞEYİ KAPSIYOR — Tutor notundaki dersin aynısı.
+    /// <c>GunlukIstekTavani</c> sayımı YALNIZCA <c>InitiatorUserId</c>'ye bakıyor
+    /// (24 saatlik kayan pencere), yani o sayımı değiştirebilecek her yazma bu kilidi
+    /// almak zorunda.
+    ///
+    /// Alıcı ya da çift bazında olsaydı fiilen hiç kilit olmazdı: tavanı aşmak isteyen
+    /// kişi FARKLI kişilere paralel istek gönderir, her istek başka bir anahtara düşer
+    /// ve "say, sonra yaz" arasındaki pencerede hepsi tavanın altında görünür. MintGuard'da
+    /// tam olarak bu yaşandı ve ölçüldü (12 paralel istek → 12 kabul).
+    ///
+    /// Kilit iki farklı kişiye aynı anda istek göndermeyi SERİLEŞTİRİR ama engellemez:
+    /// tavan dolmadığı sürece ikisi de kabul edilir, yalnızca sıraya girerler.
+    /// </remarks>
+    public static string IstekGonderen(Guid initiatorUserId) => $"lock:istek:{initiatorUserId}";
 }

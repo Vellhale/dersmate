@@ -91,7 +91,65 @@ function Sql($query) {
     return $out
 }
 
-function Tek($query) { return (($(Sql $query) -join '')).Trim() }
+function Tek($query) { return (($(Sql $query)) -join '').Trim() }
+
+<#
+  Sunucudaki CreateMatchRequestHandler.GunlukIstekTavani ile AYNI olmak zorunda.
+  Ayrışırsa test ya erken kırılır ya da tavanı hiç sınamaz.
+#>
+$GunlukTavan = 20
+
+<#
+  N isteği EŞZAMANLI ateşler (e2e-concurrency.ps1'deki kalıbın aynısı).
+
+  Invoke-RestMethod ile sırayla atmak tavanı sınamaz: istekler birbirini beklediği için
+  sayım hep güncel olur ve kilit olmasa da test GEÇER. Asıl soru "say, sonra yaz"
+  arasındaki pencerenin kapalı olup olmadığı; onu yalnızca gerçekten aynı anda giden
+  istekler ölçer. Bu yüzden mesajlar önce kurulur, sonra tek döngüde SendAsync ile
+  ateşlenip WaitAll ile beklenir.
+#>
+# PS 5.1 TUZAĞI: System.Net.Http varsayılan olarak YÜKLÜ DEĞİL. Bu satır olmadan
+# New-Object "Cannot find type [System.Net.Http.HttpClient]" ile düşüyor.
+Add-Type -AssemblyName System.Net.Http
+
+function ParallelFire {
+    param([array]$Requests)
+
+    $client = New-Object System.Net.Http.HttpClient
+    $client.Timeout = [TimeSpan]::FromSeconds(180)
+
+    $messages = @()
+    foreach ($r in $Requests) {
+        $msg = New-Object System.Net.Http.HttpRequestMessage(
+            (New-Object System.Net.Http.HttpMethod($r.method)), "$API$($r.path)")
+        if ($r.token) {
+            $msg.Headers.Authorization =
+                New-Object System.Net.Http.Headers.AuthenticationHeaderValue('Bearer', $r.token)
+        }
+        if ($null -ne $r.body) {
+            $json = $r.body | ConvertTo-Json -Depth 6
+            $msg.Content = New-Object System.Net.Http.StringContent(
+                $json, [System.Text.Encoding]::UTF8, 'application/json')
+        }
+        $messages += $msg
+    }
+
+    $tasks = New-Object 'System.Collections.Generic.List[System.Threading.Tasks.Task[System.Net.Http.HttpResponseMessage]]'
+    foreach ($m in $messages) { $tasks.Add($client.SendAsync($m)) }
+    try { [System.Threading.Tasks.Task]::WaitAll($tasks.ToArray()) } catch { }
+
+    $results = @()
+    foreach ($t in $tasks) {
+        if ($t.IsFaulted) {
+            $results += [PSCustomObject]@{ Ok = $false; Status = 0 }
+            continue
+        }
+        $resp = $t.Result
+        $results += [PSCustomObject]@{ Ok = $resp.IsSuccessStatusCode; Status = [int]$resp.StatusCode }
+    }
+    $client.Dispose()
+    return $results
+}
 
 # Test betikleri idempotent DEĞİLDİR (CLAUDE.md): sabit HWID ban bırakır, sabit ad
 # filtreleri bozar. Koşuma özel damga her ikisini de üretiyor.
@@ -400,6 +458,22 @@ Esit 'kendini engelleme reddedildi' $hk.status 400
 $hy = ApiHata POST '/api/blocks' @{ userId = [Guid]::NewGuid().ToString(); note = $null } $ada.Token
 Esit 'olmayan kullanıcıyı engelleme 404' $hy.status 404
 
+# Uzun not: KOLON SINIRINA çarpıp 500 dönüyordu; girdi hatası sunucu hatası gibi
+# görünmemeli. Arayüzdeki maxLength bir kolaylık, güvence değil — uç doğrudan çağrılabilir.
+$uzunNot = 'n' * 501
+$hn = ApiHata POST '/api/blocks' @{ userId = $cem.UserId; note = $uzunNot } $ada.Token
+Esit '500 karakterden uzun not 400 ile reddedildi' $hn.status 400
+$tamNot = 'n' * 500
+Api POST '/api/blocks' @{ userId = $cem.UserId; note = $tamNot } $ada.Token | Out-Null
+OK 'tam 500 karakter kabul ediliyor (sınırın doğru tarafı)'
+Api DELETE "/api/blocks/$($cem.UserId)" $null $ada.Token | Out-Null
+
+# İsim aramasında sunucu tarafı alt sınır: tek harf ölçütü YOK SAYIYOR, hata vermiyor.
+# Yok saymazsa tek harflik sorgu Users'ı ICU katlamasıyla baştan sona tarar.
+$tekHarf = Api GET '/api/discovery/users?name=a' $null $ada.Token
+$uniSarti = Api GET '/api/discovery/users' $null $ada.Token
+Esit 'tek harflik isim ölçütü yok sayıldı (üniversite şartı geri geldi)' $tekHarf.totalCount $uniSarti.totalCount
+
 # YAPISAL İDDİA: "beni kimler engelledi" diye bir uç YOK. Bora, İnci tarafından
 # engellendi; kendi listesi buna rağmen BOŞ olmalı — o liste engellemeyi
 # misillemeye çevirirdi.
@@ -449,6 +523,48 @@ if ($m20) { OK '20. istek hâlâ geçiyor (tavan sınırın doğru tarafında)' 
 
 $h21 = ApiHata POST '/api/matches' @{ responderUserId = $cem.UserId } $den.Token
 Esit '21. istek TAVANA takıldı (429)' $h21.status 429
+
+Write-Host '  --- ⚠️ ASIL SINAV: tavan PARALEL isteklerde de tutuyor mu' -ForegroundColor DarkGray
+
+<#
+  TAVAN KİLİTSİZ SAYIMLA UYGULANIRKEN FİİLEN ETKİSİZDİ.
+
+  Sıralı sınav (yukarıdaki 20./21. istek) kilit olmasa da GEÇER: istekler birbirini
+  beklediği için sayım hep güncel. Tavanın gerçek sınavı paralel istektir — "say, sonra
+  yaz" arasındaki pencerede hepsi tavanın altında görünür ve hepsi yazılır.
+
+  Bu projede aynı hata bir kez daha yapıldı ve ölçüldü: MintGuard'ın eğitmen tavanı çift
+  bazında kilitlendiği için 12 paralel istek 12 kabul almıştı (LockKeys.Tutor notu).
+  Buradaki kilit (LockKeys.IstekGonderen) o dersin uygulanması; bu iddia da onun kanıtı.
+
+  Kurulum: taze bir kullanıcı, tavanın 2 altına tohumlanıyor, sonra 6 FARKLI kişiye
+  EŞZAMANLI istek atıyor. Kilit çalışıyorsa tam 2 kabul + 4 ret; çalışmıyorsa 6 kabul.
+#>
+$yarisci = NewUser "ArkYaris$stamp"
+$hedefler = @()
+foreach ($i in 1..6) { $hedefler += NewUser "ArkHedef$i$stamp" }
+
+$tohumSayisi = $GunlukTavan - 2
+Sql @"
+INSERT INTO matchmaking."Matches" ("Id","InitiatorUserId","ResponderUserId","RequestedTopicId","OfferedTopicId","Status","CreatedAtUtc","RespondedAtUtc")
+SELECT gen_random_uuid(), '$($yarisci.UserId)', '$($ada.UserId)', NULL, NULL, 'Declined', now(), now()
+FROM generate_series(1, $tohumSayisi);
+"@ | Out-Null
+
+$istekler = @()
+foreach ($h in $hedefler) {
+    $istekler += @{ method = 'POST'; path = '/api/matches'; token = $yarisci.Token; body = @{ responderUserId = $h.UserId } }
+}
+$sonuclar = ParallelFire $istekler
+$kabul = @($sonuclar | Where-Object { $_.Ok }).Count
+$ret   = @($sonuclar | Where-Object { -not $_.Ok -and $_.Status -eq 429 }).Count
+
+if ($kabul -eq 2) { OK "6 eşzamanlı istekten tam 2'si kabul edildi (tavan paralelde de tuttu)" }
+else { Fail "PARALEL TAVAN DELİNDİ: 6 eşzamanlı istekten $kabul kabul edildi, 2 bekleniyordu" }
+Esit 'kalan 4 istek 429 aldı' $ret 4
+
+$dbSayim = Tek "SELECT COUNT(*) FROM matchmaking.""Matches"" WHERE ""InitiatorUserId"" = '$($yarisci.UserId)' AND ""CreatedAtUtc"" >= now() - interval '1 day';"
+Esit 'veritabanında da tam tavan kadar istek var' $dbSayim "$GunlukTavan"
 
 # ---------------------------------------------------------------------------
 Write-Host "`n================================" -ForegroundColor Yellow
