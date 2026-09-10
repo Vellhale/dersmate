@@ -73,6 +73,34 @@ public class User : BaseEntity
     public DateTime? SuspendedUntilUtc { get; set; }
 
     /// <summary>
+    /// Bu andan ÖNCE üretilmiş erişim token'ları geçersizdir. NULL = hiç geçersizleştirme
+    /// yapılmamış.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ "HER YERDEN ÇIKIŞ" BUNUNLA OLUYOR — ve neredeyse bedavaya.
+    ///
+    /// JWT durumsuz: imzalandığı andaki bilgiyi taşır ve ömrü dolana kadar geçerlidir.
+    /// Bu yüzden parola değişince açık oturumlar DÜŞMÜYORDU; sınır
+    /// <c>ParolaSifirlama</c> içinde yazılıydı ve çözümü de orada adıyla öneriliyordu:
+    /// "kullanıcı başına bir token sürümü (User tablosunda bir sayaç)".
+    ///
+    /// Sayaç yerine ZAMAN DAMGASI seçildi çünkü karşılaştırılacak şey zaten token'ın
+    /// içinde var (<c>iat</c>) ve sayaç, token'a ayrıca yazılıp her yenilemede
+    /// senkronlanmayı gerektirirdi.
+    ///
+    /// MALİYETİ SIFIRA YAKIN: <c>AccountStatusMiddleware</c> zaten HER kimlikli istekte
+    /// bu satırı okuyor (Status + SuspendedUntilUtc için, bilerek önbereksiz). Kontrol
+    /// aynı okumanın üstüne biniyor, ek sorgu yok.
+    ///
+    /// ⚠️ Damgayı ileri alan her yol, yenileme token'larını da iptal etmeli. Yalnızca
+    /// damgayı ilerletmek erişim token'larını öldürür ama elindeki yenileme token'ıyla
+    /// saldırgan hemen tazesini alır — yani yarım uygulanmış hâli, hiç uygulanmamış
+    /// hâlinden yalnızca birkaç saniye iyidir. İkisi bir arada:
+    /// <c>RefreshTokenService.TumOturumlariDusur</c>.
+    /// </remarks>
+    public DateTime? TokensValidFromUtc { get; set; }
+
+    /// <summary>
     /// RBAC rolü; JWT'ye rol claim'i olarak yazılır. Eski bool IsAdmin bunun yerini aldı —
     /// migration mevcut IsAdmin=true kayıtlarını Admin'e taşır. Tek doğruluk kaynağı burasıdır;
     /// "yönetim panelini görebilir mi" sorusu <see cref="CanModerate"/> ile türetilir, ayrı

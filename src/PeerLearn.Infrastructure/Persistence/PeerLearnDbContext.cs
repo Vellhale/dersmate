@@ -39,6 +39,7 @@ public sealed class PeerLearnDbContext : DbContext, IAppDbContext
     // Identity (Kullanıcı)
     public DbSet<User> Users => Set<User>();
     public DbSet<UserDevice> UserDevices => Set<UserDevice>();
+    public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
     public DbSet<UserPreference> UserPreferences => Set<UserPreference>();
     public DbSet<TeacherCandidateProfile> TeacherCandidateProfiles => Set<TeacherCandidateProfile>();
 

@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using PeerLearn.Application.Features.Economy;
+using PeerLearn.Application.Features.Identity;
 using PeerLearn.Application.Features.Maintenance;
 using PeerLearn.Application.Features.Scheduling;
 
@@ -207,6 +208,69 @@ public sealed class SessionSweepJob : BackgroundService
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Oturum süpürmesi başarısız; sonraki turda tekrar denenecek.");
+            }
+        } while (await timer.WaitForNextTickAsync(stoppingToken));
+    }
+}
+
+/// <summary>
+/// Süresi dolmuş yenileme token'ı satırlarını süpürür; günde bir.
+/// </summary>
+/// <remarks>
+/// Aralık uzun tutuldu çünkü acelesi yok: temizlik bir gün gecikse tablo birkaç bin
+/// satır fazla taşır, o kadar. Kısa aralık, hiçbir fayda vermeden her gün gereksiz bir
+/// tarama koştururdu.
+///
+/// Başlangıç gecikmesi diğer işlerden UZUN: açılışta göç, katalog tohumlama ve ilk
+/// istekler yarışıyor; bakım işinin o kalabalığa katılması için bir sebep yok.
+/// </remarks>
+public sealed class RefreshTokenCleanupJob : BackgroundService
+{
+    private static readonly TimeSpan Interval = TimeSpan.FromHours(24);
+    private static readonly TimeSpan InitialDelay = TimeSpan.FromMinutes(10);
+
+    private readonly IServiceScopeFactory _scopeFactory;
+    private readonly ILogger<RefreshTokenCleanupJob> _logger;
+
+    public RefreshTokenCleanupJob(IServiceScopeFactory scopeFactory, ILogger<RefreshTokenCleanupJob> logger)
+    {
+        _scopeFactory = scopeFactory;
+        _logger = logger;
+    }
+
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        try
+        {
+            await Task.Delay(InitialDelay, stoppingToken);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+
+        using var timer = new PeriodicTimer(Interval);
+        do
+        {
+            try
+            {
+                using var scope = _scopeFactory.CreateScope();
+                var mediator = scope.ServiceProvider.GetRequiredService<IMediator>();
+                var sonuc = await mediator.Send(new CleanupRefreshTokensCommand(), stoppingToken);
+
+                if (sonuc.Silinen > 0)
+                {
+                    _logger.LogInformation(
+                        "Yenileme token'ı bakımı: {Silinen} süresi dolmuş satır silindi.", sonuc.Silinen);
+                }
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                break;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Yenileme token'ı bakımı başarısız; sonraki turda tekrar denenecek.");
             }
         } while (await timer.WaitForNextTickAsync(stoppingToken));
     }

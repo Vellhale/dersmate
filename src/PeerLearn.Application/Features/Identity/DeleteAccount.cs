@@ -2,6 +2,7 @@ using MediatR;
 using Microsoft.EntityFrameworkCore;
 using PeerLearn.Application.Abstractions;
 using PeerLearn.Application.Common;
+using PeerLearn.Application.Identity;
 using PeerLearn.Domain.Identity;
 
 namespace PeerLearn.Application.Features.Identity;
@@ -67,11 +68,13 @@ public sealed class DeleteAccountHandler : IRequestHandler<DeleteAccountCommand,
 
     private readonly IAppDbContext _db;
     private readonly IPasswordHasher _hasher;
+    private readonly RefreshTokenService _refresh;
 
-    public DeleteAccountHandler(IAppDbContext db, IPasswordHasher hasher)
+    public DeleteAccountHandler(IAppDbContext db, IPasswordHasher hasher, RefreshTokenService refresh)
     {
         _db = db;
         _hasher = hasher;
+        _refresh = refresh;
     }
 
     public async Task<DeleteAccountResult> Handle(DeleteAccountCommand request, CancellationToken ct)
@@ -150,6 +153,21 @@ public sealed class DeleteAccountHandler : IRequestHandler<DeleteAccountCommand,
             var cihazlar = await _db.UserDevices.Where(d => d.UserId == user.Id).ToListAsync(ct);
             _db.UserDevices.RemoveRange(cihazlar);
         }
+
+        /*
+          ⛔ YENİLEME TOKEN'LARI ELLE İPTAL EDİLİYOR — Cascade BURADA ÇALIŞMAZ.
+
+          RefreshTokens tablosunda Users'a Cascade FK var, ama bu akış satırı SİLMİYOR:
+          hesabı anonimleştiriyor (Status=Deleted, e-posta yer tutucu). Yani hiçbir
+          Cascade tetiklenmiyor.
+
+          Bu satır olmasaydı silinmiş hesabın yenileme token'ı çalışmaya devam eder ve
+          süresiz taze erişim token'ı üretirdi. AccountStatusMiddleware de kurtarmazdı:
+          o middleware Deleted'ı GEÇİRİYOR (yalnızca satır yokluğu, Banned ve Suspended'ı
+          kesiyor). RefreshSession handler'ında Deleted için ayrıca bir kapı var; bu ise
+          ikinci savunma hattı — token'ın kendisini öldürüyor.
+        */
+        await _refresh.TumOturumlariDusurAsync(user, RefreshTokenRevokeReason.AccountDeleted, ct);
 
         await _db.SaveChangesAsync(ct);
 

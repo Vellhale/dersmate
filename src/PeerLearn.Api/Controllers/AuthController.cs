@@ -114,9 +114,9 @@ public sealed class AuthController : ControllerBase
         return NoContent();
     }
 
-    public sealed record LoginRequest(string Email, string Password, string? HwidHash);
+    public sealed record LoginRequest(string Email, string Password, string? HwidHash, bool RememberMe = true);
 
     [HttpPost("login")]
     public async Task<LoginResult> Login(LoginRequest request, CancellationToken ct)
-        => await _mediator.Send(new LoginCommand(request.Email, request.Password, request.HwidHash), ct);
+        => await _mediator.Send(new LoginCommand(request.Email, request.Password, request.HwidHash, request.RememberMe), ct);
 }

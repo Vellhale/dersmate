@@ -2,6 +2,7 @@ using MediatR;
 using Microsoft.EntityFrameworkCore;
 using PeerLearn.Application.Abstractions;
 using PeerLearn.Application.Common;
+using PeerLearn.Application.Identity;
 using PeerLearn.Domain.Identity;
 
 namespace PeerLearn.Application.Features.Identity;
@@ -40,12 +41,18 @@ public sealed class ResetPasswordHandler : IRequestHandler<ResetPasswordCommand,
     private readonly IAppDbContext _db;
     private readonly ITokenService _tokens;
     private readonly IPasswordHasher _hasher;
+    private readonly RefreshTokenService _refresh;
 
-    public ResetPasswordHandler(IAppDbContext db, ITokenService tokens, IPasswordHasher hasher)
+    public ResetPasswordHandler(
+        IAppDbContext db,
+        ITokenService tokens,
+        IPasswordHasher hasher,
+        RefreshTokenService refresh)
     {
         _db = db;
         _tokens = tokens;
         _hasher = hasher;
+        _refresh = refresh;
     }
 
     public async Task<Unit> Handle(ResetPasswordCommand request, CancellationToken ct)
@@ -80,6 +87,24 @@ public sealed class ResetPasswordHandler : IRequestHandler<ResetPasswordCommand,
         }
 
         user.PasswordHash = _hasher.Hash(request.NewPassword);
+
+        /*
+          ⛔ PAROLA DEĞİŞİNCE TÜM OTURUMLAR DÜŞÜYOR — "bilinen sınır" burada kapanıyor.
+
+          Eskiden bu satır yoktu ve sonucu şuydu: parolası çalınan bir kullanıcı parolasını
+          değiştirse bile saldırgan elindeki erişim token'ıyla iki saat daha içerideydi.
+          Sınır ParolaSifirlama'nın kendi yorumunda yazılıydı ve çözümü de orada
+          öneriliyordu ("kullanıcı başına bir token sürümü").
+
+          Yenileme token'ı geldiği için bu artık yalnızca bir eksik değil, ZORUNLULUK:
+          iptal edilmeyen bir yenileme token'ı, iki saatlik pencereyi KALICI hâle
+          getirirdi.
+
+          Metot ikisini birlikte yapıyor (token iptali + damga); ayrı ayrı çağrılabilir
+          olsalardı biri er ya da geç unutulurdu — gerekçesi RefreshTokenService'te.
+        */
+        await _refresh.TumOturumlariDusurAsync(user, RefreshTokenRevokeReason.PasswordChanged, ct);
+
         await _db.SaveChangesAsync(ct);
 
         /*

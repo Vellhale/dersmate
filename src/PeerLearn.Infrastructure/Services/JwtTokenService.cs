@@ -54,7 +54,27 @@ public sealed class JwtTokenService : ITokenService
         {
             new(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
             new(JwtRegisteredClaimNames.UniqueName, user.DisplayName),
-            new(JwtRegisteredClaimNames.Email, user.Email)
+            new(JwtRegisteredClaimNames.Email, user.Email),
+
+            /*
+              iat — TOKEN'IN ÜRETİLDİĞİ AN. "Her yerden çıkış"ın dayanağı bu:
+              AccountStatusMiddleware, iat'i User.TokensValidFromUtc damgasıyla
+              karşılaştırıp damgadan eski token'ları reddediyor.
+
+              ⚠️ AÇIKÇA YAZILIYOR ÇÜNKÜ KÜTÜPHANE YAZMIYOR. Aşağıdaki Write() bir
+              JwtSecurityToken(issuer, audience, claims, notBefore, expires, creds)
+              kuruyor; bu aşırı yükleme `nbf` ve `exp` koyar, `iat` KOYMAZ.
+
+              `nbf` ile idare edilebilirdi — Write() onu da `now` ile yazıyor ve iki değer
+              bugün aynı. Ama bu, "not before" ile "issued at"in sonsuza dek eşit kalacağı
+              varsayımına yaslanmak olurdu: Write()'a bir gün pay eklense (ör. saat kayması
+              için notBefore = now - 1dk) damga kontrolü SESSİZCE bir dakika gevşerdi.
+              Ayrı claim, o bağı kesiyor.
+            */
+            new(
+                JwtRegisteredClaimNames.Iat,
+                DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString(),
+                ClaimValueTypes.Integer64)
         };
 
         /*

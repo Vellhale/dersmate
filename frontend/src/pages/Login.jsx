@@ -15,13 +15,14 @@ export default function Login() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState(null)
   const [busy, setBusy] = useState(false)
+  const [beniHatirla, setBeniHatirla] = useState(true)
 
   async function onSubmit(event) {
     event.preventDefault()
     setBusy(true)
     setError(null)
     try {
-      await login(email, password)
+      await login(email, password, beniHatirla)
       navigate(location.state?.from ?? '/', { replace: true })
     } catch (err) {
       setError(err)
@@ -65,6 +66,32 @@ export default function Login() {
             </Button>
           </Link>
         )}
+
+        {/*
+          BENİ HATIRLA — işaretliyse oturum 60 gün, değilse 2 saat.
+
+          Varsayılan AÇIK: kullanıcıların ezici çoğunluğu kendi cihazında ve her iki
+          saatte bir parola sormak, çözmeye çalıştığımız sorunun ta kendisi. Kutuyu
+          BOŞALTMAK ortak/halka açık bilgisayar için bilinçli bir eylem; o durumda
+          tarayıcıda 60 gün yaşayacak bir taşıyıcı hiç oluşturulmuyor.
+
+          Dokunma hedefi: etiketin tamamı tıklanabilir (label sarmalıyor) ve dikey
+          dolgu ile 44px'e taşınıyor — CLAUDE.md'deki lg dokunma kuralı.
+        */}
+        <label className="flex cursor-pointer items-center gap-3 py-2 text-sm text-slate-700">
+          <input
+            type="checkbox"
+            checked={beniHatirla}
+            onChange={(e) => setBeniHatirla(e.target.checked)}
+            className="h-5 w-5 rounded border-slate-300 text-brand-600 focus:ring-2 focus:ring-brand-500"
+          />
+          <span>
+            Beni hatırla
+            <span className="block text-xs text-slate-500">
+              Ortak bir bilgisayardaysan bu kutuyu boşalt.
+            </span>
+          </span>
+        </label>
 
         <Button type="submit" loading={busy} className="w-full">
           Giriş yap

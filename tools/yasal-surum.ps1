@@ -1,4 +1,4 @@
-# Yürürlükteki yasal metin sürümünü yazdırır.
+﻿# Yürürlükteki yasal metin sürümünü yazdırır.
 #
 # NEDEN VAR: kayıt ucu `termsVersion` alanını sunucudaki sabitle BİREBİR karşılaştırıyor
 # (Domain/Identity/LegalDocuments.cs) ve tutmazsa kaydı reddediyor. Bu, test ve seed

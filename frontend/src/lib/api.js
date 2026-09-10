@@ -75,7 +75,87 @@ function varsayilanHataMetni(status) {
   return `Beklenmeyen hata (HTTP ${status}).`
 }
 
-async function request(path, { method = 'GET', body, formData, signal, headers: extra } = {}) {
+/*
+  ─── OTURUM YENİLEME ─────────────────────────────────────────────────────────
+
+  Erişim token'ı 2 saat yaşıyor. Eskiden süresi dolunca kullanıcı doğrudan giriş
+  ekranına atılıyordu; artık arka planda sessizce yenileniyor ve kullanıcı 60 gün
+  boyunca hiçbir şey fark etmiyor.
+
+  ⛔ ÜÇ TUZAK VAR, ÜÇÜ DE SESSİZ:
+
+  1. YENİLEME İSTEĞİ request() ÜZERİNDEN GİTMEZ. Aşağıda 401 gelince KOŞULSUZ olarak
+     AUTH_EXPIRED yayınlanıyor ve AuthContext bunu duyup oturumu siliyor. Yenileme de
+     request() kullansaydı, yenilemenin kendi 401'i oturumu daha ilk denemede
+     öldürürdü — yani yenileme HİÇBİR ZAMAN başarılı olamazdı. Ham fetch kullanılıyor.
+
+  2. TEK UÇUŞ (single-flight) ŞART. Sayfa açılışında onlarca istek paralel gidiyor;
+     token ölmüşse hepsi aynı anda 401 alır. Kuyruk olmasaydı onlarca yenileme isteği
+     birden giderdi ve dönüşümlü token yüzünden ilki dışındakiler "iptal edilmiş token"
+     sunmuş olurdu — sunucu bunu HIRSIZLIK sayıp kullanıcıyı her yerden atardı.
+     (Sunucuda 30 saniyelik bir tekrar penceresi var ama ona güvenmek yanlış olur.)
+
+  3. YENİ TOKEN ÖNCE localStorage'A YAZILIYOR. getToken() her istekte oradan okuyor;
+     React durumu sonra güncelleniyor. Ters sırada yazılsaydı, yenilemeden hemen sonra
+     giden istekler hâlâ eski token'ı taşırdı.
+*/
+let yenilemeSozu = null
+
+async function oturumuYenile() {
+  // Uçuş varsa ona katıl — ikinci bir istek gönderme.
+  if (yenilemeSozu) return yenilemeSozu
+
+  yenilemeSozu = (async () => {
+    const oturum = loadSession()
+
+    /* Bu sürümden önce açılmış oturumlarda refreshToken YOK. O kullanıcılar eski
+       davranışa düşüyor (401 → çıkış), bir kez daha giriş yapıyorlar. Alternatif
+       (alanın varlığını varsaymak) onları tanımsız bir duruma sokardı. */
+    if (!oturum?.refreshToken) return false
+
+    try {
+      const { getHwidHash } = await import('./hwid')
+      const response = await fetch(`${API_BASE}/api/session/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          refreshToken: oturum.refreshToken,
+          hwidHash: await getHwidHash(),
+        }),
+      })
+
+      if (!response.ok) return false
+
+      /* Yanıt giriş yanıtıyla AYNI biçimde (LoginResult), yani oturum nesnesinin
+         tamamı tazeleniyor — role ve isAdmin dahil. Yalnızca token'ı güncellemek,
+         rolü değişmiş kullanıcının panelini eski hâlde bırakırdı. */
+      saveSession(await response.json())
+      return true
+    } catch {
+      return false // ağ hatası: yenileme başarısız, çağıran 401'i yükseltsin
+    }
+  })().finally(() => {
+    yenilemeSozu = null
+  })
+
+  return yenilemeSozu
+}
+
+async function request(path, opts = {}) {
+  const yanit = await istekGonder(path, opts)
+
+  /* 401 geldi ve elimizde yenileme token'ı var → bir kez yenileyip TEK KEZ tekrar
+     dene. Tekrarın da 401 dönmesi hâlinde döngüye girmemek için bayrakla korunuyor. */
+  if (yanit.status === 401 && !opts.__yenilendi && loadSession()?.refreshToken) {
+    if (await oturumuYenile()) {
+      return request(path, { ...opts, __yenilendi: true })
+    }
+  }
+
+  return yanitiIsle(path, opts.method ?? 'GET', yanit)
+}
+
+async function istekGonder(path, { method = 'GET', body, formData, signal, headers: extra } = {}) {
   const headers = { ...extra }
   const token = getToken()
   if (token) headers.Authorization = `Bearer ${token}`
@@ -104,6 +184,14 @@ async function request(path, { method = 'GET', body, formData, signal, headers: 
     )
   }
 
+  return response
+}
+
+async function yanitiIsle(path, method, response) {
+  /* ⚠️ AUTH_EXPIRED ARTIK BURADA, request()'in TEKRAR DENEME KARARINDAN SONRA.
+     Eskiden 401 gelir gelmez yayınlanıyordu; o hâliyle yenileme başarılı olsa bile
+     oturum çoktan silinmiş olurdu. Buraya ulaşan 401, "yenileme denendi ve olmadı"
+     ya da "yenilenecek bir şey yok" demek — yani gerçekten çıkış zamanı. */
   if (response.status === 401) {
     window.dispatchEvent(new CustomEvent(AUTH_EXPIRED_EVENT))
   }
