@@ -17,9 +17,15 @@ export function AuthProvider({ children }) {
     return () => window.removeEventListener(AUTH_EXPIRED_EVENT, onExpired)
   }, [])
 
-  const login = useCallback(async (email, password) => {
+  /*
+    rememberMe VARSAYILAN true — sunucudaki varsayılanla aynı. Bu bilinçli: kutuyu
+    okumayan eski bir çağrı (ya da ileride eklenecek başka bir giriş yolu) sessizce
+    "hatırlama" davranışına düşerse, kullanıcı yalnızca beklediğinden erken çıkış yapar;
+    tersi — istemeden 60 gün açık kalan bir oturum — ortak bilgisayarda gerçek bir zarar.
+  */
+  const login = useCallback(async (email, password, rememberMe = true) => {
     const hwidHash = await getHwidHash()
-    const result = await api.login({ email, password, hwidHash })
+    const result = await api.login({ email, password, hwidHash, rememberMe })
     saveSession(result)
     setSession(result)
     return result

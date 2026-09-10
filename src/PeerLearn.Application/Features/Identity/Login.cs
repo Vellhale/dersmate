@@ -11,8 +11,23 @@ namespace PeerLearn.Application.Features.Identity;
 /// İstemci cihaz parmak izinin SHA-256 hex hash'i (opsiyonel ama istemciler göndermeli).
 /// HWID ban kontrolü ve cihaz izleme (Modül 4.3) bu değer üzerinden çalışır.
 /// </param>
-public sealed record LoginCommand(string Email, string Password, string? HwidHash)
-    : IRequest<LoginResult>;
+/// <param name="RememberMe">
+/// İşaretliyse yenileme token'ı verilir ve oturum 60 gün yaşar; işaretli değilse
+/// verilmez ve oturum erişim token'ının ömrüyle (2 saat) sınırlı kalır.
+/// </param>
+/// <remarks>
+/// ⚠️ VARSAYILAN <c>true</c> — ve bu, geriye dönük uyumluluk için ZORUNLU. 14 PowerShell
+/// paketi ve mevcut istemciler bu alanı hiç göndermiyor; varsayılan <c>false</c> olsaydı
+/// hepsi sessizce yenileme token'sız oturum açar ve özellik çalışmıyor görünürdü.
+///
+/// Ortak bilgisayar senaryosunda kullanıcı kutuyu BOŞALTIR; o zaman tarayıcıda 60 gün
+/// yaşayacak bir taşıyıcı hiç oluşmaz.
+/// </remarks>
+public sealed record LoginCommand(
+    string Email,
+    string Password,
+    string? HwidHash,
+    bool RememberMe = true) : IRequest<LoginResult>;
 
 /// <param name="Role">RBAC rolü ("Student" | "Moderator" | "Admin").</param>
 /// <param name="IsAdmin">
@@ -38,7 +53,7 @@ public sealed record LoginResult(
     string DisplayName,
     string Role,
     bool IsAdmin,
-    string RefreshToken);
+    string? RefreshToken);
 
 public sealed class LoginHandler : IRequestHandler<LoginCommand, LoginResult>
 {
@@ -141,7 +156,14 @@ public sealed class LoginHandler : IRequestHandler<LoginCommand, LoginResult>
            yazmada gitsin. Ayrı SaveChanges'ler olsaydı, ikincisi düşünce kullanıcı
            giriş yapmış ama yenileyemez hâlde kalırdı — ve bu ancak iki saat sonra,
            erişim token'ı ölünce fark edilirdi. */
-        var yenilemeTokeni = _refresh.Uret(user.Id, hwid, out _);
+        /* "Beni hatırla" işaretli değilse yenileme token'ı HİÇ ÜRETİLMİYOR — boş bir
+           satır yazıp kullanmamak yerine hiç yazmamak, ortak bilgisayarda geride
+           kullanılabilir bir taşıyıcı bırakmamak demek. */
+        string? yenilemeTokeni = null;
+        if (request.RememberMe)
+        {
+            yenilemeTokeni = _refresh.Uret(user.Id, hwid, out _);
+        }
 
         await _db.SaveChangesAsync(ct);
 
