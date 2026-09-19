@@ -142,10 +142,13 @@ public sealed class ProfileController : ControllerBase
     /// <summary>
     /// Profil fotoğrafı. İstemci canvas ile kırpıp küçülterek gönderir; sunucu boyut,
     /// tür ve İÇERİK İMZASINI yeniden doğrular (istemciye güvenilmez).
+    ///
+    /// Yanıt, ham depo anahtarını DEĞİL sürümlü erişim yolunu döndürür
+    /// (bkz. AvatarErisim / GetAvatar) — depo düzeni dışarıya sızmasın diye.
     /// </summary>
     [HttpPost("profile/avatar")]
     [RequestSizeLimit(3 * 1024 * 1024)]
-    public async Task<ActionResult<string>> UploadAvatar(IFormFile avatar, CancellationToken ct)
+    public async Task<IActionResult> UploadAvatar(IFormFile avatar, CancellationToken ct)
     {
         if (avatar is null || avatar.Length == 0)
         {
@@ -156,7 +159,7 @@ public sealed class ProfileController : ControllerBase
         var key = await _mediator.Send(
             new UpdateAvatarCommand(User.GetUserId(), stream, avatar.ContentType, avatar.Length), ct);
 
-        return Ok(key);
+        return Ok(new { avatarUrl = AvatarErisim.YolFor(User.GetUserId(), key) });
     }
 
     /// <summary>
