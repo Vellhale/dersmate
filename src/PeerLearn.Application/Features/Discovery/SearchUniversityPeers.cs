@@ -169,6 +169,8 @@ public sealed class SearchUniversityPeersHandler
         SearchUniversityPeersQuery request,
         CancellationToken ct)
     {
+        AramaGirdisi.Dogrula(request.University, request.Department, request.Name);
+
         var page = Math.Max(1, request.Page);
         var pageSize = Math.Clamp(request.PageSize, 1, MaxPageSize);
 

@@ -122,6 +122,7 @@ public sealed class SearchOffersHandler : IRequestHandler<SearchOffersQuery, Pag
 
     public async Task<PagedResult<OfferCardDto>> Handle(SearchOffersQuery request, CancellationToken ct)
     {
+        AramaGirdisi.Dogrula(request.Search);
         var page = Math.Max(1, request.Page);
         var pageSize = Math.Clamp(request.PageSize, 1, MaxPageSize);
 
