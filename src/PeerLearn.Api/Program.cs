@@ -377,6 +377,14 @@ if (app.Environment.IsDevelopment())
 app.UseForwardedHeaders();
 
 /*
+  GÜVENLİK BAŞLIKLARI — vekil başlıklarından hemen sonra, geri kalan HER ŞEYDEN önce.
+  Hata yanıtları, 401/403/429 ve dosya yanıtları da güvenlik başlığı taşısın diye burada.
+  Ne yaptığı ve neden CSP'nin API'de kilitli olduğu SecurityHeadersMiddleware'de yazılı.
+  Swagger (yukarıda, geliştirmede) bu satırın ÜSTÜNDE kayıtlı olduğundan buradan geçmez.
+*/
+app.UseMiddleware<SecurityHeadersMiddleware>();
+
+/*
   HSTS yalnızca üretimde: geliştirmede localhost'a HTTPS zorlaması, tarayıcıda kalıcı
   bir kayıt bırakıp diğer localhost projelerini de kırıyor.
 
