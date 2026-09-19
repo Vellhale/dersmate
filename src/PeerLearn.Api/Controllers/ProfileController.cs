@@ -125,7 +125,7 @@ public sealed class ProfileController : ControllerBase
         var belge = await _mediator.Send(
             new GetTeacherDocumentQuery(profileId, User.GetUserId(), AsModerator: false), ct);
 
-        return File(belge.Content, belge.ContentType);
+        return this.KullaniciDosyasi(belge.Content, belge.ContentType);
     }
 
     public sealed record UpdateProfileRequest(string DisplayName, string? Bio, string? University, string? Department);
@@ -191,7 +191,7 @@ public sealed class ProfileController : ControllerBase
             _ => "image/jpeg"
         };
 
-        return File(content, contentType);
+        return this.KullaniciDosyasi(content, contentType);
     }
 
     // PUT profile/featured-badges KALDIRILDI — rozet vitrini emekli edildi

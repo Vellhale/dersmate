@@ -73,7 +73,7 @@ public sealed class SessionsController : ControllerBase
     public async Task<IActionResult> GetProofContent(Guid sessionId, Guid proofId, CancellationToken ct)
     {
         var proof = await _mediator.Send(new GetProofContentQuery(sessionId, proofId, User.GetUserId()), ct);
-        return File(proof.Content, proof.ContentType);
+        return this.KullaniciDosyasi(proof.Content, proof.ContentType);
     }
 
     /// <summary>Çift taraflı onay (öğrenci): atomik kredi transferini tetikler.</summary>
