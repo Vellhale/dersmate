@@ -10,6 +10,25 @@
 export const API_BASE =
   import.meta.env.VITE_API_URL ?? (import.meta.env.DEV ? 'http://localhost:5000' : '')
 
+/*
+  OTURUM (erişim + 60 günlük yenileme token'ı) localStorage'da tutuluyor.
+
+  ⚠️ BİLİNEREK KABUL EDİLMİŞ SINIR — "düzeltmeden" önce oku:
+  Yenileme token'ı localStorage'da olduğu için bir XSS açığı onu çalabilir. Doğru tam
+  çözüm token'ı httpOnly cookie'ye taşımaktır, AMA bu kesişen (cross-cutting) bir iştir,
+  bu temanın küçük/güvenli kapsamının dışında ve tek başına yeni riskler açar:
+    • Mobil uygulama AYNI token akışını kullanıyor (SecureStore) ve ayrı depoda; cookie'ye
+      geçmek iki istemciyi birden değiştirmeyi ve sunucu sözleşmesini bölmeyi gerektirir.
+    • httpOnly cookie CSRF yüzeyi açar (SameSite + anti-forgery gerekir) ve buradaki
+      hassas single-flight yenileme akışını (aşağıya bkz. "⛔ ÜÇ TUZAK") yeniden kurmayı
+      zorunlu kılar.
+  Token'ı AYRI bir localStorage anahtarına koymak güvenlik SAĞLAMAZ: XSS tüm anahtarları
+  aynı anda okur. Bu yüzden kozmetik bir bölme yapılmadı.
+  Azaltım hâlihazırda YERİNDE: sıkı CSP (nginx $frontend_csp — script-src'te 'unsafe-inline'
+  YOK, satır içi script çalışmaz) + nosniff/X-Frame-Options/Referrer-Policy başlıkları XSS
+  yüzeyini daraltıyor. Karar: httpOnly cookie'ye geçiş ERTELENDİ (belge: DEVAM-EDILECEK.md
+  güvenlik notları). Bu bloğu silmeden önce mobil akışını ve refresh tuzaklarını gör.
+*/
 const TOKEN_KEY = 'peerlearn.session'
 
 /**
