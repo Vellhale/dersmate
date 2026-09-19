@@ -24,8 +24,27 @@ const STORAGE_KEY = 'peerlearn.consent'
  * genişlediği için eski onay bu saklamayı meşrulaştırmıyor — herkes banner'ı bir kez
  * daha görecek. Bedeli bilerek ödeniyor: sürümü sabit bırakmak, açıklanmamış bir
  * saklamayı eski onayla örtmek olurdu.
+ *
+ * 2026-08-24 → 2026-09-19: VERİ SORUMLUSU ADIYLA YAZILDI. Ne toplandığı değişmedi,
+ * hiçbir kategori genişlemedi — değişen, rızanın MUHATABI. Metin bugüne kadar
+ * "kullanıyoruz" diyordu ama "biz"in kim olduğunu hiçbir katmanda söylemiyordu; artık
+ * hem şerit hem ayrıntı penceresi dersmate'i Corventech'in işlettiğini yazıyor
+ * (lib/kunye.js).
+ *
+ * ⚠️ BU ARTIŞ TARTIŞILDI VE GEREKLİ BULUNDU. "Kapsam genişlemediyse neden artıyor?"
+ * sorusunun cevabı: rıza belirli bir muhataba verilir ve muhatabı adsız bırakan bir
+ * metne verilmiş onay, kime verildiği belirsiz bir onaydır. Kapsamı aynı tutup
+ * muhatabı netleştirmek, eski onayı geçerli kılmaz — onu YENİDEN ALMAYI gerektirir.
+ * Bedeli bir kez görülen bir şerit; alternatifi, ispat anında "bu onay bize mi
+ * verilmişti" sorusuna dayanağı olmayan bir kayıt.
+ *
+ * ⚠️ SOZLESME_SURUMU (lib/yasalMetinler.js) İLE KARIŞTIRMA. O sabit sunucudaki
+ * LegalDocuments.CurrentVersion ile BİREBİR eşleşmek zorunda ve ayrışırsa kayıt durur.
+ * BU sabitin öyle bir eşi yok: sunucu ConsentVersion'ı serbest metin olarak saklıyor
+ * (UserPreference.ConsentVersion, max 40) — kanıt kaydı, kapı değil. Yani burayı tek
+ * başına artırmak güvenli, orayı değil.
  */
-export const CONSENT_VERSION = '2026-08-24'
+export const CONSENT_VERSION = '2026-09-19'
 
 /** Menü dar mı bırakıldı (Layout). localStorage: oturumlar arası kalır. */
 export const RAIL_KEY = 'peerlearn.raydar'

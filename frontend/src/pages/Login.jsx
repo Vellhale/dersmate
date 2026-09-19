@@ -4,6 +4,7 @@ import { useAuth } from '../state/AuthContext'
 import { Button, Card, ErrorBox, Field } from '../components/ui'
 import { Logo } from '../components/Logo'
 import { CookieSettingsLink } from '../components/CookieBanner'
+import { KunyeSatiri } from '../components/Kunye'
 import { brand, ink } from '../lib/brand'
 
 export default function Login() {
@@ -328,6 +329,12 @@ export function AuthShell({ title, subtitle, children }) {
               Hesap silme
             </Link>
           </div>
+
+          {/* Künye giriş/kayıt ekranlarında da: hesabı OLMAYAN biri bu ürünü kimin
+              işlettiğini görebilmeli. Kayıt kararı tam burada veriliyor ve "kime
+              kaydoluyorum" sorusunun cevabı, kaydolduktan sonra öğrenilecek bir şey
+              değil. Ortalama: kabuk `lg` altında ortalı, üstündeki metinlerle aynı. */}
+          <KunyeSatiri className="mt-3 text-center lg:text-left" />
         </div>
       </main>
     </div>

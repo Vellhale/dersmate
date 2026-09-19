@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { Bolum, Maddeler, MetinSayfasi } from './MetinSayfasi'
 import { SOZLESME_TARIHI } from '../lib/yasalMetinler'
+import { ISLETMECI, ISLETMECI_ADRESI, ISLETMECI_ALAN_ADI, MARKA } from '../lib/kunye'
 
 /*
   KULLANIM KOŞULLARI.
@@ -27,10 +28,30 @@ export default function Kosullar() {
     >
       <Bolum no="1" baslik="dersmate nedir">
         <p>
-          dersmate, öğrencilerin birbirine ders anlattığı bir akran öğrenme
+          {MARKA}, öğrencilerin birbirine ders anlattığı bir akran öğrenme
           platformudur. Burada öğretmen değil akran vardır: anlatan da öğrenen de
           öğrencidir. Platform, dersin içeriğinden veya kalitesinden sorumlu değildir;
           yalnızca insanları buluşturur ve kayıt tutar.
+        </p>
+        {/*
+          SÖZLEŞMENİN KARŞI TARAFI. Bir kullanım koşulları metni iki taraf arasındaki
+          sözleşmedir ve taraflardan biri bugüne kadar İSİMSİZDİ: metin boyunca geçen
+          "biz"in kim olduğu hiçbir yerde yazmıyordu. §7'deki sorumluluk sınırı ve
+          §6'daki yaptırım yetkisi, kimin adına kullanıldığı belli olmayan haklardı.
+        */}
+        <p>
+          {MARKA},{' '}
+          <a
+            href={ISLETMECI_ADRESI}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-medium text-brand-700 hover:underline"
+          >
+            {ISLETMECI}
+          </a>{' '}
+          ({ISLETMECI_ALAN_ADI}) tarafından işletilmektedir. Bu metindeki “biz” ve
+          “{MARKA}” ifadeleri {ISLETMECI}’i anlatır. Künye ve iletişim bilgileri
+          sayfanın altındadır.
         </p>
       </Bolum>
 

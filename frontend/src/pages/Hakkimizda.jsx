@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { Logo } from '../components/Logo'
 import { CamKart } from '../components/SayfaZemini'
+import { ISLETMECI, ISLETMECI_ADRESI, ISLETMECI_ALAN_ADI, MARKA } from '../lib/kunye'
 import {
   ArtanIkonu,
   CuzdansizIkonu,
@@ -254,6 +255,37 @@ export default function Hakkimizda() {
       <p className="mt-10 text-center text-sm italic text-slate-600">
         Bir konuyu anlatabiliyorsan, onu gerçekten öğrenmişsindir.
       </p>
+
+      {/*
+        ── KİM YAPIYOR ───────────────────────────────────────────────────────
+        Sayfanın üç kartı "biz ne yapıyoruz" ve "bunu kim kullanıyor" sorularını
+        yanıtlıyordu; "BUNU KİM YAPIYOR" sorusu — Hakkımızda sayfasının en doğal
+        sorusu — yanıtsızdı.
+
+        KUTU YOK, ayırıcı çizgi ve tek cümle var. Bir CamKart daha eklemek bu bilgiyi
+        misyon/vizyon/topluluk ile AYNI ağırlıkta gösterirdi; oysa burası sayfanın
+        tezi değil, imzası. İmza sayfanın altına küçük atılır.
+
+        Yasal künye burada DEĞİL: bu bir tanıtım cümlesi, tanıtıcı bilgi yükümlülüğünün
+        karşılığı değil. Tescil bilgileri yasal metinlerin altındaki künye bloğunda
+        (MetinSayfasi → KunyeBlogu) — ikisini karıştırmak, yasal bilgiyi kimsenin
+        aramadığı bir sayfaya gömmek olurdu.
+      */}
+      <div className="mt-8 border-t border-slate-200/70 pt-6 text-center">
+        <p className="text-sm leading-relaxed text-slate-600">
+          {MARKA}’i{' '}
+          <a
+            href={ISLETMECI_ADRESI}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-semibold text-brand-700 hover:underline"
+          >
+            {ISLETMECI}
+          </a>{' '}
+          geliştiriyor ve işletiyor.
+        </p>
+        <p className="mt-1 text-xs text-slate-500">{ISLETMECI_ALAN_ADI}</p>
+      </div>
     </div>
   )
 }
