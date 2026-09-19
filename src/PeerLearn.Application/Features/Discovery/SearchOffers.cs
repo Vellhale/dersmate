@@ -237,18 +237,24 @@ public sealed class SearchOffersHandler : IRequestHandler<SearchOffersQuery, Pag
               Büyük/küçük harf duyarsız arama. EF.Functions.ILike KULLANILMADI: o Npgsql'e
               özgüdür ve Application katmanını veritabanı sağlayıcısına bağlardı (bu proje
               Clean Architecture gereği Application → Infrastructure bağımlılığını yasaklıyor).
-              ToLower().Contains(...) sağlayıcıdan bağımsızdır ve PostgreSQL'de zaten
-              "lower(x) LIKE '%...%'"e çevrilir — ILIKE ile aynı maliyet.
+              EF.Functions.Like ise sağlayıcıdan bağımsızdır (Microsoft.EntityFrameworkCore) ve
+              lower(x) üzerinde çalışır — ILIKE ile aynı maliyet.
+
+              Joker karakterler KAÇIŞLANIR (AramaDeseni + ESCAPE): kullanıcının yazdığı
+              % ya da _ artık "her şey / herhangi bir harf" anlamına gelmez; aksi halde
+              "%" araması tüm katalogla eşleşip tam tablo taramasına yol açardı. .Contains
+              bunu yapmıyordu — kaçış için açık LIKE gerekiyor.
 
               Ölçekleme notu: baştaki joker yüzünden b-tree index kullanılamaz. Katalog
               büyüdüğünde çözüm pg_trgm + GIN index'tir; o aşamada bu ifade ham SQL'e ya da
               Infrastructure'daki bir sorgu nesnesine taşınmalı.
             */
             var term = request.Search.Trim().ToLowerInvariant();
+            var desen = AramaDeseni.Iceren(term);
             query = query.Where(x =>
-                x.topic.Name.ToLower().Contains(term)
-                || x.subject.Name.ToLower().Contains(term)
-                || x.tutor.DisplayName.ToLower().Contains(term));
+                EF.Functions.Like(x.topic.Name.ToLower(), desen, AramaDeseni.KacisKarakteri)
+                || EF.Functions.Like(x.subject.Name.ToLower(), desen, AramaDeseni.KacisKarakteri)
+                || EF.Functions.Like(x.tutor.DisplayName.ToLower(), desen, AramaDeseni.KacisKarakteri));
         }
 
         if (request.MinLevel is { } minLevel)
