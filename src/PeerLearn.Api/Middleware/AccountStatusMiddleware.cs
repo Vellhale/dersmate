@@ -79,10 +79,10 @@ public sealed class AccountStatusMiddleware
         /*
           ⛔ "HER YERDEN ÇIKIŞ" DAMGASI.
 
-          Parola değişimi, hesap silme ve yaptırım akışları User.TokensValidFromUtc'yi
-          ileri alıyor; o andan ÖNCE üretilmiş her erişim token'ı burada ölüyor. JWT
-          durumsuz olduğu için başka bir yerde öldürülemezdi — imzalandığı andaki bilgiyi
-          taşıyor ve ömrü dolana kadar geçerli.
+          Parola değişimi, hesap silme, yaptırım ve rol değişimi akışları
+          User.TokensValidFromUtc'yi ileri alıyor; o andan ÖNCE üretilmiş her erişim token'ı
+          burada ölüyor. JWT durumsuz olduğu için başka bir yerde öldürülemezdi — imzalandığı
+          andaki bilgiyi taşıyor ve ömrü dolana kadar geçerli.
 
           ⚠️ iat CLAIM'İ YOKSA TOKEN REDDEDİLİYOR (fail-closed). Bu sürümden önce üretilmiş
           token'larda claim yok; onlar geçersiz sayılıyor ve kullanıcı bir kez daha giriş

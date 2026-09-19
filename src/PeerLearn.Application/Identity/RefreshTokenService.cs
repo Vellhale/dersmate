@@ -5,8 +5,8 @@ using PeerLearn.Domain.Identity;
 namespace PeerLearn.Application.Identity;
 
 /// <summary>
-/// Yenileme token'ı üretme, dönüştürme ve toplu iptal. Dört çağıranı var: giriş,
-/// yenileme ucu, parola değişimi ve hesap silme.
+/// Yenileme token'ı üretme, dönüştürme ve toplu iptal. Beş çağıranı var: giriş,
+/// yenileme ucu, parola değişimi, hesap silme ve rol değişimi.
 /// </summary>
 /// <remarks>
 /// AYRI BİR SERVİS OLMASININ SEBEBİ, "yenileme token'ını iptal et" işinin dört farklı
@@ -146,8 +146,8 @@ public sealed class RefreshTokenService
     /// Bu yüzden damga bir sonraki tam saniyeye YUKARI yuvarlanıyor: o saniye içinde
     /// üretilmiş her token reddediliyor. Ters yönde bir yanlış (damgadan hemen sonra
     /// üretilmiş bir token'ın reddedilmesi) bu üründe oluşamaz, çünkü bu metodu çağıran
-    /// dört akışın (parola değişimi, hesap silme, yaptırım, çıkış) hiçbiri aynı anda yeni
-    /// token ÜRETMİYOR — hepsi kullanıcıyı dışarı atıyor.
+    /// akışların (parola değişimi, hesap silme, yaptırım, çıkış, rol değişimi) hiçbiri aynı
+    /// anda yeni token ÜRETMİYOR — hepsi kullanıcıyı dışarı atıyor.
     /// </remarks>
     public static bool TokenDamgadanEski(DateTime tokenUretimAni, DateTime? damga)
     {

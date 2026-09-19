@@ -169,4 +169,7 @@ public enum RefreshTokenRevokeReason
     /// İptal edilmiş bir token yeniden sunuldu — hırsızlık şüphesiyle tüm zincir iptal.
     /// </summary>
     ReuseDetected = 5,
+
+    /// <summary>Rol değişti — tüm oturumlar düşürüldü.</summary>
+    RoleChanged = 6,
 }

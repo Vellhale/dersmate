@@ -40,9 +40,14 @@ public sealed record RefreshSessionCommand(string RefreshToken, string? HwidHash
 ///
 /// ⚠️ CLAIM'LER VERİTABANINDAN TAZE OKUNUYOR — eski token'ın claim'leri kopyalanmıyor.
 /// Kopyalansaydı rol değişikliği (moderatörlükten alınma gibi) yenileme boyunca taşınır
-/// ve kullanıcı yetkisini süresiz sürdürürdü. Bugün rolün token'da donması bilinen bir
-/// sorun (arayüzde panel açık kalıp istekler 403 dönüyor); kısa erişim + taze yenileme
-/// bunu İYİLEŞTİRİYOR, ama yalnızca claim'ler yeniden okunursa.
+/// ve kullanıcı yetkisini süresiz sürdürürdü. Rolün token'da donması iki yönde FARKLI
+/// sonuç verir: YÜKSELTMEde token eski DÜŞÜK rolü taşıdığı için yetkili uçlar geçici 403
+/// döner (zararsız — yenileme ya da yeniden giriş çözer); DÜŞÜRMEde ise token eski YÜKSEK
+/// rolü taşımaya devam eder ve yetki token ömrü (120 dk) boyunca korunurdu — bu 403 değil,
+/// bir güvenlik açığıydı. Artık rol değişimi de <c>ChangeUserRoleHandler</c>'da "her yerden
+/// çıkış" primitifini (<c>TumOturumlariDusurAsync</c>) çağırdığı için o pencere kaynağında
+/// kapandı. Claim'lerin BURADA taze okunması yine şart: yeniden giriş yapan kullanıcı doğru
+/// rolü almalı, yoksa eski claim'ler yenileme boyunca taşınırdı.
 /// </remarks>
 public sealed class RefreshSessionHandler : IRequestHandler<RefreshSessionCommand, LoginResult>
 {

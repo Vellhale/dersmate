@@ -452,6 +452,24 @@ Send Put "/api/admin/users/$($aday.UserId)/role" @{ role = 'Moderator' } $admin.
 $yeniRol = (Sql "SELECT ""Role"" FROM identity.""Users"" WHERE ""Id"" = '$($aday.UserId)';").Trim()
 if ($yeniRol -eq 'Moderator') { OK 'rol atandı (elle SQL gerekmiyor)' } else { Fail "rol: $yeniRol" }
 
+# ROL DÜŞÜNCE ERİŞİM TOKEN'I ANINDA GEÇERSİZLEŞMELİ (YÜKSEK bulgu).
+# Rol JWT'ye ClaimTypes.Role olarak imzalanıp donuyor ve erişim token'ı ömrü (120 dk)
+# boyunca sabit kalıyor. ChangeUserRoleHandler damgayı (TokensValidFromUtc) ileri almazsa
+# yetkisi DÜŞÜRÜLEN bir moderatör eski token'ıyla o pencere boyunca yetkisini sürdürür ve
+# ikinci bir hesabı Admin yapıp kalıcılaştırabilirdi. Düzeltme: handler artık "her yerden
+# çıkış" primitifini (TumOturumlariDusurAsync, sebep RoleChanged) çağırıyor.
+# MUTASYON: handler'daki bu çağrı kaldırılırsa $adayMod düşürmeden sonra da yaşar,
+# /api/wallet 200 döner ve aşağıdaki kontrol [KALDI] olur. Beklenen kod 401'dir
+# (SESSION_REVOKED, AccountStatusMiddleware) — ban'ın 403'ü değil.
+$adayMod = (Send Post '/api/auth/login' @{ email = $aday.Email; password = 'Demo12345'; hwidHash = $aday.Hwid } $null).accessToken
+Get_ '/api/wallet' $adayMod | Out-Null
+OK 'düşürmeden önce moderatör token''ı çalışıyor'
+Send Put "/api/admin/users/$($aday.UserId)/role" @{ role = 'Student' } $admin.Token | Out-Null
+try {
+    Get_ '/api/wallet' $adayMod | Out-Null
+    Fail 'rol düşünce eski token hâlâ çalışıyor (yetki token''da donuyor)'
+} catch { if ((HataKodu $_) -eq 401) { OK 'rol düşünce eski token ANINDA reddedildi (401 SESSION_REVOKED)' } else { Fail "beklenen 401, gelen $(HataKodu $_)" } }
+
 try {
     Send Put "/api/admin/users/$($admin.UserId)/role" @{ role = 'Student' } $admin.Token | Out-Null
     Fail 'yönetici kendi rolünü düşürebildi'
