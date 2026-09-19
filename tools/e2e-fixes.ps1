@@ -10,6 +10,8 @@
 #   C. Tekrar-kanıt sinyali yükleyene sızmıyor
 #   D. Doğrulama e-postası yeniden gönderilebiliyor (hesap kilitlenmiyor)
 #   E. Yaptırım ANINDA etkili ve geri alınabilir (ban / askı / rol)
+#   F. Yeniden-kullanım tespiti zinciri YALNIZCA gerçek hırsızlıkta düşürüyor
+#      (sebep-kapılı: Rotated + pencere dışı), sıfırlama/çıkış sonrası taze oturumu değil
 #
 # KAPSAMDAN ÇIKARILAN İDDİA (yeni ekonomi sözleşmesi):
 #   B bölümü eskiden "cüzdanda görünen bakiye HARCANABİLİR bakiye olmalı" kusurunu
@@ -458,6 +460,95 @@ try {
 $izKaydi = @((Get_ '/api/admin/audit-log?pageSize=50' $admin.Token).items | Where-Object { $_.action -in @('UserUnbanned','UserSanctioned','RoleChanged') })
 if ($izKaydi.Count -ge 3) { OK "yeni yaptırım işlemleri denetim izine yazıldı ($($izKaydi.Count) kayıt)" }
 else { Fail "denetim izi kaydı: $($izKaydi.Count)" }
+
+# ---------------------------------------------------------------------------
+Section 'F. Yeniden-kullanım tespiti YALNIZCA gerçek hırsızlıkta zinciri düşürmeli'
+
+# ASIL KUSUR: iptal edilmiş bir token yeniden sunulduğunda zinciri düşürme kararı yalnızca
+# 30 sn'lik "iyi niyetli tekrar" penceresine bakıyordu; iptal SEBEBİNE bakmıyordu. Pencere
+# Rotated'a bağlı olduğundan, PasswordChanged/SignedOut/Sanctioned/AccountDeleted ile
+# BİLİNÇLİ iptal edilmiş bir token da "hırsızlık" muamelesi görüp TumOturumlariDusurAsync
+# (ReuseDetected) tetikliyor ve kullanıcının sıfırlama/çıkış SONRASI açtığı TAZE oturumları
+# da topluca düşürüyordu. Düzeltme sebep-kapılı: zincir yalnızca Rotated + pencere dışı
+# tekrarda düşer; diğer sebepler 401 ile reddedilir ama zincir düşürülmez.
+#
+# KURULUM SQL İLE: gerçek parola-sıfırlama akışı e2e'de sürülemiyor (forgot-password
+# token'ı e-postayla yolluyor, yanıtta yok — ForgotPassword.cs). Bu yüzden PasswordChanged
+# durumu hedefli bir UPDATE ile, Rotated pencere-dışı durumu da 30 sn sleep yerine
+# RevokedAtUtc'yi geriye iterek deterministik kuruluyor. PS 5.1: tanımlayıcılar çift-çift
+# tırnak (""RefreshTokens""), literaller tek tırnak.
+
+# NewUser refreshToken'i atıyor; onu yakalamak için ayrı login gerekiyor.
+function Giris($email, $hwid) { Send Post '/api/auth/login' @{ email = $email; password = 'Demo12345'; hwidHash = $hwid } $null }
+function Yenile($rt, $hwid)   { Send Post '/api/session/refresh' @{ refreshToken = $rt; hwidHash = $hwid } $null }
+
+# --- F1 (asıl bulgu): parola değişimi SONRASI açılan TAZE oturum HAYATTA kalmalı ---
+$uF = NewUser 'fixf1' $stamp
+$rtA = (Giris $uF.Email $uF.Hwid).refreshToken   # cihaz A — reset ÖNCESİ token
+OK 'F1: cihaz A giriş yaptı (reset öncesi token alındı)'
+
+# Parola değişimini benzet: o ana dek üretilmiş tüm token'lar PasswordChanged ile iptal +
+# "her yerden çıkış" damgası ileri. Damga 2 sn geriye alınıyor ki AZ SONRA açılacak taze
+# oturum, damganın saniye-yukarı-yuvarlamasına (TokenDamgadanEski) takılmasın — sınanan
+# şey sebep-kapısı, damga yarışı değil.
+Sql @"
+UPDATE identity."RefreshTokens"
+SET "RevokedAtUtc" = now(), "RevokeReason" = 'PasswordChanged'
+WHERE "UserId" = '$($uF.UserId)' AND "RevokedAtUtc" IS NULL;
+UPDATE identity."Users"
+SET "TokensValidFromUtc" = now() - interval '2 seconds'
+WHERE "Id" = '$($uF.UserId)';
+"@ | Out-Null
+
+$hwidB = NewHwid
+$rtB = (Giris $uF.Email $hwidB).refreshToken     # cihaz B — reset SONRASI TAZE oturum
+OK 'F1: reset sonrası cihaz B taze oturum açtı'
+
+# Eski token (RT_A) reddedilmeli.
+try {
+    Yenile $rtA $uF.Hwid | Out-Null
+    Fail 'F1: iptal edilmiş eski token (RT_A) yenileme yapabildi'
+} catch { if ((HataKodu $_) -eq 401) { OK 'F1: eski token 401 ile reddedildi' } else { Fail "F1: RT_A için beklenen 401, gelen $(HataKodu $_)" } }
+
+# ASIL KANIT: taze oturum (RT_B) düşmemeli. Düzeltme geri alınırsa (eski `if(!pencereIcinde)`),
+# RT_A'nın reddi RT_B dâhil tüm zinciri ReuseDetected ile düşürür ve bu adım 401 döner → [KALDI].
+try {
+    $yeniB = Yenile $rtB $hwidB
+    if ($yeniB.accessToken -and $yeniB.refreshToken) { OK 'F1: reset SONRASI taze oturum düşmedi (yenilenebildi)' }
+    else { Fail 'F1: RT_B yanıtı eksik (accessToken/refreshToken yok)' }
+} catch { Fail "F1: TAZE oturum (RT_B) düştü — sebep-kapılı düzeltme çalışmıyor (gelen $(HataKodu $_))" }
+
+# --- F2 (karşı yön): GERÇEK hırsızlık (Rotated + pencere DIŞI) hâlâ tüm zinciri düşürmeli ---
+$vF = NewUser 'fixf2' $stamp
+$rt1 = (Giris $vF.Email $vF.Hwid).refreshToken
+$ref = Yenile $rt1 $vF.Hwid                       # RT1 -> RT2 (RT1 artık Rotated)
+$rt2 = $ref.refreshToken
+if ($rt2) { OK 'F2: token dönüştü (RT1 Rotated, RT2 taze)' } else { Fail 'F2: dönüşüm token dönmedi' }
+
+# RT1'i pencere DIŞINA it (30 sn sleep yerine 40 sn geriye) — yalnızca Rotated satırı.
+Sql @"
+UPDATE identity."RefreshTokens"
+SET "RevokedAtUtc" = now() - interval '40 seconds'
+WHERE "UserId" = '$($vF.UserId)' AND "RevokeReason" = 'Rotated';
+"@ | Out-Null
+
+# Pencere dışı Rotated tekrar = gerçek hırsızlık → 401 VE zincir düşer.
+try {
+    Yenile $rt1 $vF.Hwid | Out-Null
+    Fail 'F2: pencere dışı Rotated token yenileme yapabildi'
+} catch { if ((HataKodu $_) -eq 401) { OK 'F2: çalınmış (pencere dışı Rotated) token 401 ile reddedildi' } else { Fail "F2: RT1 için beklenen 401, gelen $(HataKodu $_)" } }
+
+# ASIL KANIT: hırsızlık taze zinciri de (RT2) düşürmeli. Düzeltme yanlışlıkla Rotated'ı da
+# muaf tutarsa bu adım 200 döner ve aşağıdaki ReuseDetected sayısı 0 olur → [KALDI].
+try {
+    Yenile $rt2 $vF.Hwid | Out-Null
+    Fail 'F2: hırsızlıkta RT2 düşmedi — zincir düşürme gerçek hırsızlıkta da kapanmış'
+} catch { if ((HataKodu $_) -eq 401) { OK 'F2: hırsızlık tüm zinciri düşürdü (RT2 de 401)' } else { Fail "F2: RT2 için beklenen 401, gelen $(HataKodu $_)" } }
+
+# Yapısal kanıt: en az bir token ReuseDetected ile iptal edildi.
+$reuse = (Sql "SELECT COUNT(*) FROM identity.""RefreshTokens"" WHERE ""UserId"" = '$($vF.UserId)' AND ""RevokeReason"" = 'ReuseDetected';").Trim()
+if ([int]$reuse -ge 1) { OK "F2: zincir ReuseDetected ile iptal edildi ($reuse satır)" }
+else { Fail "F2: ReuseDetected satırı yok ($reuse) — zincir düşürülmedi" }
 
 Write-Host "`n================================" -ForegroundColor White
 if ($script:Fail -eq 0) { Write-Host "TÜM ADIMLAR BAŞARILI ($script:Pass kontrol)" -ForegroundColor Green }
