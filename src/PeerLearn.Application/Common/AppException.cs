@@ -109,6 +109,9 @@ public static class ErrorCodes
 
     /// <summary>Forum yorumu bulunamadı.</summary>
     public const string CommentNotFound = "COMMENT_NOT_FOUND";
+
+    /// <summary>Kişi kendi forum içeriğine (gönderi/yorum) oy vermeye çalıştı.</summary>
+    public const string SelfVote = "SELF_VOTE";
     public const string ReportAlreadyExists = "REPORT_ALREADY_EXISTS";
     public const string DisputeAlreadyOpen = "DISPUTE_ALREADY_OPEN";
     public const string NotAuthorized = "NOT_AUTHORIZED";
