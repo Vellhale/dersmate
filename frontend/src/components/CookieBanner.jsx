@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useConsent } from '../state/ConsentContext'
 import { CONSENT_CATEGORIES, CONSENT_VERSION } from '../lib/consent'
+import { ISLETMECI, MARKA } from '../lib/kunye'
 import { Button } from './ui'
 
 /**
@@ -72,9 +73,23 @@ export function CookieBanner() {
           className="fixed inset-x-0 bottom-0 z-50 border-t border-brand-100 bg-white/95 p-4 shadow-[0_-4px_20px_rgba(15,23,42,0.08)] backdrop-blur"
         >
           <div className="mx-auto flex max-w-4xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            {/*
+              ⚠️ ŞERİT ARTIK VERİ SORUMLUSUNU ADIYLA SÖYLÜYOR (2026-09-19).
+
+              Rıza, BELİRLİ BİR MUHATABA verilir; "kullanıyoruz" diyen ama kimin
+              kullandığını söylemeyen bir metne verilen onayın kime verildiği belirsizdi.
+              KVKK'da aydınlatmanın ilk katmanı veri sorumlusunun kimliğidir ve çerez
+              şeridi bu üründe ilk katmandır — ayrıntı penceresi ikinci.
+
+              METİN UZADI, YÜKSEKLİK ELLE AYARLANMADI: yukarıdaki ResizeObserver şeridin
+              boyunu ölçüp body'ye o kadar dolgu veriyor. Sabit bir yükseklik yazılsaydı
+              bu cümle tam da o hatayı geri getirirdi (mobilde şeridin altındaki düğmeler
+              tıklanamaz hâle geliyordu). Kalıbın karşılığını verdiği yer burası.
+            */}
             <p className="text-sm text-slate-700">
-              Siteyi çalıştırmak için zorunlu çerezleri kullanıyoruz. Analitik ve fonksiyonel
-              çerezler ise <strong>yalnızca izin verirsen</strong> çalışır.{' '}
+              {MARKA}’i işleten <strong>{ISLETMECI}</strong> olarak, siteyi çalıştırmak
+              için zorunlu çerezleri kullanıyoruz. Analitik ve fonksiyonel çerezler ise{' '}
+              <strong>yalnızca izin verirsen</strong> çalışır.{' '}
               {/* Dokunma alanı bilerek büyük: rızayı DARALTMANIN yolu, kabul etmenin yolundan
                   zor olmamalı. Yanındaki düğmeler zaten 44px. */}
               <button
@@ -197,9 +212,19 @@ function ConsentSettings({ initial, onClose, onSave, allowDismiss }) {
             </div>
           ))}
 
-          <p className="text-xs text-slate-400">
-            Metin sürümü: {CONSENT_VERSION}. Tercihini istediğin zaman sayfanın altındaki
-            “Çerez tercihleri” bağlantısından değiştirebilirsin.
+          {/* Muhatap ikinci katmanda da yazılı: pencere şeride basmadan da (altbilgideki
+              "Çerez tercihleri" bağlantısıyla) açılabiliyor, yani şeritteki cümleyi hiç
+              görmemiş bir kullanıcı buraya doğrudan gelebilir. Rızanın kime verildiği
+              her iki yoldan da görünmeli.
+
+              slate-400 → slate-500 (ölçüldü, tarayıcıda): slate-400 beyaz üstünde
+              **2.56:1** veriyordu ve bu metin 12px, yani WCAG'de "normal metin" —
+              eşik 4.5:1. slate-500 **4.76:1** ile geçiyor. Rızanın muhatabını yazıp
+              okunamayacak bir tonda bırakmak, yazmamakla aynı kapıya çıkardı. */}
+          <p className="text-xs leading-relaxed text-slate-500">
+            Bu tercihleri, {MARKA}’i işleten {ISLETMECI}’e vermiş olursun. Metin sürümü:{' '}
+            {CONSENT_VERSION}. Tercihini istediğin zaman sayfanın altındaki “Çerez
+            tercihleri” bağlantısından değiştirebilirsin.
           </p>
         </div>
 

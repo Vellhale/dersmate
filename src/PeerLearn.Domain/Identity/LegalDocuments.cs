@@ -45,6 +45,23 @@ public static class LegalDocuments
     ///
     /// 2026-09-05: gizlilik metnine veri işleyenler, yurt dışına aktarım ve yedek
     /// saklama süresi eklendi (KVKK m.9/m.10).
+    ///
+    /// 2026-09-19: İKİ DEĞİŞİKLİK TEK ARTIŞTA.
+    ///   1. Veri sorumlusunun kimliği metne yazıldı — dersmate'i Corventech işletiyor
+    ///      (Gizlilik §1, Koşullar §1 ve her iki sayfanın altındaki künye). Metinler
+    ///      bugüne kadar "biz" diyordu ama muhatabı adlandırmıyordu; KVKK m.10'un
+    ///      istediği ilk bilgi budur.
+    ///   2. Arkadaş sayısı + ortak arkadaşlar ifşası (Gizlilik §6). 2026-09-10'da
+    ///      metne eklenmiş ama sürümü artırılamamıştı — borç Gizlilik.jsx başında
+    ///      kayıtlıydı, burada kapandı.
+    ///
+    /// Ayrı ayrı artırmak mobil tarafta iki mağaza yayını demekti; aynı gün yürürlüğe
+    /// giren iki değişiklik tek kapıdan geçirildi.
+    ///
+    /// ⚠️ MOBİL DEPODAKİ KOPYA BU DEĞERE ÇEKİLMEDEN YENİ APK YAYINLANMAMALI.
+    /// Mobil uygulama henüz mağazada olmadığı için bugün kullanıcıya dokunan bir
+    /// kırılma yok: kapı ilk yayından ÖNCE kapanıyor. Yayına çıkmış bir APK varken
+    /// aynı işlem yapılsaydı, güncellemeyi almamış herkes kayıt ekranında kilitlenirdi.
     /// </remarks>
-    public const string CurrentVersion = "2026-09-05";
+    public const string CurrentVersion = "2026-09-19";
 }
