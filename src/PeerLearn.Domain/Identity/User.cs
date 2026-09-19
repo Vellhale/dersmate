@@ -173,6 +173,12 @@ public class User : BaseEntity
     public DateTime? EmailVerificationCodeSentAtUtc { get; set; }
 
     /// <summary>
+    /// Son parola-sıfırlama isteği zamanı. Hesap başına bekleme (e-posta bombardımanı
+    /// koruması) için; bkz. ParolaSifirlama.BeklemeIcinde ve ForgotPasswordHandler.
+    /// </summary>
+    public DateTime? PasswordResetRequestedAtUtc { get; set; }
+
+    /// <summary>
     /// Bu kod için yapılan YANLIŞ deneme sayısı; yeni kodla sıfırlanır.
     /// </summary>
     /// <remarks>

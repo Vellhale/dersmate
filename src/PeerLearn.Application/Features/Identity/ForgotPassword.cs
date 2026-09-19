@@ -36,14 +36,16 @@ public sealed class ForgotPasswordHandler : IRequestHandler<ForgotPasswordComman
     private readonly ITokenService _tokens;
     private readonly IEmailSender _email;
     private readonly EmailOptions _emailOptions;
+    private readonly IClock _clock;
 
     public ForgotPasswordHandler(IAppDbContext db, ITokenService tokens, IEmailSender email,
-        IOptions<EmailOptions> emailOptions)
+        IOptions<EmailOptions> emailOptions, IClock clock)
     {
         _db = db;
         _tokens = tokens;
         _email = email;
         _emailOptions = emailOptions.Value;
+        _clock = clock;
     }
 
     public async Task<Unit> Handle(ForgotPasswordCommand request, CancellationToken ct)
@@ -59,6 +61,21 @@ public sealed class ForgotPasswordHandler : IRequestHandler<ForgotPasswordComman
         {
             return Unit.Value;
         }
+
+        // HESAP BAŞINA BEKLEME — e-posta bombardımanına karşı (dinamik testte yakalandı:
+        // forgot-password'a art arda istek 12/12 gönderim üretiyordu). ResendVerification
+        // ile aynı desen. Yanıt yine TEKDÜZE (boş 200) kalıyor: cooldown içindeyse sessizce
+        // atlanır, dışarıdan 'gönderildi mi' ayrımı görünmez (numaralandırma açılmaz).
+        var simdi = _clock.UtcNow;
+        if (ParolaSifirlama.BeklemeIcinde(user.PasswordResetRequestedAtUtc, simdi))
+        {
+            return Unit.Value;
+        }
+
+        // Damgayı GÖNDERİMDEN ÖNCE yazıp kalıcılaştır: koruma, gönderim yavaşlasa ya da
+        // patlasa bile sürsün (en kötüde kullanıcı bir sonraki denemesini bekler; sel kesilir).
+        user.PasswordResetRequestedAtUtc = simdi;
+        await _db.SaveChangesAsync(ct);
 
         // Purpose, kullanıcının O ANKİ parola hash'ine bağlanıyor: bağlantı kullanılıp
         // parola değişince eski token kendiliğinden geçersizleşiyor (bkz. ParolaSifirlama).
