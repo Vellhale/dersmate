@@ -141,6 +141,32 @@ async function oturumuYenile() {
   return yenilemeSozu
 }
 
+/*
+  ─── SUNUCU TARAFLI ÇIKIŞ ────────────────────────────────────────────────────
+
+  İstemcinin oturumu localStorage'dan silmesi tek başına yetmiyordu: silinen
+  yenileme token'ı yeniden ele geçirilirse 60 gün boyunca taze erişim token'ı
+  üretebilirdi. Bu çağrı token'ı SUNUCUDA da iptal ettiriyor.
+
+  ⛔ request() KULLANILMIYOR, ham fetch:
+    • request()'in 401 → yenileme → AUTH_EXPIRED zinciri çıkışta anlamsız; üstelik
+      yenileme, tam iptal edeceğimiz token'ı bir kez daha döndürüp yarışa sokardı.
+    • Uç anonim; Authorization başlığı gerekmiyor, token gövdede gidiyor.
+  Yanıt 204, gövde beklenmiyor. Ağ hatası YUTULUYOR — çağıran (AuthContext) yerel
+  oturumu her hâlükârda siliyor, çıkış istemcide asla "başarısız" olmamalı.
+*/
+async function oturumuKapat(refreshToken, tumCihazlar = false) {
+  try {
+    await fetch(`${API_BASE}/api/session/logout`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refreshToken, tumCihazlar }),
+    })
+  } catch {
+    // Ağ hatası çıkışı engellememeli.
+  }
+}
+
 async function request(path, opts = {}) {
   const yanit = await istekGonder(path, opts)
 
@@ -277,6 +303,13 @@ export const api = {
   resendVerification: (email) =>
     request('/api/v1/auth/resend-verification', { method: 'POST', body: { email } }),
   login: (payload) => request('/api/v1/auth/login', { method: 'POST', body: payload }),
+
+  /**
+   * SUNUCU TARAFLI ÇIKIŞ: sunulan yenileme token'ını iptal eder. tumCihazlar=true tüm
+   * oturumları düşürür. Ham fetch (request() değil) ve hata yutuluyor — gerekçe
+   * oturumuKapat'ta.
+   */
+  logout: (refreshToken, tumCihazlar = false) => oturumuKapat(refreshToken, tumCihazlar),
 
   /** Parola sıfırlama bağlantısı ister. Yanıt, adres kayıtlı olsun olmasın AYNI (204) —
       farklı yanıt vermek "bu e-posta kayıtlı mı" sorusunu herkese yanıtlardı. */
