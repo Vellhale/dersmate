@@ -50,6 +50,19 @@ public interface IPasswordHasher
 {
     string Hash(string password);
     bool Verify(string hash, string password);
+
+    /// <summary>
+    /// Parolayı doğrular; doğruysa VE saklanan karma güncel iş faktöründen (iterasyon
+    /// sayısı) daha zayıf üretilmişse, <paramref name="yenilenmisKarma"/> ile güncel
+    /// faktörle üretilmiş taze bir karma döner (doğrulamada yükselt / rehash-on-verify).
+    /// </summary>
+    /// <remarks>
+    /// ⚠️ ÇAĞIRAN, <paramref name="yenilenmisKarma"/> null DEĞİLSE onu KALICILAŞTIRMALI —
+    /// aksi halde yükseltme her girişte yeniden hesaplanır ama hiç yazılmaz, yani karma
+    /// eski faktörde kalır. Yalnızca giriş yolu (Login) bunu kullanıyor; parola sıfırlama
+    /// ve kayıt zaten güncel faktörle taze karma üretiyor.
+    /// </remarks>
+    bool Verify(string hash, string password, out string? yenilenmisKarma);
 }
 
 public interface ITokenService
