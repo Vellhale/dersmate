@@ -35,6 +35,11 @@ public sealed class CreateReportHandler : IRequestHandler<CreateReportCommand, G
 {
     private const int MinDescriptionLength = 15;
 
+    // moderation.Reports.Description kolon sınırı (ModerationConfigurations: HasMaxLength(2000)).
+    // Uygulama katmanı bunu ÖNCE sınamazsa, sınırı aşan gövde DB'de kesme hatasına düşüp
+    // 400 yerine 500 üretir — kullanıcı hatası sunucu hatası gibi görünürdü.
+    private const int MaxDescriptionLength = 2000;
+
     private readonly IAppDbContext _db;
     private readonly IClock _clock;
 
@@ -52,6 +57,12 @@ public sealed class CreateReportHandler : IRequestHandler<CreateReportCommand, G
             throw new AppException(ErrorCodes.ValidationFailed,
                 $"Ne olduğunu kısaca anlat (en az {MinDescriptionLength} karakter). " +
                 "Yönetim yalnızca senin anlattığını görecek.");
+        }
+
+        if (aciklama.Length > MaxDescriptionLength)
+        {
+            throw new AppException(ErrorCodes.ValidationFailed,
+                $"Açıklama çok uzun (en fazla {MaxDescriptionLength} karakter).");
         }
 
         Guid sikayetEdilen;
