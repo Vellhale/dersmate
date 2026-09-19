@@ -30,6 +30,8 @@ public static class DependencyInjection
         services.AddSingleton<IPasswordHasher, PasswordHasherService>();
         services.AddSingleton<ITokenService, JwtTokenService>();
         services.AddSingleton<IProofStorage, LocalProofStorage>();
+        // Magick.NET stateless/thread-safe → Singleton, IProofStorage ile aynı ömür.
+        services.AddSingleton<IGorselTemizleyici, MagickGorselTemizleyici>();
 
         /*
           E-posta sağlayıcısı AYARDAN seçilir. Geliştirmede "Log" (token konsoldan okunur),

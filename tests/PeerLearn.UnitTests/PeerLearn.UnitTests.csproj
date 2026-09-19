@@ -19,6 +19,9 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\PeerLearn.Application\PeerLearn.Application.csproj" />
+    <!-- GorselTemizleyiciTests, MagickGorselTemizleyici'yi (Infrastructure) doğrudan çağırır;
+         Magick.NET-Q16-AnyCPU bu referanstan transitif akar. -->
+    <ProjectReference Include="..\..\src\PeerLearn.Infrastructure\PeerLearn.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

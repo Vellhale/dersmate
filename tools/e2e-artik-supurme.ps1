@@ -200,6 +200,50 @@ if (Test-Path $artikYolu) {
     OK 'sahte artık silindi (süpürücü gerçekten çalıştı)'
 }
 
+# ---------------------------------------------------------------------------
+Section 'Belge yüklemesinde EXIF temizliği + PDF dokunulmazlığı'
+# Ayrı bir aday üzerinde (yukarıdaki süpürme akışına dokunmadan): görsel belge metadata'sı
+# SİLİNMELİ, PDF ise DEĞİŞTİRİLMEDEN geçmeli. İki dosya da aynı uçtan (document) indirilir.
+#
+# MUTASYON: UploadTeacherDocumentHandler'daki gorselMi dalı bozulup PDF de temizlenmeye
+#   sokulursa PDF byte-byte eşitliği KIRILIR (Magick PDF'i ya reddeder ya rasterize eder);
+#   TryTemizle çağrısı kaldırılırsa görsel sentinel/EXIF taşımaya devam eder ve o KIRILIR.
+
+# EXIF+GPS+sentinel gömülü gerçek JPEG (Magick.NET ile üretildi; smoke ile aynı).
+$jpgB64 = '/9j/4AAQSkZJRgABAQAAAQABAAD/4QDYRXhpZgAASUkqAAgAAAADAA4BAgAYAAAANgAAAA8BAgAYAAAATgAAACWIBAABAAAAZgAAAAAAAAAAAAAAREVSU01BVEUtS09OVU0tU0VOVElORUwAREVSU01BVEUtS09OVU0tU0VOVElORUwABAABAAIAAgAAAE4AAAACAAUAAwAAAKAAAAADAAIAAgAAAEUAAAAEAAUAAwAAALgAAAAAAAAAAAAAACkAAAABAAAAAQAAAAEAAAACAAAAAQAAAB0AAAABAAAAAAAAAAEAAAABAAAAAQAAAP/bAEMAAwICAgICAwICAgMDAwMEBgQEBAQECAYGBQYJCAoKCQgJCQoMDwwKCw4LCQkNEQ0ODxAQERAKDBITEhATDxAQEP/bAEMBAwMDBAMECAQECBALCQsQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEP/AABEIABAAGAMBEQACEQEDEQH/xAAVAAEBAAAAAAAAAAAAAAAAAAAABf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/xAAVAQEBAAAAAAAAAAAAAAAAAAAAB//EABQRAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhEDEQA/AIiupIAAAAA//9k='
+# Küçük, geçerli bir PDF (görsel değil): temizliğe hiç uğramamalı, byte-byte korunmalı.
+$pdfB64 = 'JVBERi0xLjQKMSAwIG9iajw8IC9UeXBlIC9DYXRhbG9nIC9QYWdlcyAyIDAgUiA+PmVuZG9iagoyIDAgb2JqPDwgL1R5cGUgL1BhZ2VzIC9LaWRzIFszIDAgUl0gL0NvdW50IDEgPj5lbmRvYmoKMyAwIG9iajw8IC9UeXBlIC9QYWdlIC9QYXJlbnQgMiAwIFIgL01lZGlhQm94IFswIDAgMTIwIDkwXSAvQ29udGVudHMgNCAwIFIgPj5lbmRvYmoKNCAwIG9iajw8IC9MZW5ndGggNDQgPj5zdHJlYW0KQlQgL0YxIDEyIFRmIDEwIDQwIFRkIChERVJTTUFURS1QREYpIFRqIEVUCmVuZHN0cmVhbSBlbmRvYmoKdHJhaWxlcjw8IC9Sb290IDEgMCBSID4+CiUlRU9GCg=='
+
+$aday2 = NewUser 'supexif' $stamp
+Put_ '/api/profile/teacher-candidate' @{ university = 'Test Üniversitesi'; faculty = 'Eğitim Fakültesi'; department = 'Fizik Öğretmenliği'; gradeYear = 2; hasPedagogicalCertificate = $false } $aday2.Token | Out-Null
+
+function BelgeIndir($profilId, $token) {
+    $r = Invoke-WebRequest -Uri "$Api/api/profile/teacher-candidate/$profilId/document" `
+        -Headers @{ Authorization = "Bearer $token" } -UseBasicParsing
+    return [byte[]]$r.Content
+}
+
+# (1) GÖRSEL belge — metadata SİLİNMELİ.
+$jpg = [Convert]::FromBase64String($jpgB64)
+PostDosya '/api/profile/teacher-candidate/document' $jpg 'kanit.jpg' 'image/jpeg' $aday2.Token | Out-Null
+$profil2 = (Sql "SELECT ""Id"" FROM identity.""TeacherCandidateProfiles"" WHERE ""UserId"" = '$($aday2.UserId)';").Trim()
+if (-not $profil2) { Dur 'aday2 profil Id bulunamadı' }
+$jpgOut = BelgeIndir $profil2 $aday2.Token
+# PS 5.1 .NET Framework: Encoding.Latin1 YOK; ISO-8859-1 baytları birebir çevirir. Eşleşme
+# büyük/küçük harf DUYARLI (-cnotmatch): APP1 kimliği tam "Exif".
+$jpgLatin1 = [Text.Encoding]::GetEncoding('ISO-8859-1').GetString($jpgOut)
+if ($jpgLatin1 -cnotmatch 'DERSMATE-KONUM-SENTINEL') { OK 'görsel belgenin EXIF sentinel''i silindi' }
+else { Fail 'görsel belge EXIF sentinel taşımaya devam ediyor — metadata temizlenmedi' }
+if ($jpgLatin1 -cnotmatch 'Exif') { OK 'görsel belgenin EXIF APP1 imzası silindi' }
+else { Fail 'görsel belgede EXIF APP1 segmenti hâlâ var' }
+
+# (2) PDF belge — DOKUNULMADAN geçmeli (byte-byte aynı).
+$pdf = [Convert]::FromBase64String($pdfB64)
+PostDosya '/api/profile/teacher-candidate/document' $pdf 'belge.pdf' 'application/pdf' $aday2.Token | Out-Null
+$pdfOut = BelgeIndir $profil2 $aday2.Token
+if ([Convert]::ToBase64String($pdfOut) -eq $pdfB64) { OK 'PDF belge byte-byte korundu (temizliğe uğramadı)' }
+else { Fail "PDF belge değişti — görsel-olmayan içerik temizliğe sokuldu (yüklenen $($pdf.Length)B, inen $($pdfOut.Length)B)" }
+
 Write-Host ""
 Write-Host "Geçen: $script:Pass   Kalan: $script:Fail" -ForegroundColor White
 if ($script:Fail -gt 0) { exit 1 }
