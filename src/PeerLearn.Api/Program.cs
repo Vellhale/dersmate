@@ -127,7 +127,11 @@ builder.Services
         // Enum'lar YANITLARDA zaten string dönüyor ("Offer", "SessionNotHeld").
         // Bu converter olmadan İSTEKLERDE sayı bekleniyordu; asimetri, arayüzün gönderdiği
         // her enum alanını 400'e düşürüyordu (uçtan uca testte yakalandı).
-        options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
+        //
+        // Hazır JsonStringEnumConverter yerine KesinEnumDonusturucu: aynı ad-tabanlı okuma/
+        // yazmayı yapar AMA gövdedeki TANIMSIZ tamsayıyı da reddeder — enum'lar DB'de metin
+        // saklandığından tanımsız bir üyenin kalıcılaşması okuma anında patlardı.
+        options.JsonSerializerOptions.Converters.Add(new KesinEnumDonusturucu());
     });
 
 // React dev sunucusu için CORS (SignalR credential ister → AllowCredentials + açık origin).
