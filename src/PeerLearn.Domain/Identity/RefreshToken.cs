@@ -32,12 +32,19 @@ namespace PeerLearn.Domain.Identity;
 /// Tuzlansaydı sorgu kurulamazdı. Tokenin kendisi 256 bit olduğu için tuza gerek de yok.
 ///
 /// ─── DÖNÜŞÜM (ROTATION) VE HIRSIZLIK TESPİTİ ────────────────────────────────
-/// Her yenilemede eski token iptal edilip yenisi veriliyor. Zaten iptal edilmiş bir
-/// token yeniden sunulursa bu iki şeyden biri demektir: ya token çalındı ve iki taraf
-/// birden kullanıyor, ya da istemci aynı token'la iki kez denedi. İkisini ayırt etmenin
-/// güvenli yolu yok, bu yüzden davranış tektir: o kullanıcının TÜM zinciri iptal edilir.
-/// Yanlış pozitifin bedeli "yeniden giriş yap", yanlış negatifin bedeli "hırsız içeride
-/// kalır" — asimetri açık.
+/// Her yenilemede eski token iptal edilip yenisi veriliyor. DÖNÜŞÜMLE (Rotated) iptal
+/// edilmiş bir token yeniden sunulursa bu iki şeyden biri demektir: ya token çalındı ve
+/// iki taraf birden kullanıyor, ya da istemci aynı token'la iki kez denedi. İkisini "iyi
+/// niyetli tekrar" penceresi ayırıyor; pencere DIŞINDA sunulan bir Rotated token'da ayırt
+/// etmenin güvenli yolu yok, bu yüzden o kullanıcının TÜM zinciri iptal edilir. Yanlış
+/// pozitifin bedeli "yeniden giriş yap", yanlış negatifin bedeli "hırsız içeride kalır" —
+/// asimetri açık.
+///
+/// ⚠️ ZİNCİR DÜŞÜRME YALNIZCA Rotated token'a özgü. Başka bir sebeple (çıkış, parola
+/// değişimi, yaptırım, hesap silme) zaten iptal edilmiş bir token'ın tekrarı reddedilir
+/// ama zincir DÜŞÜRÜLMEZ: o token'lar bilinçli iptal + damga ileri alma sonucu ölüdür,
+/// tekrarları erişim üretmez. Aksi hâlde sıfırlama/çıkış sonrası açılan taze oturumlar da
+/// düşerdi. Karar mantığı <c>RefreshTokenService.GercekYenidenKullanim</c>.
 ///
 /// ─── CİHAZ BAĞI: KAYDEDİLİYOR, ZORUNLU TUTULMUYOR ───────────────────────────
 /// <see cref="DeviceHwidHash"/> token üretilirken yazılıyor ama doğrulamada
@@ -162,4 +169,7 @@ public enum RefreshTokenRevokeReason
     /// İptal edilmiş bir token yeniden sunuldu — hırsızlık şüphesiyle tüm zincir iptal.
     /// </summary>
     ReuseDetected = 5,
+
+    /// <summary>Rol değişti — tüm oturumlar düşürüldü.</summary>
+    RoleChanged = 6,
 }

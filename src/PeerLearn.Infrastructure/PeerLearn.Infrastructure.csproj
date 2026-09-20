@@ -24,6 +24,13 @@
     <PackageReference Include="Microsoft.Extensions.Identity.Core" Version="8.0.11" />
     <PackageReference Include="StackExchange.Redis" Version="2.8.16" />
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="7.1.2" />
+    <!--
+      Görsel metadata (EXIF/GPS/thumbnail) temizliği için. Lisans Apache-2.0 (ticari
+      kullanıma uygun). Yalnızca Infrastructure'a girer; Application/Api temiz kalır
+      (IProofStorage kalıbıyla aynı). -Q16-AnyCPU tüm platform native'lerini gömer, imajı
+      büyütür; Linux runtime'ında libgomp.so.1 gerektirir (bkz. Dockerfile → libgomp1).
+    -->
+    <PackageReference Include="Magick.NET-Q16-AnyCPU" Version="14.17.1" />
   </ItemGroup>
 
   <ItemGroup>

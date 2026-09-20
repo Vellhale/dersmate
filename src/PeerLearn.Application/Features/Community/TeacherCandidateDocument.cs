@@ -44,12 +44,14 @@ public sealed class UploadTeacherDocumentHandler : IRequestHandler<UploadTeacher
     private readonly IAppDbContext _db;
     private readonly IClock _clock;
     private readonly IProofStorage _storage;
+    private readonly IGorselTemizleyici _temizleyici;
 
-    public UploadTeacherDocumentHandler(IAppDbContext db, IClock clock, IProofStorage storage)
+    public UploadTeacherDocumentHandler(IAppDbContext db, IClock clock, IProofStorage storage, IGorselTemizleyici temizleyici)
     {
         _db = db;
         _clock = clock;
         _storage = storage;
+        _temizleyici = temizleyici;
     }
 
     public async Task Handle(UploadTeacherDocumentCommand request, CancellationToken ct)
@@ -77,8 +79,27 @@ public sealed class UploadTeacherDocumentHandler : IRequestHandler<UploadTeacher
             throw new AppException(ErrorCodes.ValidationFailed, "Belge boyutu geçersiz.");
         }
 
-        tampon.Position = 0;
-        var anahtar = await _storage.SaveAsync(tampon, uzanti, ct);
+        // GÖRSEL belgeler (öğrenci belgesi fotoğrafı/ekran görüntüsü) EXIF/GPS taşıyabilir;
+        // depoya yazmadan ÖNCE temizlenir. PDF'e DOKUNULMAZ — Magick PDF'i Ghostscript
+        // delegesi olmadan açamaz/rasterize eder, oysa e-Devlet PDF'i olduğu gibi kalmalı.
+        // Ayrım içeriğe/uzantıya göre değil, tam olarak application/pdf içerik tipine göre.
+        var gorselMi = !request.ContentType.Equals("application/pdf", StringComparison.OrdinalIgnoreCase);
+        Stream yazilacak = tampon;
+        if (gorselMi)
+        {
+            if (!_temizleyici.TryTemizle(tampon.ToArray(), request.ContentType, out var temizBytes))
+            {
+                throw new AppException(ErrorCodes.ValidationFailed, "Görsel belge çözümlenemedi.");
+            }
+            if (temizBytes.LongLength > MaxBytes)
+            {
+                throw new AppException(ErrorCodes.ValidationFailed, "Belge boyutu geçersiz.");
+            }
+            yazilacak = new MemoryStream(temizBytes, writable: false);
+        }
+
+        yazilacak.Position = 0;
+        var anahtar = await _storage.SaveAsync(yazilacak, uzanti, ct);
 
         profil.DocumentStorageKey = anahtar;
         profil.DocumentContentType = request.ContentType.ToLowerInvariant();

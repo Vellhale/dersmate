@@ -68,14 +68,16 @@ public sealed record UpdateAvatarCommand(Guid UserId, Stream Content, string Con
     : IRequest<string>;
 
 /// <remarks>
-/// KIRPMA VE KÜÇÜLTME İSTEMCİDE yapılır (canvas), sunucu yalnızca doğrular.
+/// KIRPMA VE KÜÇÜLTME İSTEMCİDE yapılır (canvas); sunucu yalnızca doğrular ve metadata temizler.
 ///
-/// Neden: sunucuda yeniden boyutlandırma bir görüntü kütüphanesi (ImageSharp vb.) gerektirir;
-/// kırpma çerçevesini kullanıcı zaten tarayıcıda seçtiği için aynı canvas'tan hazır,
-/// küçültülmüş bir kare çıkarmak hem bağımlılık eklemez hem de yükleme boyutunu düşürür.
+/// Neden yeniden boyutlandırma istemcide: kırpma çerçevesini kullanıcı zaten tarayıcıda
+/// seçtiği için aynı canvas'tan hazır, küçültülmüş bir kare çıkarmak yükleme boyutunu düşürür
+/// ve sunucuda pahalı bir yeniden-boyutlandırma adımından kaçınır.
 ///
-/// Ama İSTEMCİYE GÜVENİLMEZ: boyut, tür ve içerik imzası burada yeniden denetlenir.
-/// İstemci 20 MB'lık bir dosyayı "image/png" diyerek gönderebilir.
+/// Ama İSTEMCİYE GÜVENİLMEZ: boyut, tür ve içerik imzası burada yeniden denetlenir (istemci
+/// 20 MB'lık bir dosyayı "image/png" diyerek gönderebilir) VE metadata sunucuda silinir.
+/// Canvas çıktısı çoğu EXIF'i zaten düşürse de sunucu istemciye güvenmez: konum/cihaz sızdıran
+/// EXIF/GPS/gömülü thumbnail IGorselTemizleyici ile burada da kaldırılır (Magick.NET).
 /// </remarks>
 public sealed class UpdateAvatarHandler : IRequestHandler<UpdateAvatarCommand, string>
 {
@@ -91,11 +93,13 @@ public sealed class UpdateAvatarHandler : IRequestHandler<UpdateAvatarCommand, s
 
     private readonly IAppDbContext _db;
     private readonly IProofStorage _storage;
+    private readonly IGorselTemizleyici _temizleyici;
 
-    public UpdateAvatarHandler(IAppDbContext db, IProofStorage storage)
+    public UpdateAvatarHandler(IAppDbContext db, IProofStorage storage, IGorselTemizleyici temizleyici)
     {
         _db = db;
         _storage = storage;
+        _temizleyici = temizleyici;
     }
 
     public async Task<string> Handle(UpdateAvatarCommand request, CancellationToken ct)
@@ -126,6 +130,18 @@ public sealed class UpdateAvatarHandler : IRequestHandler<UpdateAvatarCommand, s
         {
             throw new AppException(ErrorCodes.ValidationFailed,
                 "Dosya bir görsel değil (içerik imzası uyuşmuyor).");
+        }
+
+        // İçerik imzası ucuz erken-red; asıl metadata temizliği burada. EXIF/GPS/thumbnail
+        // silinir, EXIF yönelimi piksele işlenir. Sınır temizlik SONRASI yeniden ölçülür.
+        if (!_temizleyici.TryTemizle(bytes, request.ContentType, out var temizBytes))
+        {
+            throw new AppException(ErrorCodes.ValidationFailed, "Fotoğraf çözümlenemedi.");
+        }
+        bytes = temizBytes;
+        if (bytes.LongLength > MaxAvatarBytes)
+        {
+            throw new AppException(ErrorCodes.ValidationFailed, "Fotoğraf 2 MB'tan büyük.");
         }
 
         using var content = new MemoryStream(bytes, writable: false);
