@@ -10,6 +10,8 @@
  * yokluğu asla bir akışı kırmamalı.
  */
 
+import { normalizeYol } from './analiz-yolu'
+
 const MEASUREMENT_ID = import.meta.env.VITE_GA4_MEASUREMENT_ID ?? ''
 const SCRIPT_ID = 'ga4-script'
 
@@ -114,5 +116,7 @@ export const AnalyticsEvents = {
 
 export function trackPageView(path) {
   if (!analyticsConfigured || window[disableFlag]) return
-  gtag('event', 'page_view', { page_path: path })
+  // Yol GA'ya GİTMEDEN kimliksizleştirilir: /profil/<guid> → /profil/:userId (KVKK).
+  // Tek nokta: çağıran ham yol geçse bile GUID üçüncü tarafa aktarılmaz.
+  gtag('event', 'page_view', { page_path: normalizeYol(path) })
 }

@@ -122,6 +122,27 @@ public interface IProofStorage
     IAsyncEnumerable<StoredObject> ListAsync(CancellationToken ct = default);
 }
 
+/// <summary>
+/// Yüklenen görsellerden konum/cihaz sızdıran metadata'yı (EXIF/GPS/XMP/IPTC ve gömülü
+/// EXIF thumbnail'ini) siler: görüntüyü çözer, EXIF yönelimini piksele işler ve metadata
+/// olmadan AYNI formatta yeniden kodlar. YALNIZCA görsel içerik tiplerine çağrılır;
+/// PDF gibi görsel-olmayan tipler bu servise hiç uğramaz (çağıran içerik tipiyle ayırır).
+///
+/// NEDEN DEPO KATMANINDA DEĞİL: temizlik depoya YAZMADAN önce, handler'da olmalı. S3'e
+/// geçince IProofStorage değişir ama sızıntı riski aynı kalırdı; ayrıca ders kanıtında
+/// hash temizlenmiş baytlardan hesaplandığı için depoya giren bayt ile hash aynı olmalı.
+/// </summary>
+public interface IGorselTemizleyici
+{
+    /// <summary>
+    /// Baytları görsel olarak çözemezse (bozuk/görsel-olmayan/decompression-bomb) false
+    /// döner; çağıran kendi bağlamına uygun AppException fırlatır (ProofInvalid ya da
+    /// ValidationFailed). Başarılıysa <paramref name="temiz"/> metadata'sız yeniden
+    /// kodlanmış baytları taşır.
+    /// </summary>
+    bool TryTemizle(byte[] icerik, string contentType, out byte[] temiz);
+}
+
 public interface IEmailSender
 {
     Task SendAsync(string to, string subject, string body, CancellationToken ct = default);

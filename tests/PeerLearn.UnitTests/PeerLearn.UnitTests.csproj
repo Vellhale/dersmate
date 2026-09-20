@@ -19,8 +19,9 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\PeerLearn.Application\PeerLearn.Application.csproj" />
-    <!-- Parola karma (PBKDF2 iş faktörü + rehash-on-verify) Infrastructure'da; gerçek
-         PasswordHasherService'i sınamak için gerekli. -->
+    <!-- Infrastructure referansı iki test kümesi için gerekli:
+         - GorselTemizleyiciTests -> MagickGorselTemizleyici (Magick.NET-Q16-AnyCPU transitif akar).
+         - ParolaKarmaTests -> gerçek PasswordHasherService (PBKDF2 iş faktörü + rehash-on-verify). -->
     <ProjectReference Include="..\..\src\PeerLearn.Infrastructure\PeerLearn.Infrastructure.csproj" />
   </ItemGroup>
 

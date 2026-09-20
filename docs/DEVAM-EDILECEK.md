@@ -612,21 +612,46 @@ eski istemci onu hiç çağırmaz. Yan fayda: profil kartı 5 sorguda kalıyor.
 imleri, paylaşılmış bağlantılar ve mobilin derin bağlantıları kırılmasın diye
 kaldırılmamalı.
 
-### ⚠️ AÇIK BORÇ: sözleşme sürümü
+### ✅ KAPANDI: sözleşme sürümü (2026-09-19)
 
-Arkadaş sayısı ve ortak arkadaşlar, Gizlilik §6'nın herkese açık saydığı kümede **yok**
+Arkadaş sayısı ve ortak arkadaşlar, Gizlilik §6'nın herkese açık saydığı kümede **yoktu**
 ("adın, fotoğrafın, okulun, kendini anlattığın metin, anlatabildiğin konular, aldığın
-değerlendirmeler"). Kiminle arkadaş olduğun bugüne kadar yalnızca iki tarafa
-görünüyordu — bu **yeni bir ifşadır** ve `SOZLESME_SURUMU`'nun artması gerekir.
+değerlendirmeler") — yani **yeni bir ifşaydı** ve `SOZLESME_SURUMU`'nun artmasını
+gerektiriyordu. Borç, künye turunda **veri sorumlusu kimliğiyle birlikte tek artışta**
+kapatıldı: `2026-09-05` → `2026-09-19`, hem `frontend/src/lib/yasalMetinler.js` hem
+`LegalDocuments.CurrentVersion`.
 
-Sürüm **artırılmadı** ve sebebi hukuki değil işletimsel: artırmak bir **mobil yayın
-kapısıdır**. Sabit sunucudakiyle birebir eşleşmek zorunda, mobil kendi kopyasını pakete
-gömülü taşıyor; tek taraflı artırmak güncellemeyi almamış her mobil kullanıcıyı kayıt
-ekranında kilitler. Metnin sürümden bir adım önde olması ise yalnızca bir kayıt
-gecikmesi.
+İkisini birleştirmek bilinçliydi: her sürüm artışı mobil tarafta ayrı bir mağaza yayını
+demek ve aynı gün yürürlüğe giren iki metin değişikliğini tek kapıdan geçirmek o bedeli
+yarıya indirdi. Artış, mobil uygulama **henüz mağazada değilken** yapıldı — kapı ilk
+yayından önce kapandığı için kimse kayıt ekranında kilitlenmedi.
 
-**Kapatma sırası:** mobil `yasalMetinler.js` artır → APK yayınla → `LegalDocuments
-.CurrentVersion` + web sabitini artır → dağıt. Gerekçe `Gizlilik.jsx` başında da yazılı.
+> ⚠️ **Mobil depodaki kopya bu değere çekilmeden ilk APK yayınlanmamalı.** Kural
+> kalkmadı, yalnızca bu kez bedelsiz ödendi. Sonraki artışta sıra yine:
+> mobil `yasalMetinler.js` → APK → `LegalDocuments.CurrentVersion` + web sabiti → dağıt.
+
+### ⚠️ AÇIK BORÇ: künyedeki tescil bilgileri
+
+dersmate'in **kim tarafından işletildiği** artık üründe yazılı — Corventech, beş yüzeyde
+ve tek kaynaktan (`frontend/src/lib/kunye.js`). Kapanan boşluk gerçekti: Koşullar ve
+Gizlilik boyunca geçen "biz"in kim olduğu hiçbir yerde yazmıyordu, yani KVKK m.10'un
+istediği **ilk** bilgi eksikti ve `MetinSayfasi.jsx`'teki taslak uyarısı bunu zaten
+kendisi sayıyordu.
+
+**Eksik kalan üç değer:** `TICARI_UNVAN`, `ADRES`, `MERSIS` — `kunye.js`'te `null` ve
+bilerek öyle. Bunlar koddan türetilemez, yalnızca ticaret sicilinden gelir; bir KVKK
+metnine gerçek olmayan bir unvan yazmak hiç yazmamaktan **daha kötüdür**. `KunyeBlogu`
+onları koşullu basıyor, yani üçü doldurulduğu anda blok kendiliğinden tamamlanır —
+başka hiçbir dosyaya dokunmak gerekmez.
+
+İki uyarı:
+
+- **Corventech tescilli bir tüzel kişi değilse** (yalnızca marka/alan adıysa) bu üç değer
+  doldurulmamalı: o durumda veri sorumlusu gerçek kişidir ve şirket adını tescil bilgisi
+  gibi göstermek kimliği netleştirmek yerine bulandırır. Künyedeki "… tarafından
+  işletilmektedir" ifadesi her iki durumda da doğru olduğu için koşulsuz basılıyor.
+- **"Taslak metin" uyarısı bu üç değer doldurulmadan kaldırılamaz** — uyarının saydığı
+  eksiklerden biri tam olarak veri sorumlusu kimlik bilgileri.
 
 ### Açık kalanlar
 

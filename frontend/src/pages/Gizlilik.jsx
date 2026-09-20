@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { Bolum, Maddeler, MetinSayfasi } from './MetinSayfasi'
 import { SOZLESME_TARIHI } from '../lib/yasalMetinler'
+import { ISLETMECI, ISLETMECI_ADRESI, ISLETMECI_ALAN_ADI, MARKA } from '../lib/kunye'
 
 /*
   GİZLİLİK POLİTİKASI + KVKK AYDINLATMA METNİ.
@@ -20,38 +21,30 @@ import { SOZLESME_TARIHI } from '../lib/yasalMetinler'
   anahtar bakıyor ve çoğu karşı tarafa ait (ders geçmişi, puanlar, değerlendirmeler).
   Metin bunu gizlemiyor; "her şey silinir" demek yanlış olurdu.
 
-  ⚠️⚠️ SÜRÜM BORCU — OKUNMADAN GEÇİLMEMELİ (2026-09-10)
+  ✅ SÜRÜM BORCU KAPANDI (2026-09-19). 2026-09-10'dan beri burada duran uzun not,
+  §6'daki arkadaş sayısı + ortak arkadaşlar ifşasının sözleşme sürümüne yansımadığını
+  kaydediyordu. Sürüm 2026-09-19'a çekildi ve borç kapandı; notun kendisi, kapandığında
+  sadeleştirilmesini söylüyordu — bu paragraf o sadeleştirme. Ayrıntılı gerekçe
+  (neden isimle aranabilirlik sürüm gerektirmiyordu ama arkadaş grafı gerektiriyordu)
+  yasalMetinler.js ve LegalDocuments.cs'teki sürüm notlarına taşındı.
 
-  §6'ya İKİ AYRI TURDA paragraf eklendi ve ikisinin yasal ağırlığı AYNI DEĞİL:
+  ⚠️ SÜRÜM ARTIRMAK HÂLÂ MOBİL BİR YAYIN KAPISI. Borcun kapanması kuralı kaldırmıyor:
+  SOZLESME_SURUMU sunucudaki sabitle birebir eşleşmek zorunda, mobil uygulama kendi
+  kopyasını PAKETE GÖMÜLÜ taşıyor ve AYRI BİR DEPODA yazılıyor. Bu artış mobil mağazada
+  henüz uygulama YOKKEN yapıldı, yani kimseyi kilitlemedi — ama mobil depodaki kopya bu
+  değere çekilmeden ilk APK yayınlanırsa o kullanıcılar kayıt olamaz.
 
-   1. İSİMLE ARANABİLİRLİK + ENGELLEME. Sürüm ARTIRILMADI ve bu doğruydu: §6 zaten
-      "profilinde senin girdiğin bilgiler diğer kullanıcılara açıktır" diyor, görünen
-      ad o kümede. Arama, açık olan bir bilgiye ulaşmanın YOLU — yeni ifşa değil,
-      açıklama.
-
-   2. ARKADAŞ SAYISI + ORTAK ARKADAŞLAR. Bu FARKLI ve gerekçe (1)'den DEVRALINAMAZ.
-      §6'nın herkese açık saydığı küme sayılı: "adın, fotoğrafın, okulun, kendini
-      anlattığın metin, anlatabildiğin konular, aldığın değerlendirmeler". KİMİNLE
-      ARKADAŞ OLDUĞUN o kümede YOK — bugüne kadar yalnızca iki tarafa görünüyordu.
-      Sosyal grafın bir parçasını üçüncü kişiye açmak YENİ BİR İFŞADIR ve sözleşme
-      sürümünün ARTMASI gerekir.
-
-  SÜRÜM YİNE DE ARTIRILMADI ve sebebi hukuki değil, işletimsel: artırmak MOBİL BİR
-  YAYIN KAPISIDIR. SOZLESME_SURUMU sunucudaki sabitle birebir eşleşmek zorunda, mobil
-  uygulama kendi kopyasını PAKETE GÖMÜLÜ taşıyor ve AYRI BİR DEPODA yazılıyor. Tek
-  taraflı artırmak, güncellemeyi almamış her mobil kullanıcıyı KAYIT EKRANINDA
-  KİLİTLER — canlı, kullanıcıya dokunan bir kırılma. Metnin sürümden bir adım önde
-  olması ise yalnızca bir kayıt gecikmesi.
-
-  YAPILACAK SIRA (ürün sahibinin mobil tarafla eşgüdümü gerekiyor):
+  SONRAKİ ARTIŞTA SIRA (mağazada uygulama varken):
     1. mobil depodaki src/lib/yasalMetinler.js sürümünü artır
     2. yeni APK'yı yayınla (mağaza incelemesi dahil)
     3. LegalDocuments.CurrentVersion + web yasalMetinler.js'i artır
     4. sunucuyu dağıt
 
-  Bu adımlar tamamlanana kadar §6'daki arkadaş paragrafı YÜRÜRLÜKTEKİ metni doğru
-  anlatıyor ama sürüm numarası onu yansıtmıyor. Borç burada kayıtlı; kapanınca bu
-  not da sadeleştirilmeli.
+  ⚠️ METİN HÂLÂ TASLAK. Sürüm borcunun kapanması metnin hukuken tamamlandığı anlamına
+  GELMEZ. §1 artık veri sorumlusunu adıyla söylüyor ama tescil bilgileri (ticari unvan,
+  adres, MERSIS) lib/kunye.js'te BOŞ ve bilerek boş — uydurulmadı. MetinSayfasi'ndeki
+  "Taslak metin" uyarısı bu yüzden yerinde duruyor; o üç değer doldurulup metin bir
+  hukukçuya okutulmadan kaldırılmamalı.
 */
 export default function Gizlilik() {
   return (
@@ -60,12 +53,43 @@ export default function Gizlilik() {
       ozet="Hangi verini topluyoruz, neden topluyoruz, ne kadar saklıyoruz ve ne isteyebilirsin."
       sonGuncelleme={SOZLESME_TARIHI}
     >
-      <Bolum no="1" baslik="Kısaca">
+      {/*
+        ⚠️ BÖLÜM NUMARALARI DEĞİŞTİRİLEMEZ — yalnızca BAŞLIK değişti (2026-09-19).
+
+        Veri sorumlusu kimliği bir KVKK aydınlatma metninin İLK maddesidir, bu yüzden
+        doğal yeri yeni bir §1 açmaktı. AÇILMADI: §4, §5, §6, §7 ve §9'a hem bu metnin
+        içinden hem docs/DEVAM-EDILECEK.md'den atıf yapılıyor ve araya bölüm eklemek
+        hepsini bir kaydırıp SESSİZCE yanlış maddeye işaret ettirirdi — yasal bir
+        metinde yanlış atıf, eksik atıftan kötüdür.
+
+        Bunun yerine mevcut §1 genişletildi ve başlığına "veri sorumlusu" eklendi:
+        numaralar yerinde kaldı, kimlik aranabilir oldu. Tam künye ayrıca sayfanın
+        altında (MetinSayfasi → KunyeBlogu) ve tescil bilgileri doldurulduğunda orada
+        kendiliğinden görünecek.
+      */}
+      <Bolum no="1" baslik="Kısaca ve veri sorumlusu">
+        {/* Kimlik ÖNCE: "bu veriyi kim işliyor" sorusu, "ne işliyor" sorusundan önce
+            gelir. ISLETMECI sabitten okunuyor, elle yazılmıyor — künye beş yüzeyde
+            görünüyor ve birinin ayrışması iki farklı kimlik göstermek demek. */}
         <p>
-          dersmate, öğrencilerin birbirine ders anlattığı bir platformdur. Verini
-          reklam için kullanmıyoruz, satmıyoruz ve üçüncü taraflara pazarlama amacıyla
-          aktarmıyoruz. Topladığımız her şey ya hesabını çalıştırmak ya da platformu
-          kötüye kullanımdan korumak için.
+          <strong>{MARKA}</strong>, öğrencilerin birbirine ders anlattığı bir
+          platformdur ve{' '}
+          <a
+            href={ISLETMECI_ADRESI}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-medium text-brand-700 hover:underline"
+          >
+            {ISLETMECI}
+          </a>{' '}
+          ({ISLETMECI_ALAN_ADI}) tarafından işletilmektedir. Bu metinde geçen “biz”,
+          {' '}{ISLETMECI}’tir; verinle ilgili taleplerin muhatabı da odur. İletişim
+          bilgileri sayfanın altındaki künyededir.
+        </p>
+        <p>
+          Verini reklam için kullanmıyoruz, satmıyoruz ve üçüncü taraflara pazarlama
+          amacıyla aktarmıyoruz. Topladığımız her şey ya hesabını çalıştırmak ya da
+          platformu kötüye kullanımdan korumak için.
         </p>
       </Bolum>
 

@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import { KunyeBlogu } from '../components/Kunye'
 import { Logo } from '../components/Logo'
 
 /*
@@ -50,13 +51,19 @@ export function MetinSayfasi({ baslik, ozet, sonGuncelleme, children }) {
 
         <div className="mt-8 space-y-8">{children}</div>
 
+        {/*
+          KÜNYE, YALIN BİR "İLETİŞİM" SATIRININ YERİNE GEÇTİ (2026-09-19).
+
+          Eskiden burada yalnızca iletisim@dersmate.com vardı; yani metin "bize yaz"
+          diyordu ama "biz kimiz" demiyordu. Yukarıdaki taslak uyarısının saydığı
+          eksiklerden biri tam olarak buydu — veri sorumlusunun kimliği, bir KVKK
+          aydınlatma metninin süsü değil, ilk maddesidir.
+
+          E-posta adresi kaybolmadı: KunyeBlogu onu da basıyor (artık "KVKK başvuruları"
+          ifadesiyle birlikte, çünkü m.11 başvuruları için gösterilen adres budur).
+        */}
         <div className="mt-12 border-t border-slate-200 pt-6">
-          <p className="text-sm text-slate-600">
-            Sorular ve talepler için:{' '}
-            <a href="mailto:iletisim@dersmate.com" className="font-medium text-brand-700 hover:underline">
-              iletisim@dersmate.com
-            </a>
-          </p>
+          <KunyeBlogu />
         </div>
       </main>
     </div>

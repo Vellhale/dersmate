@@ -7,6 +7,7 @@ import { WalletProvider, useWallet } from '../state/WalletContext'
 import { InboxProvider, useInbox } from '../state/InboxContext'
 import { Logo } from './Logo'
 import { CookieSettingsLink } from './CookieBanner'
+import { KunyeSatiri } from './Kunye'
 import { ProductTour, RestartTourLink } from './ProductTour'
 import { Avatar } from './Avatar'
 import { SeviyeRozeti } from './SeviyeRozeti'
@@ -536,20 +537,28 @@ function LayoutShell() {
               ulaşmanın başka yolu kalmıyordu (AuthShell'deki bağlantılar yalnızca
               giriş öncesi ekranlarda). Metni okumak, kabul ettikten sonra da mümkün
               olmalı. */}
-          <footer className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-4 gap-y-1 px-4 pb-8 pt-2">
-            <CookieSettingsLink />
-            <RestartTourLink />
-            <NavLink to="/kosullar" className="text-xs text-slate-500 underline hover:text-slate-700">
-              Kullanım koşulları
-            </NavLink>
-            <NavLink to="/gizlilik" className="text-xs text-slate-500 underline hover:text-slate-700">
-              Gizlilik
-            </NavLink>
-            {/* Silme sayfası altbilgide: mağaza kaydındaki adresin sitede de bulunabilir
-                olması gerekiyor, yalnızca doğrudan yazılarak ulaşılan gizli bir sayfa değil. */}
-            <NavLink to="/hesap-silme" className="text-xs text-slate-500 underline hover:text-slate-700">
-              Hesap silme
-            </NavLink>
+          <footer className="mx-auto max-w-6xl px-4 pb-8 pt-2">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+              <CookieSettingsLink />
+              <RestartTourLink />
+              <NavLink to="/kosullar" className="text-xs text-slate-500 underline hover:text-slate-700">
+                Kullanım koşulları
+              </NavLink>
+              <NavLink to="/gizlilik" className="text-xs text-slate-500 underline hover:text-slate-700">
+                Gizlilik
+              </NavLink>
+              {/* Silme sayfası altbilgide: mağaza kaydındaki adresin sitede de bulunabilir
+                  olması gerekiyor, yalnızca doğrudan yazılarak ulaşılan gizli bir sayfa değil. */}
+              <NavLink to="/hesap-silme" className="text-xs text-slate-500 underline hover:text-slate-700">
+                Hesap silme
+              </NavLink>
+            </div>
+
+            {/* Künye AYRI SATIRDA, bağlantı şeridinin İÇİNDE değil. İki sebep: (1) bu bir
+                gezinme bağlantısı değil, bir kimlik beyanı — aynı sırada durunca "Hesap
+                silme"nin komşusu gibi okunuyordu; (2) şerit dar ekranda zaten sarılıyor,
+                araya girince künye iki bağlantının ortasında kalıyordu. */}
+            <KunyeSatiri className="mt-2" />
           </footer>
         </div>
       </div>
