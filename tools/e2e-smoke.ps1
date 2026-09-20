@@ -101,6 +101,33 @@ function UploadProof {
         -ContentType "multipart/form-data; boundary=$boundary" -Body $body -TimeoutSec 60
 }
 
+# EXIF/GPS + gömülü 'DERSMATE-KONUM-SENTINEL' taşıyan gerçek bir JPEG kanıt yükler.
+# Sunucu depoya yazmadan ÖNCE metadata'yı temizlemeli; indirilen baytta ne EXIF ne sentinel
+# kalmalı. (Görsel Magick.NET ile üretildi; 24x16 SteelBlue + EXIF ImageDescription/Make/GPS.)
+function UploadProofExif {
+    param($SessionId, $Code, $Token)
+    $jpgB64 = '/9j/4AAQSkZJRgABAQAAAQABAAD/4QDYRXhpZgAASUkqAAgAAAADAA4BAgAYAAAANgAAAA8BAgAYAAAATgAAACWIBAABAAAAZgAAAAAAAAAAAAAAREVSU01BVEUtS09OVU0tU0VOVElORUwAREVSU01BVEUtS09OVU0tU0VOVElORUwABAABAAIAAgAAAE4AAAACAAUAAwAAAKAAAAADAAIAAgAAAEUAAAAEAAUAAwAAALgAAAAAAAAAAAAAACkAAAABAAAAAQAAAAEAAAACAAAAAQAAAB0AAAABAAAAAAAAAAEAAAABAAAAAQAAAP/bAEMAAwICAgICAwICAgMDAwMEBgQEBAQECAYGBQYJCAoKCQgJCQoMDwwKCw4LCQkNEQ0ODxAQERAKDBITEhATDxAQEP/bAEMBAwMDBAMECAQECBALCQsQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEP/AABEIABAAGAMBEQACEQEDEQH/xAAVAAEBAAAAAAAAAAAAAAAAAAAABf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/xAAVAQEBAAAAAAAAAAAAAAAAAAAAB//EABQRAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhEDEQA/AIiupIAAAAA//9k='
+    $fileBytes = [Convert]::FromBase64String($jpgB64)
+    $boundary = [Guid]::NewGuid().ToString('N')
+    $enc = [System.Text.Encoding]::UTF8
+    $ms = New-Object System.IO.MemoryStream
+
+    $head = "--$boundary`r`nContent-Disposition: form-data; name=`"verificationCode`"`r`n`r`n$Code`r`n" +
+            "--$boundary`r`nContent-Disposition: form-data; name=`"proof`"; filename=`"proof.jpg`"`r`nContent-Type: image/jpeg`r`n`r`n"
+    $headBytes = $enc.GetBytes($head)
+    $tailBytes = $enc.GetBytes("`r`n--$boundary--`r`n")
+
+    $ms.Write($headBytes, 0, $headBytes.Length)
+    $ms.Write($fileBytes, 0, $fileBytes.Length)
+    $ms.Write($tailBytes, 0, $tailBytes.Length)
+    $body = $ms.ToArray()
+    $ms.Dispose()
+
+    Invoke-RestMethod -Uri "$API/api/sessions/$SessionId/complete" -Method Post `
+        -Headers @{ Authorization = "Bearer $Token" } `
+        -ContentType "multipart/form-data; boundary=$boundary" -Body $body -TimeoutSec 60
+}
+
 # SQL'i dosyadan çalıştır: PowerShell 5.1 native komutlara argüman geçerken gömülü
 # çift tırnakları yiyor ve PostgreSQL identifier'ları küçük harfe katlanıyordu.
 function Sql($query) {
@@ -365,6 +392,42 @@ $cT = (Api POST '/api/auth/login' @{ email = "cem$stamp@test.dev"; password = 'P
 $denied = InvokeExpectError { Api GET "/api/sessions/$sessionId/proofs" $null $cT }
 if ($denied.code -eq 'NOT_SESSION_PARTICIPANT') { OK 'üçüncü kişinin kanıt erişimi reddedildi' }
 else { Fail "beklenen NOT_SESSION_PARTICIPANT, gelen $($denied.code)" }
+
+# ---------------------------------------------------------------- 10c. EXIF/METADATA TEMİZLİĞİ
+Step '10c. Kanıt görselinden EXIF/GPS metadata temizleniyor'
+# İkinci ders (7. adımda açıldı, henüz tamamlanmadı) EXIF+GPS+sentinel gömülü bir JPEG ile
+# tamamlanır. Sunucu depoya YAZMADAN ÖNCE metadata'yı silmeli; indirilen baytta ne sentinel
+# ne EXIF imzası kalmalı. Tamamlama basım yapmaz (basım onaydadır), o yüzden ekonomi
+# iddialarını etkilemez.
+# MUTASYON: CompleteSession'daki TryTemizle çağrısı kaldırılırsa indirilen bayt sentinel/EXIF
+# taşır ve bu adım [HATA] verir.
+$ikSid = $second.sessionId
+$shift2 = @"
+UPDATE scheduling."LessonSessions"
+SET "ScheduledStartUtc" = now() - interval '2 hours',
+    "ScheduledEndUtc"   = now() - interval '1 hour'
+WHERE "Id" = '$ikSid';
+"@
+if ((Sql $shift2) -match 'UPDATE 1') { OK 'ikinci dersin saati geçmişe alındı (time-lock açıldı)' }
+else { Fail 'ikinci ders saati kaydırılamadı' }
+
+$exifProof = UploadProofExif -SessionId $ikSid -Code $second.verificationCode -Token $bT
+OK "EXIF'li JPEG kanıt yüklendi (proofId: $($exifProof.proofId))"
+
+$exifImg = Invoke-WebRequest -Uri "$API/api/sessions/$ikSid/proofs/$($exifProof.proofId)/content" `
+    -Headers @{ Authorization = "Bearer $bT" } -UseBasicParsing -TimeoutSec 30
+if ($exifImg.StatusCode -eq 200 -and $exifImg.Content.Length -gt 0) {
+    OK "temizlenmiş kanıt indirildi ($($exifImg.Content.Length) bayt)"
+} else { Fail "temizlenmiş kanıt indirilemedi (status=$($exifImg.StatusCode))" }
+
+# PS 5.1 .NET Framework üzerinde koşuyor: Encoding.Latin1 YOK. ISO-8859-1 baytları birebir
+# karaktere çevirir, ASCII imzalar aranabilir olur. Eşleşmeler büyük/küçük harf DUYARLI
+# (-cnotmatch): APP1 kimliği tam olarak "Exif", DCT gürültüsünde rastgele eşleşme olmasın.
+$latin1 = [Text.Encoding]::GetEncoding('ISO-8859-1').GetString([byte[]]$exifImg.Content)
+if ($latin1 -cnotmatch 'DERSMATE-KONUM-SENTINEL') { OK 'gömülü EXIF sentinel indirilen baytta YOK (metadata silindi)' }
+else { Fail 'EXIF SENTINEL HÂLÂ VAR — sunucu kanıt metadatasını temizlemiyor' }
+if ($latin1 -cnotmatch 'Exif') { OK 'EXIF APP1 imzası (Exif) indirilen baytta YOK' }
+else { Fail 'EXIF APP1 segmenti hâlâ mevcut — metadata silinmedi' }
 
 # ---------------------------------------------------------------- 11. ATOMİK BASIM
 Step '11. Çift taraflı onay + atomik puan basımı'

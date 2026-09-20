@@ -109,7 +109,7 @@ public sealed class LoginHandler : IRequestHandler<LoginCommand, LoginResult>
             throw new AppException(ErrorCodes.InvalidCredentials, "E-posta veya şifre hatalı.", statusCode: 401);
         }
 
-        if (!_hasher.Verify(user.PasswordHash, request.Password))
+        if (!_hasher.Verify(user.PasswordHash, request.Password, out var yenilenmisKarma))
         {
             // Kullanıcı var/yok bilgisi sızdırılmaz: iki durumda da aynı hata.
             throw new AppException(ErrorCodes.InvalidCredentials, "E-posta veya şifre hatalı.", statusCode: 401);
@@ -139,6 +139,15 @@ public sealed class LoginHandler : IRequestHandler<LoginCommand, LoginResult>
         }
 
         user.LastLoginAtUtc = now;
+
+        /* DOĞRULAMADA YÜKSELT (rehash-on-verify): parola eski/zayıf iş faktörlü bir karmayla
+           eşleşmişse, güncel faktörle üretilmiş taze karma burada kalıcılaşıyor. Atama durum
+           kontrollerinden SONRA, çünkü aşağıdaki SaveChanges ancak giriş gerçekten
+           açıldığında koşuyor; banlı/askıdaki hesap için yükseltmenin bir anlamı da yok. */
+        if (yenilenmisKarma is not null)
+        {
+            user.PasswordHash = yenilenmisKarma;
+        }
 
         var device = await _db.UserDevices
             .SingleOrDefaultAsync(d => d.UserId == user.Id && d.HwidHash == hwid, ct);

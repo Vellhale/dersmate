@@ -41,12 +41,14 @@ public sealed class CompleteSessionHandler : IRequestHandler<CompleteSessionComm
     private readonly IAppDbContext _db;
     private readonly IClock _clock;
     private readonly IProofStorage _storage;
+    private readonly IGorselTemizleyici _temizleyici;
 
-    public CompleteSessionHandler(IAppDbContext db, IClock clock, IProofStorage storage)
+    public CompleteSessionHandler(IAppDbContext db, IClock clock, IProofStorage storage, IGorselTemizleyici temizleyici)
     {
         _db = db;
         _clock = clock;
         _storage = storage;
+        _temizleyici = temizleyici;
     }
 
     public async Task<CompleteSessionResult> Handle(CompleteSessionCommand request, CancellationToken ct)
@@ -80,14 +82,31 @@ public sealed class CompleteSessionHandler : IRequestHandler<CompleteSessionComm
             throw new AppException(ErrorCodes.ProofInvalid, "Kanıt dosyası boyutu geçersiz.");
         }
 
+        // EXIF/GPS/metadata TEMİZLİĞİ — hash ve depoya yazmadan ÖNCE. Üç içerik tipi de
+        // görsel (PNG/JPEG/WebP), hepsi temizlenir. SIRA KRİTİK: hash ve SaveAsync AYNI
+        // temizlenmiş baytlardan olmalı, yoksa IsDuplicateHash depodaki dosyayla tutarsız
+        // kalır. (Davranış değişikliği: eski satırların hash'i HAM bayttan; aynı görselin
+        // eski ve yeni yüklemesi artık aynı hash'e düşmez — yalnızca admin-görünür sezgi.)
+        if (!_temizleyici.TryTemizle(bytes, request.ProofContentType, out var temizBytes))
+        {
+            throw new AppException(ErrorCodes.ProofInvalid, "Kanıt görseli çözümlenemedi.");
+        }
+        bytes = temizBytes;
+
+        // Yeniden kodlama nadiren de olsa boyutu büyütebilir; sınırı temizlik SONRASI yeniden uygula.
+        if (bytes.LongLength > MaxProofBytes)
+        {
+            throw new AppException(ErrorCodes.ProofInvalid, "Kanıt dosyası boyutu geçersiz.");
+        }
+
         var hash = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
 
         // Sahte kanıt sinyali: aynı görsel farklı bir derste kullanılmış mı? (Modül 4.3)
         var duplicate = await _db.SessionProofs.AnyAsync(
             p => p.Sha256Hash == hash && p.SessionId != session.Id, ct);
 
-        buffer.Position = 0;
-        var storageKey = await _storage.SaveAsync(buffer, extension, ct);
+        using var temizAkis = new MemoryStream(bytes, writable: false);
+        var storageKey = await _storage.SaveAsync(temizAkis, extension, ct);
 
         var proof = new SessionProof
         {

@@ -34,8 +34,13 @@ WORKDIR /app
 # curl SAĞLIK YOKLAMASI İÇİN. Runtime imajı hiçbir HTTP istemcisi taşımıyor (wget de
 # yok) — kurulmazsa HEALTHCHECK her seferinde "unhealthy" der ve konteyner sonsuz
 # yeniden başlar. Sessiz değil ama teşhisi zor bir arıza; sebebi burada yazılı.
+#
+# libgomp1 GÖRSEL METADATA TEMİZLİĞİ İÇİN (Magick.NET-Q16-AnyCPU). Native kütüphane
+# libgomp.so.1'e (OpenMP) bağlı; kurulmazsa yükleme yolları ÇALIŞIR ama İLK görsel
+# temizliğinde "Unable to load shared library 'Magick.Native'... libgomp.so.1" ile
+# patlar — derlemede değil, çalışma anında. aspnet:8.0 (Debian) tabanında varsayılan gelmez.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl \
+    && apt-get install -y --no-install-recommends curl libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
 # KÖK KULLANICI DEĞİL. Konteynerden kaçış olasılığını sıfırlamıyor ama bedeli de

@@ -31,7 +31,8 @@ public sealed record RefreshSessionCommand(string RefreshToken, string? HwidHash
 ///
 /// Kontrol listesi (sırası önemli, ucuzdan pahalıya):
 ///   1. token var mı
-///   2. iptal edilmiş mi → yeniden kullanım tespiti (aşağıdaki pencere)
+///   2. iptal edilmiş mi → reddet; ama zinciri YALNIZCA dönüşmüş (Rotated) token
+///      pencere dışında tekrarlanırsa düşür (sebep-kapılı; aşağıya bakın)
 ///   3. süresi dolmuş mu
 ///   4. kullanıcı var mı, durumu giriş yapmaya uygun mu
 ///   5. cihaz banlı mı
@@ -39,9 +40,14 @@ public sealed record RefreshSessionCommand(string RefreshToken, string? HwidHash
 ///
 /// ⚠️ CLAIM'LER VERİTABANINDAN TAZE OKUNUYOR — eski token'ın claim'leri kopyalanmıyor.
 /// Kopyalansaydı rol değişikliği (moderatörlükten alınma gibi) yenileme boyunca taşınır
-/// ve kullanıcı yetkisini süresiz sürdürürdü. Bugün rolün token'da donması bilinen bir
-/// sorun (arayüzde panel açık kalıp istekler 403 dönüyor); kısa erişim + taze yenileme
-/// bunu İYİLEŞTİRİYOR, ama yalnızca claim'ler yeniden okunursa.
+/// ve kullanıcı yetkisini süresiz sürdürürdü. Rolün token'da donması iki yönde FARKLI
+/// sonuç verir: YÜKSELTMEde token eski DÜŞÜK rolü taşıdığı için yetkili uçlar geçici 403
+/// döner (zararsız — yenileme ya da yeniden giriş çözer); DÜŞÜRMEde ise token eski YÜKSEK
+/// rolü taşımaya devam eder ve yetki token ömrü (120 dk) boyunca korunurdu — bu 403 değil,
+/// bir güvenlik açığıydı. Artık rol değişimi de <c>ChangeUserRoleHandler</c>'da "her yerden
+/// çıkış" primitifini (<c>TumOturumlariDusurAsync</c>) çağırdığı için o pencere kaynağında
+/// kapandı. Claim'lerin BURADA taze okunması yine şart: yeniden giriş yapan kullanıcı doğru
+/// rolü almalı, yoksa eski claim'ler yenileme boyunca taşınırdı.
 /// </remarks>
 public sealed class RefreshSessionHandler : IRequestHandler<RefreshSessionCommand, LoginResult>
 {
@@ -87,23 +93,27 @@ public sealed class RefreshSessionHandler : IRequestHandler<RefreshSessionComman
         // ── 2. İptal edilmiş token yeniden sunuldu ──────────────────────────────
         if (satir.RevokedAtUtc is { } iptalAni)
         {
-            /* İYİ NİYETLİ TEKRAR MI, HIRSIZLIK MI?
+            /* HIRSIZLIK MI, ÖLÜ BİR TOKEN'IN MASUM TEKRARI MI?
 
-               İki sekme (ya da mobilde iki eşzamanlı istek) aynı anda yenilemeye
-               kalkarsa ikincisi, birincinin az önce dönüştürdüğü token'ı sunar. Bu
-               masum durum ile gerçek hırsızlık aynı desene sahip; ayırt eden tek şey
-               ZAMAN. Pencere içindeyse zinciri İPTAL ETMİYORUZ — istek yalnızca
-               başarısız dönüyor ve istemcinin tek-uçuş kuyruğu zaten yeni token'a
-               sahip oluyor.
+               İptal edilmiş bir token'ın yeniden sunulması TEK BİR durumda hırsızlık
+               delilidir: token DÖNÜŞÜMLE (Rotated) iptal edildiyse VE "iyi niyetli
+               tekrar" penceresi geçtiyse. Zinciri yalnızca o zaman düşürüyoruz.
 
-               Pencere olmasaydı iki sekmesi açık her kullanıcı, hiçbir şey yapmadığı
-               hâlde her yerden atılırdı; üstelik günlükte "hırsızlık tespit edildi"
-               yazacağı için teşhisi de yanıltıcı olurdu. */
-            var pencereIcinde =
-                satir.RevokeReason == RefreshTokenRevokeReason.Rotated &&
-                iptalAni.AddSeconds(RefreshTokenService.DonusumTekrarPenceresiSaniye) > now;
+               Neden yalnızca Rotated? Çünkü diğer iptal sebepleri — çıkış, parola
+               değişimi, yaptırım, hesap silme — zaten BİLİNÇLİ "her yerden çıkış"
+               işlemleridir: TumOturumlariDusurAsync o andaki tüm token'ları iptal edip
+               TokensValidFromUtc damgasını ileri almıştır. Böyle bir token sonradan
+               sunulsa erişim ÜRETMEZ; hırsızlık değil, ölü bir token'ın tekrarıdır ve
+               reddedilmesi yeterli. Onu da zincir düşürmeye saydığımız eski hâlde,
+               kullanıcının sıfırlama/çıkış SONRASI açtığı TAZE oturumlar da topluca
+               düşüyor ve günlükte yanıltıcı biçimde "hırsızlık tespit edildi" yazıyordu.
 
-            if (!pencereIcinde)
+               Rotated + pencere İÇİ ise (iki sekme / iki eşzamanlı istek aynı token'ı
+               yarıştırdı) yine düşürmüyoruz: istek başarısız dönüyor, istemcinin tek-uçuş
+               kuyruğu zaten yeni token'a sahip. Karar RefreshTokenService içindeki saf
+               GercekYenidenKullanim'da; buradaki üç dal (düşür / düşürme, ama her hâlde
+               reddet) yalnızca onu uyguluyor. */
+            if (RefreshTokenService.GercekYenidenKullanim(satir.RevokeReason, iptalAni, now))
             {
                 var sahibi = await _db.Users.SingleOrDefaultAsync(u => u.Id == satir.UserId, ct);
                 if (sahibi is not null)
@@ -114,6 +124,10 @@ public sealed class RefreshSessionHandler : IRequestHandler<RefreshSessionComman
                 }
             }
 
+            /* ⚠️ YANIT SÖZLEŞMESİ DEĞİŞMEZ: düşürülsün ya da düşürülmesin, iptal edilmiş
+               token her hâlde AYNI gövdeli 401 (InvalidToken) ile reddedilir. Mobil,
+               gövdeli/gövdesiz 401 ayrımına bağlı (bkz. api.js) — mesaj/kod/durum değişirse
+               o ayrım bozulur. */
             throw new AppException(ErrorCodes.InvalidToken,
                 "Oturumun süresi doldu, tekrar giriş yapın.", statusCode: 401);
         }

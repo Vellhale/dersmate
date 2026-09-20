@@ -376,7 +376,9 @@ public sealed class GetUserProfileHandler : IRequestHandler<GetUserProfileQuery,
             user.Id,
             user.DisplayName,
             user.Bio,
-            user.AvatarUrl,
+            // Ham depo anahtarı DEĞİL, sürümlü erişim yolu (bkz. AvatarErisim / GetAvatar):
+            // depo düzeni sızmasın diye fotoğraf yalnızca yetkili uçtan okunur.
+            AvatarErisim.YolFor(user.Id, user.AvatarUrl),
             user.University,
             user.Department,
             user.CreatedAtUtc,

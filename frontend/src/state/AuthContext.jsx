@@ -31,9 +31,17 @@ export function AuthProvider({ children }) {
     return result
   }, [])
 
-  const logout = useCallback(() => {
+  /*
+    Yerel oturum HEMEN siliniyor (UI beklemez), sunucudaki iptal ise arka planda
+    best-effort gidiyor. Sıra bilinçli: istemci taraflı çıkış anında olmalı; sunucu
+    çağrısı ağ hatasıyla düşse bile kullanıcı çıkmış sayılır. api.logout token'ı 60 gün
+    yaşamaktan alıkoyar (bkz. oturumuKapat). tumCihazlar=true "her yerden çık".
+  */
+  const logout = useCallback(({ tumCihazlar = false } = {}) => {
+    const refreshToken = loadSession()?.refreshToken
     saveSession(null)
     setSession(null)
+    if (refreshToken) api.logout(refreshToken, tumCihazlar)
   }, [])
 
   const value = useMemo(

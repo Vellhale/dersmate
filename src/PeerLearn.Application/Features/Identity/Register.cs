@@ -102,6 +102,21 @@ public sealed class RegisterHandler : IRequestHandler<RegisterCommand, RegisterR
         }
 
         // citext kolonu sayesinde karşılaştırma büyük/küçük harf duyarsızdır.
+        //
+        // ⚠️ KULLANICI NUMARALANDIRMASI — BİLİNEREK KABUL EDİLMİŞ SINIR (düzeltmeden önce oku):
+        // Bu 409 + "zaten kayıtlı" mesajı, e-postanın sistemde olup olmadığını dışarıya
+        // söyler (enumeration). Bilerek böyle: kayıt akışında kullanıcının NEDEN devam
+        // edemediğini bilmesi gerekir — sessizce "başarılı" dönmek onu var olmayan bir
+        // doğrulama koduna yönlendirir ve UX'i bozar. Tam gizleyen desen (her durumda jenerik
+        // "doğrulama e-postası gönderildi" + var olan hesaba "zaten kayıtlısın" postası) burada
+        // KÜÇÜK/GÜVENLİ değil: sahte bir yanıt gövdesi (UserId) üretmeyi, hesabın durumuna göre
+        // (doğrulanmış / doğrulanmamış / anonimleştirilmiş) dallanmayı, yeni bir e-posta şablonu
+        // ve zamanlama yan-kanalını (yalnızca yeni hesapta parola karması üretiliyor) eşitlemeyi
+        // gerektirir — çok kenar durumlu, ayrı bir iş. Numaralandırmanın UCUZ kapatılabildiği
+        // yerlerde ZATEN kapalı: forgot-password ve resend-verification adres kayıtlı olsun
+        // olmasın aynı yanıtı döner (bkz. api.js yorumları). Kayıt, UX'in söylemeyi zorunlu
+        // kıldığı istisnadır — yaygın kabul edilen denge. Karar ERTELENDİ (DEVAM-EDILECEK.md
+        // güvenlik notları).
         var exists = await _db.Users.AnyAsync(u => u.Email == email, ct);
         if (exists)
         {

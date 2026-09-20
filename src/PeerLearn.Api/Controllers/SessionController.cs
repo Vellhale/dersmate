@@ -55,4 +55,27 @@ public sealed class SessionController : ControllerBase
     [HttpPost("refresh")]
     public async Task<LoginResult> Refresh(RefreshRequest request, CancellationToken ct)
         => await _mediator.Send(new RefreshSessionCommand(request.RefreshToken, request.HwidHash), ct);
+
+    /// <param name="TumCihazlar">
+    /// true ise kullanıcının TÜM oturumları düşürülür (her yerden çıkış); atlanırsa/false
+    /// ise yalnızca sunulan token iptal edilir (bu cihaz).
+    /// </param>
+    public sealed record LogoutRequest(string? RefreshToken, bool TumCihazlar = false);
+
+    /// <summary>
+    /// SUNUCU TARAFLI ÇIKIŞ: sunulan yenileme token'ını iptal eder — böylece istemci
+    /// token'ı silse de silinen değer 60 gün boyunca yeniden kullanılamaz. Yanıt HER
+    /// DURUMDA 204: idempotent ve token varlığını sızdırmaz (bkz. <see cref="LogoutHandler"/>).
+    /// </summary>
+    /// <remarks>
+    /// HWID İSTENMİYOR (yenileme ucundan farklı): burada token ÜRETİLMİYOR, iptal ediliyor;
+    /// ham token'ı sunabilmek yeterli yetki. Uç anonim — çıkış anında erişim token'ı çoktan
+    /// ölmüş olabilir.
+    /// </remarks>
+    [HttpPost("logout")]
+    public async Task<IActionResult> Logout(LogoutRequest request, CancellationToken ct)
+    {
+        await _mediator.Send(new LogoutCommand(request.RefreshToken, request.TumCihazlar), ct);
+        return NoContent();
+    }
 }

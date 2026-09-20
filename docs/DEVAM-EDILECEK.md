@@ -673,3 +673,51 @@ başka hiçbir dosyaya dokunmak gerekmez.
 `tools/e2e-arkadaslar.ps1` — `run-all-tests.ps1` içinde, engelleme paketinin hemen
 ardından kayıtlı. Her okumada sayı=liste değişmezini ayrıca sınıyor; her yasak iddianın
 yanında bir **serbest** iddia var (engel/askı kalkınca kişi geri geliyor).
+
+## Güvenlik sertleştirme — düşük bulgular (2026-09-19)
+
+Güvenlik taramasındaki düşük öncelikli bulgular tema tema kapatıldı. Aşağıdakiler bu
+temada **DEĞERLENDİRİLİP karar bağlanan** üç bulgu; ikisi gerekçesiyle **ERTELENDİ**,
+biri **azaltıldı**. Bir sonraki kişi bunları "eksik" sanıp körü körüne değiştirmesin.
+
+### G-web1. Web yenileme token'ı localStorage'da — **ERTELENDİ (belge)**
+
+60 günlük yenileme token'ı (erişim token'ıyla birlikte) `localStorage`'da
+(`frontend/src/lib/api.js`, `TOKEN_KEY = 'peerlearn.session'`). Bir XSS açığı onu çalabilir.
+
+**Neden ertelendi (kozmetik "düzeltme" yapılmadı):** Doğru çözüm httpOnly cookie, ama
+kesişen bir iş — mobil AYNI token akışını kullanıyor (SecureStore, ayrı depo), cookie CSRF
+yüzeyi açar (SameSite + anti-forgery) ve hassas single-flight yenileme akışını yeniden
+kurmayı gerektirir. Token'ı **ayrı bir localStorage anahtarına** koymak güvenlik SAĞLAMAZ:
+XSS tüm anahtarları aynı anda okur — o yüzden yapılmadı. **Azaltım yerinde:** sıkı CSP
+(`script-src`'te `'unsafe-inline'` yok → satır içi script çalışmaz) + nosniff/X-Frame-Options
+/Referrer-Policy başlıkları. Gerekçenin tamamı `api.js` içindeki blok yorumunda.
+
+**Kapatma yolu (gelecekte):** önce mobil token depolamasını hizala, sonra iki istemci +
+sunucu için httpOnly cookie + refresh rotasyonunu birlikte tasarla.
+
+### G-web2. Kayıt ucu kullanıcı numaralandırmasına açık — **ERTELENDİ (kabul edilen denge)**
+
+`POST /api/v1/auth/register` var olan bir e-postada `409 EmailTaken` + "Bu e-posta zaten
+kayıtlı" döner (`Register.cs`); adresin sistemde olduğunu dışarıya söyler.
+
+**Neden ertelendi:** Kayıt akışında kullanıcının NEDEN devam edemediğini bilmesi gerekir;
+sessiz "başarılı" yanıt onu var olmayan bir doğrulama koduna yönlendirir. Tam gizleyen desen
+(jenerik "doğrulama e-postası gönderildi" + var olan hesaba "zaten kayıtlısın" postası)
+KÜÇÜK/GÜVENLİ değil: sahte yanıt gövdesi, hesap durumuna göre dallanma, yeni e-posta şablonu
+ve zamanlama yan-kanalı eşitleme ister. Numaralandırmanın **ucuz** kapatılabildiği yerlerde
+ZATEN kapalı: `forgot-password` ve `resend-verification` adres kayıtlı olsun olmasın aynı
+yanıtı veriyor. Kayıt, UX'in söylemeyi zorunlu kıldığı istisna — yaygın kabul edilen denge.
+Gerekçe `Register.cs` içindeki `exists` kontrolünün üstünde.
+
+### G-web3. SignalR erişim token'ı sorgu dizesinde — **AZALTILDI (nginx)**
+
+WebSocket tarayıcıda `Authorization` başlığı taşıyamadığı için SignalR erişim token'ını
+`?access_token=...` sorgu dizesinde yollar (`Program.cs` `OnMessageReceived`,
+`useChatHub.js`) — SignalR için olağan/kaçınılmaz. Risk yalnızca **loglama**: nginx'in
+varsayılan `combined` biçimi tam istek satırını (token dahil) erişim günlüğüne yazardı.
+
+**Uygulanan azaltım:** `tools/ornek-nginx.conf` içine `hub_masked` log biçimi (`$request`
+yerine `$request_method $uri` — `$uri` sorgu dizesi içermez) ve `/hubs/` için onu kullanan
+ayrı bir `location`. Hub trafiği yine loglanıyor, token düşüyor. Kod değişmedi; token akışı
+olduğu gibi. Şablon; canlıda `deploy/nginx.conf`'a kopyalanırken taşınmalı (§3).

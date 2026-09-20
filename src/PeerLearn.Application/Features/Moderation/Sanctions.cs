@@ -2,6 +2,7 @@ using MediatR;
 using Microsoft.EntityFrameworkCore;
 using PeerLearn.Application.Abstractions;
 using PeerLearn.Application.Common;
+using PeerLearn.Application.Identity;
 using PeerLearn.Domain.Identity;
 using PeerLearn.Domain.Moderation;
 
@@ -224,8 +225,13 @@ public sealed record ChangeUserRoleCommand(Guid TargetUserId, Guid AdminUserId, 
 public sealed class ChangeUserRoleHandler : IRequestHandler<ChangeUserRoleCommand>
 {
     private readonly IAppDbContext _db;
+    private readonly RefreshTokenService _refresh;
 
-    public ChangeUserRoleHandler(IAppDbContext db) => _db = db;
+    public ChangeUserRoleHandler(IAppDbContext db, RefreshTokenService refresh)
+    {
+        _db = db;
+        _refresh = refresh;
+    }
 
     public async Task Handle(ChangeUserRoleCommand request, CancellationToken ct)
     {
@@ -245,6 +251,19 @@ public sealed class ChangeUserRoleHandler : IRequestHandler<ChangeUserRoleComman
         }
 
         user.Role = request.NewRole;
+
+        /* ROL DEĞİŞİMİ ERİŞİM TOKEN'INI DA GEÇERSİZ KILAR — YOKSA DÜŞÜRÜLEN YETKİ SÜRER.
+           Rol JWT'ye ClaimTypes.Role olarak imzalanıp donuyor ve erişim token'ı ömrü
+           (JwtOptions.AccessTokenMinutes = 120 dk) boyunca sabit kalıyor; AccountStatusMiddleware
+           her istekte Role'ü DB'den tazelemez. Damga ileri alınmazsa yetkisi DÜŞÜRÜLEN bir
+           yönetici/moderatör o pencere boyunca yetkisini korur ve ikinci bir hesabı Admin
+           yaparak kalıcılaştırabilirdi. "Her yerden çıkış" primitifi hem yenileme token'larını
+           iptal eder hem TokensValidFromUtc'yi ileri alır — ban / parola değişimi / hesap silme
+           ile aynı yol. SaveChanges ÇAĞIRMIYOR: aşağıdaki tek SaveChangesAsync, Role + iptal
+           edilen token'lar + damga + denetim satırını atomik yazar (ek kilit/transaction gerekmez;
+           bu tablo puana dokunmuyor — bkz. RefreshTokenService sınıf notu). eskiRol == NewRole
+           erken dönüşü üstte olduğu için no-op çağrı token düşürmez. */
+        await _refresh.TumOturumlariDusurAsync(user, RefreshTokenRevokeReason.RoleChanged, ct);
 
         var actorRole = await _db.Users.AsNoTracking()
             .Where(u => u.Id == request.AdminUserId)
