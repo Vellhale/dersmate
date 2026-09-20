@@ -211,6 +211,36 @@ public static class CommunityRewardRules
     /// </remarks>
     public static int HakEdilenToplam(int netOy)
         => Math.Max(0, netOy) / NetUpvotesPerReward * CreditsPerReward;
+
+    /// <summary>
+    /// SUİSTİMAL TAVANI: bir kullanıcıya 24 saatlik kayan pencerede basılabilecek en fazla
+    /// topluluk ödülü puanı. Ders basımındaki MintGuard'ın topluluk karşılığı.
+    /// </summary>
+    /// <remarks>
+    /// NEDEN VAR — VE NEDEN GENİŞ. Ödülün toplamı zaten net oyla sınırlı (idempotent
+    /// fark basımı), ama net oy sahte hesaplardan oluşan bir oy halkasıyla kısa sürede
+    /// şişirilebilir. MintGuard ders basımını nasıl DAVRANIŞSAL bir hız tavanıyla
+    /// frenliyorsa, bu da topluluk basımını aynı biçimde frenler: dürüst kullanıcıyı hiç
+    /// rahatsız etmeden endüstriyel ölçekte basımı keser.
+    ///
+    /// 5 ödül/gün = 1500 net oy/gün. Gerçek bir kullanıcının bir günde bu kadar net oy
+    /// toplaması olağan dışıdır; domain notundaki ölçek (300 net oy ~ 10 sahte hesap ×
+    /// 30 gönderi) bunu somutlaştırıyor.
+    ///
+    /// TAVAN KAYIP DEĞİL GECİKME ÜRETİR. İş her turda güncel net oydan hak edilen TOPLAMI
+    /// hesaplayıp ödenmiş farkı basıyor; tavana takılan kullanıcının hak edişi silinmez,
+    /// yalnızca sonraki pencerelerde (eski basımlar 24 saatlik pencereden düşünce) basılır.
+    /// Bu yüzden büyük ve meşru bir hak ediş asla kalıcı olarak engellenmez.
+    /// </remarks>
+    public const int MaxRewardCreditsPerDay = 5 * CreditsPerReward;
+
+    /// <summary>
+    /// Verilen kullanıcıya 24 saatlik pencerede zaten basılmış topluluk ödülü puanı
+    /// tavanı doldurdu mu. Saf: pencere sayımını çağıran (kilit altında) yapar, kararı
+    /// burası verir.
+    /// </summary>
+    public static bool GunlukTavanAsildi(int penceredeBasilanPuan)
+        => penceredeBasilanPuan >= MaxRewardCreditsPerDay;
 }
 
 public static class ForumRules

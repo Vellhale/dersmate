@@ -127,7 +127,11 @@ builder.Services
         // Enum'lar YANITLARDA zaten string dönüyor ("Offer", "SessionNotHeld").
         // Bu converter olmadan İSTEKLERDE sayı bekleniyordu; asimetri, arayüzün gönderdiği
         // her enum alanını 400'e düşürüyordu (uçtan uca testte yakalandı).
-        options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
+        //
+        // Hazır JsonStringEnumConverter yerine KesinEnumDonusturucu: aynı ad-tabanlı okuma/
+        // yazmayı yapar AMA gövdedeki TANIMSIZ tamsayıyı da reddeder — enum'lar DB'de metin
+        // saklandığından tanımsız bir üyenin kalıcılaşması okuma anında patlardı.
+        options.JsonSerializerOptions.Converters.Add(new KesinEnumDonusturucu());
     });
 
 // React dev sunucusu için CORS (SignalR credential ister → AllowCredentials + açık origin).
@@ -375,6 +379,14 @@ if (app.Environment.IsDevelopment())
   okuyabilmeli. Yapılandırması ve "neden KnownProxies temizlendi" gerekçesi yukarıda.
 */
 app.UseForwardedHeaders();
+
+/*
+  GÜVENLİK BAŞLIKLARI — vekil başlıklarından hemen sonra, geri kalan HER ŞEYDEN önce.
+  Hata yanıtları, 401/403/429 ve dosya yanıtları da güvenlik başlığı taşısın diye burada.
+  Ne yaptığı ve neden CSP'nin API'de kilitli olduğu SecurityHeadersMiddleware'de yazılı.
+  Swagger (yukarıda, geliştirmede) bu satırın ÜSTÜNDE kayıtlı olduğundan buradan geçmez.
+*/
+app.UseMiddleware<SecurityHeadersMiddleware>();
 
 /*
   HSTS yalnızca üretimde: geliştirmede localhost'a HTTPS zorlaması, tarayıcıda kalıcı

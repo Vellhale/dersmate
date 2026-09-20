@@ -262,39 +262,45 @@ public sealed class SearchUniversityPeersHandler
                arayan kişi "inci" yazdığında da bulmalı. Kolasyon ve değiştirme zinciri
                üniversite filtresiyle BİREBİR aynı — ayrışırsa iki alan farklı davranır
                ve sebebi uzun süre anlaşılmaz. */
-            var ad = AramaIcinKatla(request.Name!);
+            // Joker karakterler kaçışlanır (AramaDeseni + ESCAPE): folding zinciri AYNEN
+            // korunur, yalnızca son karşılaştırma .Contains yerine EF.Functions.Like'a
+            // taşınır ki kullanıcının yazdığı % / _ beklenmeyen (çok geniş) eşleşme üretmesin.
+            var adDeseni = AramaDeseni.Iceren(AramaIcinKatla(request.Name!));
             query = query.Where(x =>
-                EF.Functions.Collate(x.DisplayName, IcuKolasyon)
-                    .ToLower()
-                    .Replace(BirlesenNokta, "")
-                    .Replace(BuyukNoktaliI, "i")
-                    .Replace(NoktasizI, "i")
-                    .Contains(ad));
+                EF.Functions.Like(
+                    EF.Functions.Collate(x.DisplayName, IcuKolasyon)
+                        .ToLower()
+                        .Replace(BirlesenNokta, "")
+                        .Replace(BuyukNoktaliI, "i")
+                        .Replace(NoktasizI, "i"),
+                    adDeseni, AramaDeseni.KacisKarakteri));
         }
 
         if (!string.IsNullOrWhiteSpace(request.University))
         {
-            var u = AramaIcinKatla(request.University);
+            var uDeseni = AramaDeseni.Iceren(AramaIcinKatla(request.University));
             query = query.Where(x =>
-                EF.Functions.Collate(x.University!, IcuKolasyon)
-                    .ToLower()
-                    .Replace(BirlesenNokta, "")
-                    .Replace(BuyukNoktaliI, "i")
-                    .Replace(NoktasizI, "i")
-                    .Contains(u));
+                EF.Functions.Like(
+                    EF.Functions.Collate(x.University!, IcuKolasyon)
+                        .ToLower()
+                        .Replace(BirlesenNokta, "")
+                        .Replace(BuyukNoktaliI, "i")
+                        .Replace(NoktasizI, "i"),
+                    uDeseni, AramaDeseni.KacisKarakteri));
         }
 
         if (!string.IsNullOrWhiteSpace(request.Department))
         {
-            var d = AramaIcinKatla(request.Department);
+            var dDeseni = AramaDeseni.Iceren(AramaIcinKatla(request.Department));
             query = query.Where(x =>
                 x.Department != null &&
-                EF.Functions.Collate(x.Department, IcuKolasyon)
-                    .ToLower()
-                    .Replace(BirlesenNokta, "")
-                    .Replace(BuyukNoktaliI, "i")
-                    .Replace(NoktasizI, "i")
-                    .Contains(d));
+                EF.Functions.Like(
+                    EF.Functions.Collate(x.Department, IcuKolasyon)
+                        .ToLower()
+                        .Replace(BirlesenNokta, "")
+                        .Replace(BuyukNoktaliI, "i")
+                        .Replace(NoktasizI, "i"),
+                    dDeseni, AramaDeseni.KacisKarakteri));
         }
 
         // Sayım sıralamadan ÖNCE: boş sonuçta sıralama ve sayfalama boşuna çalışmasın.

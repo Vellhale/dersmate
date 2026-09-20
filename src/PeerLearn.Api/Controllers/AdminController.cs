@@ -99,7 +99,7 @@ public sealed class AdminController : ControllerBase
         var belge = await _mediator.Send(
             new GetTeacherDocumentQuery(profileId, User.GetUserId(), AsModerator: true), ct);
 
-        return File(belge.Content, belge.ContentType);
+        return this.KullaniciDosyasi(belge.Content, belge.ContentType);
     }
 
     public sealed record TeacherCandidateReviewRequest(TeacherCandidateDecision Decision, string Note);
@@ -165,7 +165,7 @@ public sealed class AdminController : ControllerBase
         var proof = await _mediator.Send(
             new GetProofContentQuery(sessionId, proofId, User.GetUserId(), AsAdmin: true), ct);
 
-        return File(proof.Content, proof.ContentType);
+        return this.KullaniciDosyasi(proof.Content, proof.ContentType);
     }
 
     /// <summary>

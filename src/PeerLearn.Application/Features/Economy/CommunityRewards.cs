@@ -7,6 +7,7 @@ using PeerLearn.Application.Common;
 using PeerLearn.Application.Economy;
 using PeerLearn.Application.Options;
 using PeerLearn.Domain.Community;
+using PeerLearn.Domain.Economy;
 
 namespace PeerLearn.Application.Features.Economy;
 
@@ -59,7 +60,13 @@ public sealed record GrantCommunityRewardsCommand : IRequest<GrantCommunityRewar
 /// Sayaç bu iki durumu ayırıyor: 0 ödül + 0 hata = yapacak iş yoktu; 0 ödül + N hata =
 /// sistemik bir sorun var.
 /// </remarks>
-public sealed record GrantCommunityRewardsResult(int UsersRewarded, int CreditsMinted, int Failed);
+/// <param name="Deferred">
+/// Suistimal tavanına (<see cref="CommunityRewardRules.MaxRewardCreditsPerDay"/>) takılıp
+/// bu turda ATLANAN kullanıcı sayısı. Hata değildir: hak ediş silinmez, sonraki turlarda
+/// (pencere ilerleyince) basılır. Ayrı sayılıyor ki "tavan devreye girdi" ile "hata" ve
+/// "yapacak iş yoktu" birbirine karışmasın — <see cref="Failed"/>'in eklenme gerekçesinin aynısı.
+/// </param>
+public sealed record GrantCommunityRewardsResult(int UsersRewarded, int CreditsMinted, int Failed, int Deferred);
 
 public sealed class GrantCommunityRewardsHandler
     : IRequestHandler<GrantCommunityRewardsCommand, GrantCommunityRewardsResult>
@@ -75,6 +82,7 @@ public sealed class GrantCommunityRewardsHandler
     private const int MaxUsersPerRun = 200;
 
     private readonly IAppDbContext _db;
+    private readonly IClock _clock;
     private readonly CreditLedgerService _ledger;
     private readonly IDistributedLockProvider _locks;
     private readonly EconomyOptions _economy;
@@ -82,12 +90,14 @@ public sealed class GrantCommunityRewardsHandler
 
     public GrantCommunityRewardsHandler(
         IAppDbContext db,
+        IClock clock,
         CreditLedgerService ledger,
         IDistributedLockProvider locks,
         IOptions<EconomyOptions> economy,
         ILogger<GrantCommunityRewardsHandler> logger)
     {
         _db = db;
+        _clock = clock;
         _ledger = ledger;
         _locks = locks;
         _economy = economy.Value;
@@ -133,6 +143,7 @@ public sealed class GrantCommunityRewardsHandler
         var odullenen = 0;
         var toplamPuan = 0;
         var basarisiz = 0;
+        var ertelenen = 0;
 
         foreach (var aday in adaylar)
         {
@@ -142,6 +153,34 @@ public sealed class GrantCommunityRewardsHandler
                 // Anahtar kullanıcı bazında çünkü sorgunun grupladığı şey de kullanıcı.
                 await using var walletLock = await _locks.AcquireAsync(
                     LockKeys.Wallet(aday.Id), TimeSpan.FromSeconds(_economy.LockTimeoutSeconds), ct);
+
+                /*
+                  SUİSTİMAL TAVANI (MintGuard deseni): 24 saatlik kayan pencerede bu
+                  kullanıcıya basılmış topluluk ödülünü SAY, sonra bas. Tavan doluysa
+                  kullanıcı bu turda atlanır (sıraya girer, hak edişi silinmez).
+
+                  KİLİT ANAHTARI SORGUNUN GRUPLADIĞINI KAPSIYOR (CLAUDE.md / LockKeys):
+                  hem cüzdan kilidi hem sayım kullanıcı bazında. CommunityReward hareketini
+                  yazan tek yol bu iş ve o yazım da aynı cüzdan kilidini alıyor; dolayısıyla
+                  sayımı değiştirebilecek her yazma bu kilidi tutmak zorunda. "Say, sonra
+                  yaz" penceresi böylece serileşiyor — kilitsiz olsa eşzamanlı turlar tavanı
+                  birlikte aşardı (MintGuard'da tam olarak bu ölçülmüştü).
+
+                  BookSession'daki MintGuard.EnsureCanBookAsync gibi, sayım transaction'ın
+                  DIŞINDA ama kilit ALTINDA yapılıyor.
+                */
+                var pencereBasi = _clock.UtcNow.AddDays(-1);
+                var penceredeBasilan = await _db.CreditTransactions.AsNoTracking()
+                    .Where(t => t.Type == CreditTransactionType.CommunityReward
+                                && t.CreatedAtUtc >= pencereBasi
+                                && _db.Wallets.Any(w => w.Id == t.WalletId && w.UserId == aday.Id))
+                    .SumAsync(t => (int?)t.Amount, ct) ?? 0;
+
+                if (CommunityRewardRules.GunlukTavanAsildi(penceredeBasilan))
+                {
+                    ertelenen++;
+                    continue;
+                }
 
                 var basilan = await ConcurrencyRetry.RunAsync(_db, async () =>
                 {
@@ -196,6 +235,14 @@ public sealed class GrantCommunityRewardsHandler
                 "Topluluk ödülü: {Kullanici} kullanıcıya {Puan} puan basıldı.", odullenen, toplamPuan);
         }
 
+        if (ertelenen > 0)
+        {
+            // Bilgi amaçlı: tavan devrede. Hata değil — bu kullanıcılar sonraki turda basılacak.
+            _logger.LogInformation(
+                "Topluluk ödülü: {Ertelenen} kullanıcı günlük tavana takıldı, sonraki tura ertelendi.",
+                ertelenen);
+        }
+
         /*
           ADAY VARDI AMA HİÇBİRİ ÖDENEMEDİ — bu bir arıza işareti ve ayrıca uyarılıyor.
           Tek tek hatalar zaten LogError'a düşüyor ama onlar kullanıcı bazında; buradaki
@@ -209,6 +256,6 @@ public sealed class GrantCommunityRewardsHandler
                 "Sistemik bir sorun olabilir.", adaylar.Count, basarisiz);
         }
 
-        return new GrantCommunityRewardsResult(odullenen, toplamPuan, basarisiz);
+        return new GrantCommunityRewardsResult(odullenen, toplamPuan, basarisiz, ertelenen);
     }
 }

@@ -490,7 +490,14 @@ kilitlemiyor.
   diğerinin yazdığı kanıtı bulamaz (404). Ölçeklenirken nesne depolamaya geçilmeli.
 - **Göç geri alma korumaları var.** Forum ve kayıt onayı göçleri, veri varken geri
   alınmayı reddediyor (`RAISE EXCEPTION`). Bu kasıtlı: o veriler geri getirilemez.
-- **JWT durumsuz, 2 saat.** Parola değişince açık oturumlar düşmüyor.
+- **JWT durumsuz, 2 saat.** Erişim token'ı iptal edilemez, ömrü dolana kadar (≤2 saat)
+  yaşar; kısa ömrü bu sınırı kabul edilebilir tutuyor. ~~Parola değişince açık oturumlar
+  düşmüyor.~~ **ARTIK DÜŞÜYOR:** parola değişimi, hesap silme, yaptırım ve **her yerden
+  çıkış** tüm yenileme token'larını iptal edip `TokensValidFromUtc` damgasını ileri alıyor,
+  böylece eldeki erişim token'ları da anında geçersizleşiyor. **Sunucu taraflı çıkış**
+  (`POST /api/session/logout`) sunulan yenileme token'ını iptal eder (`TumCihazlar=true` ise
+  hepsini); tek cihaz çıkışında yalnızca o cihazın erişim token'ı ömrü dolana kadar (≤2 saat)
+  çalışır — bilinen ve kabul edilmiş artık.
 - ~~**Hesap silme ucu yok.**~~ **ARTIK VAR** (2026-09-05'te güncellendi). `POST /api/profile/delete`
   ve arayüzde "Hesabımı sil" ekranı hem web'de hem mobilde çalışıyor. Bu satır bir dönem
   yanlış kalmıştı ve aynı yanlış gizlilik metnine de sızmıştı: kullanıcıya, yapabildiği

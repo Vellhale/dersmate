@@ -237,6 +237,30 @@ public sealed class VoteForumContentHandler
 
         var icerikId = request.PostId ?? request.CommentId!.Value;
 
+        /*
+          KENDİ İÇERİĞİNE OY YOK — kilit almadan, sayaç/defter yazmadan ÖNCE reddedilir.
+          Forum net oyu topluluk ödülüne besleniyor; self-vote kişinin kendi puanını
+          şişirmesine yol açardı (bkz. ForumOyKurali).
+
+          Sahiplik (AuthorUserId) değişmez olduğu için bu okuma transaction dışında
+          güvenlidir — sonradan değişip yarışacak bir alan yok. İçerik hiç yoksa burada
+          bir şey yapılmaz; aşağıdaki transaction doğru "bulunamadı" hatasını üretir.
+        */
+        var icerikSahibi = request.PostId is { } sahiplikGonderiId
+            ? await _db.CommunityPosts.AsNoTracking()
+                .Where(p => p.Id == sahiplikGonderiId)
+                .Select(p => (Guid?)p.AuthorUserId)
+                .SingleOrDefaultAsync(ct)
+            : await _db.CommunityComments.AsNoTracking()
+                .Where(c => c.Id == request.CommentId)
+                .Select(c => (Guid?)c.AuthorUserId)
+                .SingleOrDefaultAsync(ct);
+
+        if (icerikSahibi is { } sahip)
+        {
+            ForumOyKurali.SahibiOyVeremez(sahip, request.UserId);
+        }
+
         await using var kilit = await _locks.AcquireAsync(
             LockKeys.ForumContent(icerikId), TimeSpan.FromSeconds(10), ct);
 

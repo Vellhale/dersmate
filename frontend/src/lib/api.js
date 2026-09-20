@@ -10,6 +10,25 @@
 export const API_BASE =
   import.meta.env.VITE_API_URL ?? (import.meta.env.DEV ? 'http://localhost:5000' : '')
 
+/*
+  OTURUM (erişim + 60 günlük yenileme token'ı) localStorage'da tutuluyor.
+
+  ⚠️ BİLİNEREK KABUL EDİLMİŞ SINIR — "düzeltmeden" önce oku:
+  Yenileme token'ı localStorage'da olduğu için bir XSS açığı onu çalabilir. Doğru tam
+  çözüm token'ı httpOnly cookie'ye taşımaktır, AMA bu kesişen (cross-cutting) bir iştir,
+  bu temanın küçük/güvenli kapsamının dışında ve tek başına yeni riskler açar:
+    • Mobil uygulama AYNI token akışını kullanıyor (SecureStore) ve ayrı depoda; cookie'ye
+      geçmek iki istemciyi birden değiştirmeyi ve sunucu sözleşmesini bölmeyi gerektirir.
+    • httpOnly cookie CSRF yüzeyi açar (SameSite + anti-forgery gerekir) ve buradaki
+      hassas single-flight yenileme akışını (aşağıya bkz. "⛔ ÜÇ TUZAK") yeniden kurmayı
+      zorunlu kılar.
+  Token'ı AYRI bir localStorage anahtarına koymak güvenlik SAĞLAMAZ: XSS tüm anahtarları
+  aynı anda okur. Bu yüzden kozmetik bir bölme yapılmadı.
+  Azaltım hâlihazırda YERİNDE: sıkı CSP (nginx $frontend_csp — script-src'te 'unsafe-inline'
+  YOK, satır içi script çalışmaz) + nosniff/X-Frame-Options/Referrer-Policy başlıkları XSS
+  yüzeyini daraltıyor. Karar: httpOnly cookie'ye geçiş ERTELENDİ (belge: DEVAM-EDILECEK.md
+  güvenlik notları). Bu bloğu silmeden önce mobil akışını ve refresh tuzaklarını gör.
+*/
 const TOKEN_KEY = 'peerlearn.session'
 
 /**
@@ -139,6 +158,32 @@ async function oturumuYenile() {
   })
 
   return yenilemeSozu
+}
+
+/*
+  ─── SUNUCU TARAFLI ÇIKIŞ ────────────────────────────────────────────────────
+
+  İstemcinin oturumu localStorage'dan silmesi tek başına yetmiyordu: silinen
+  yenileme token'ı yeniden ele geçirilirse 60 gün boyunca taze erişim token'ı
+  üretebilirdi. Bu çağrı token'ı SUNUCUDA da iptal ettiriyor.
+
+  ⛔ request() KULLANILMIYOR, ham fetch:
+    • request()'in 401 → yenileme → AUTH_EXPIRED zinciri çıkışta anlamsız; üstelik
+      yenileme, tam iptal edeceğimiz token'ı bir kez daha döndürüp yarışa sokardı.
+    • Uç anonim; Authorization başlığı gerekmiyor, token gövdede gidiyor.
+  Yanıt 204, gövde beklenmiyor. Ağ hatası YUTULUYOR — çağıran (AuthContext) yerel
+  oturumu her hâlükârda siliyor, çıkış istemcide asla "başarısız" olmamalı.
+*/
+async function oturumuKapat(refreshToken, tumCihazlar = false) {
+  try {
+    await fetch(`${API_BASE}/api/session/logout`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refreshToken, tumCihazlar }),
+    })
+  } catch {
+    // Ağ hatası çıkışı engellememeli.
+  }
 }
 
 async function request(path, opts = {}) {
@@ -277,6 +322,13 @@ export const api = {
   resendVerification: (email) =>
     request('/api/v1/auth/resend-verification', { method: 'POST', body: { email } }),
   login: (payload) => request('/api/v1/auth/login', { method: 'POST', body: payload }),
+
+  /**
+   * SUNUCU TARAFLI ÇIKIŞ: sunulan yenileme token'ını iptal eder. tumCihazlar=true tüm
+   * oturumları düşürür. Ham fetch (request() değil) ve hata yutuluyor — gerekçe
+   * oturumuKapat'ta.
+   */
+  logout: (refreshToken, tumCihazlar = false) => oturumuKapat(refreshToken, tumCihazlar),
 
   /** Parola sıfırlama bağlantısı ister. Yanıt, adres kayıtlı olsun olmasın AYNI (204) —
       farklı yanıt vermek "bu e-posta kayıtlı mı" sorusunu herkese yanıtlardı. */
