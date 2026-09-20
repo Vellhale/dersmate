@@ -44,6 +44,22 @@ public static class ParolaSifirlama
     public static TimeSpan Omur => TimeSpan.FromHours(1);
 
     /// <summary>
+    /// Hesap başına parola-sıfırlama isteği bekleme süresi (saniye). E-posta
+    /// bombardımanına karşı; ResendVerification'daki ResendCooldownSeconds ile AYNI
+    /// amaç ve AYNI gerekçe: IP sınırı tek başına yetmez (saldırgan IP değiştirebilir),
+    /// koruma HEDEF HESABA bakmalı. Sıfırlama, doğrulamadan daha seyrek bir eylem
+    /// olduğu için pencere biraz daha uzun (120 sn).
+    /// </summary>
+    public const int BeklemeSaniye = 120;
+
+    /// <summary>
+    /// Son istekten bu yana bekleme süresi DOLMADIYSA true. Saf/durumsuz — DB'siz
+    /// birim testiyle sınanır (bkz. GercekYenidenKullanim deseni).
+    /// </summary>
+    public static bool BeklemeIcinde(DateTime? sonIstekUtc, DateTime simdiUtc)
+        => sonIstekUtc is { } s && (simdiUtc - s).TotalSeconds < BeklemeSaniye;
+
+    /// <summary>
     /// Token amacı: sabit önek + parola hash'inin damgası. Damga sayesinde token,
     /// üretildiği andaki parolaya bağlı kalıyor (bkz. sınıf açıklaması).
     /// </summary>
