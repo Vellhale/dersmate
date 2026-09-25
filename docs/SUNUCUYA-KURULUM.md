@@ -93,6 +93,10 @@ SMTP_USERNAME=…
 SMTP_PASSWORD=…
 ```
 
+Push bildirimleri `PUSH_PROVIDER=Log` ile **kapalı** gelir: uygulama açılır, telefona
+bildirim gitmez. Açmak ayrı bir adım ve sırası önemli (önce Bearer'la `--test-push`, sonra
+Expo'da Enhanced Security) — `docs/URETIME-CIKIS.md` §11.
+
 ---
 
 ## 3. nginx yapılandırmasını yerleştir

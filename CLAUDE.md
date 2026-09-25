@@ -21,7 +21,7 @@ npm --prefix frontend run dev                     # arayüz :5173
 powershell -File .\tools\start-dev.ps1            # üçünü birden, ayrı konsollarda
 powershell -File .\tools\stop-dev.ps1             # düzgün kapat (Postgres'i ÖLDÜRME)
 powershell -File .\tools\restart-api.ps1          # durdur → derle → başlat
-powershell -File .\tools\run-all-tests.ps1        # 14 paket, 562 kontrol
+powershell -File .\tools\run-all-tests.ps1        # birim testleri + 17 e2e paketi, tek özet
 ```
 
 ```bash
@@ -104,6 +104,56 @@ adım kayar). Bu hata bu projede **üç kez** yapıldı.
   `WHERE`'i o koşulu **birebir** içermedikçe kullanılmaz — yeni index eklerken buna dikkat.
 - Göç yazarken **veri onarımı şemadan ÖNCE** gelir ve `RAISE EXCEPTION` ile değişmezleri
   sına. Bozuk veriyle sessizce ilerleyen bir göç, geri alınamaz hasar demektir.
+- **`Take` ile `ExecuteUpdate` durum koşulunu satırda yeniden sınamaz.** EF bunu
+  `UPDATE … FROM (SELECT … WHERE "Status" = … LIMIT n)` olarak üretiyor; koşul yalnızca alt
+  sorguda kalıyor ve PostgreSQL eşzamanlı güncellenmiş satırda onu yeniden değerlendirmiyor.
+  Süpürücü bu yüzden kabul edilmekte olan isteği `Expired`'a eziyordu (ölçüldü). Durum
+  koşullu toplu güncelleme partisiz, tek `UPDATE … WHERE "Status" = …` olmalı.
+
+---
+
+## Push bildirimleri
+
+Mimari `docs/ASAMA-2-BACKEND.md` §8, üretim ayarı ve açma sırası `docs/URETIME-CIKIS.md` §11.
+Buradakiler ihlali SESSİZ kalanlar:
+
+- **Olay noktası yalnızca deftere satır yazar.** `BildirimKuyrugu.Ekle` olayın kendi kaydıyla
+  AYNI `SaveChanges`'ten (ya da transaction'dan) ÖNCE; `IBildirimSinyali.Uyandir()` commit'ten
+  SONRA. Ayrı yazılan satır "olay var, bildirim yok" (ya da tersi) penceresi açar. Handler'da
+  `IPushGonderici` (Expo) çağrılmaz.
+- **`ConcurrencyRetry` lambdasının içinde yalnızca `Ekle`.** Yeniden deneme ChangeTracker'ı
+  temizlediği için içerideki Add güvenli; içerideki `Uyandir` ise her denemede bir kez daha
+  çalar. "Satır yazıldı mı" bilgisi lambdanın dönüş değeriyle dışarı taşınır
+  (`ResolveDisputeHandler`: `RunAsync<bool>`).
+- **`Uyandir` fırlatmaz, fırlatmamalı**: commit olmuş mesaj istemciye hata dönerse istemci
+  yeniden gönderir ve mesaj iki kez yazılır.
+- **Dağıtıcıda durum yazımı her şeyden önce ve fencing'li**: Expo yanıtından hemen sonra,
+  bilet ve cihaz silmeden ÖNCE, `WHERE "LeaseOwner" = @tur AND "Status" = 'Pending'` ile ve
+  kapanış jetonuna değil kendi 10 sn'lik jetonuna bağlı. Sıra ya da koşul değişirse kira
+  dolunca satır ikinci kez gönderilir (e2e-bildirim 8. bölüm bunu kırar).
+- **HTTP zaman aşımı kira payından kısa kalmalı** (`Push:ZamanAsimiSaniye` [1, 25] sn, kira
+  payı 30 sn): yanıt kira bitmeden gelmezse satır başka turda yeniden gönderilir.
+- **Kısma yuvası gönderimden ÖNCE alınır**; sonra alınsaydı iki kopya aynı anda gönderirdi.
+- **Kısmi indeks filtreleri sorguyla birebir**: `IX_Notifications_Bekleyen` (`"Status" =
+  'Pending'`), `IX_LessonSessions_YaklasanDers`, `IX_LessonSessions_OnayBekleyen`.
+- **Android yükünde `collapseId` YOK** (FCM çevrimdışı cihaz için 4 collapse anahtarı
+  saklıyor; beşinci sohbetin mesajı hiç ulaşmayabilir). Ekrandakini `tag` değiştirir.
+- **Kanal kimlikleri ve `data.tur` mobille birebir** (`BildirimKanallari` ↔ mobil
+  `src/lib/bildirimler.js`). Android tanımadığı kanalla gelen bildirimi hata vermeden
+  düşürür. Değişecekse iki tarafta aynı gün.
+- **`DedupeKey` biçimi değiştirilmez** (`BildirimAnahtarlari`): değişirse dağıtım sırasında
+  eski biçimle yazılmış hatırlatma "başka olay" sayılır ve ikinci kez gider. Damga
+  mikrosaniye (Npgsql tick'in son hanesini kesiyor).
+- **Ham SQL'e giden her `DateTime` `Kind=Utc`**: Npgsql başkasını timestamptz'ye yazmaz.
+- **Oturumu bitiren yeni bir akış cihaz kaydını da silmeli.** Bugünkü noktalar:
+  `RefreshTokenService.TumOturumlariDusurAsync`, Logout tek cihaz, `BanUser`. Geçici askıda
+  bilerek silinmez. İkinci savunma hattı `OturumBagi` ("bu cihazın EN YENİ token'ı aktif mi";
+  "herhangi aktif token" DEĞİL — e2e-bildirim 1. bölüm bunu kırar).
+- **`Push:Provider=Log` üretimde de açılır** ve defterde satırlar `Sent` görünür; telefona
+  hiçbir şey gitmez. e2e-bildirim bu sağlayıcıyı ister (kancalar token'ın son ekinde:
+  `OLU]`, `YABANCI]`, `YAVAS]`).
+- Geliştirme konsolu dağıtıcının 5 sn'lik sahiplenme SQL'iyle dolar; susturmak için
+  `Logging__LogLevel__Microsoft.EntityFrameworkCore.Database.Command=Warning`.
 
 ---
 
@@ -125,6 +175,9 @@ adım kayar). Bu hata bu projede **üç kez** yapıldı.
   gerçekten kırıldığını gör. Bu projede dört test aynı anda **yanlış nedenle** geçiyordu.
 - Yapısal iddia ("bu kolon artık yok") değer iddiasından ("değeri 0") güçlüdür; kaldırılan
   bir şeyi sınarken yapısal olanı yaz.
+- **Sunucu saatine bağlı kontrol pencere dışında `[ATLANDI]` basar**, geçti gibi yapmaz.
+  `e2e-bildirim.ps1`'de iki tane var (günlük istek özeti 05–08 UTC, otomatik onay
+  hatırlatması TR 08–21): tam kapsam yalnızca 08–11 TR arasında koşar, dışında özet EKSİK der.
 
 ---
 
@@ -138,6 +191,13 @@ Hepsi bu projede **en az bir kez** ısırdı:
   yakalanamaz. Paketler `powershell.exe -File` ile **ayrı süreçte** koşmalı.
 - **Satır içi ortam değişkeni öneki yok.** `PGPASSWORD=x psql` çalışmaz; `$env:` ile ayrı
   satırda ata.
+- **`Set-Item Env:X ''` değişkeni SİLER**, boş değer atamaz; silinen değişkenin yerine
+  `appsettings.json`'daki değer geçer. Boş bağlantı dizesi (`ConnectionStrings__Redis=`)
+  gerekiyorsa süreci bash'in `env` komutuyla başlat (`env ConnectionStrings__Redis= dotnet …`).
+- **`\"` kaçış DEĞİL.** Çift tırnaklı dizgede tırnak `""` ile yazılır (`"""Id"" = '$x'"`).
+  C#/bash alışkanlığıyla yazılan `\"` betiği bozar ya da SQL'i sessizce değiştirir.
+- **Stop tercihiyle yerel komutun stderr'i istisnaya döner** (`& node … 2>&1`). Uyarı basan
+  bir aracı çağırırken `$ErrorActionPreference`'ı o satır için `Continue`'ya al.
 - **`&&` ve `||` yok.** `;` ve `if ($?)` kullan.
 - **Performans ölçme.** `Invoke-WebRequest` büyük yanıtlarda kendi maliyetini ekliyor
   (112 KB'de ~10 ms). Ölçümü Node ile yap.
@@ -180,6 +240,7 @@ Hepsi bu projede **en az bir kez** ısırdı:
 |---|---|
 | Modül sınırları, şema ayrımı, kilit stratejisi | `docs/ASAMA-1-MIMARI.md` |
 | Ekonomi, moderasyon, arka plan işleri | `docs/ASAMA-2-BACKEND.md` |
+| Push bildirimleri (defter, dağıtıcı, sessiz saat, etiketler) | `docs/ASAMA-2-BACKEND.md` §8 |
 | Sayfalar, bileşenler, tasarım kararları | `docs/ASAMA-3-FRONTEND.md` |
 | Sıfırdan kurulum | `docs/GELISTIRME-ORTAMI.md` |
 | Üretim ayarları ve kapılar | `docs/URETIME-CIKIS.md` |
