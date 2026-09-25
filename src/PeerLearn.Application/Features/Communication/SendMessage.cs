@@ -1,8 +1,11 @@
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using PeerLearn.Application.Abstractions;
 using PeerLearn.Application.Common;
+using PeerLearn.Application.Features.Communication.Bildirimler;
 using PeerLearn.Application.Features.Identity;
+using PeerLearn.Application.Options;
 using PeerLearn.Domain.Communication;
 using PeerLearn.Domain.Matchmaking;
 
@@ -30,11 +33,17 @@ public sealed class SendMessageHandler : IRequestHandler<SendMessageCommand, Sen
 {
     private readonly IAppDbContext _db;
     private readonly IClock _clock;
+    private readonly IBildirimSinyali _sinyal;
+    private readonly TimeSpan _bildirimGecikmesi;
 
-    public SendMessageHandler(IAppDbContext db, IClock clock)
+    public SendMessageHandler(IAppDbContext db, IClock clock, IBildirimSinyali sinyal, IOptions<PushOptions> push)
     {
         _db = db;
         _clock = clock;
+        _sinyal = sinyal;
+        // Eksi değer "geçmişte vadeli" satır üretir ve gecikmenin amacını (web'de okunan
+        // mesaja telefonun çalmaması) sessizce kapatırdı; alt sınır 0.
+        _bildirimGecikmesi = TimeSpan.FromSeconds(Math.Max(0, push.Value.MesajGecikmeSaniye));
     }
 
     public async Task<SendMessageResult> Handle(SendMessageCommand request, CancellationToken ct)
@@ -76,6 +85,8 @@ public sealed class SendMessageHandler : IRequestHandler<SendMessageCommand, Sen
                 "Bu sohbete yeni mesaj yazılamıyor.", statusCode: 403);
         }
 
+        var now = _clock.UtcNow;
+
         var message = new Message
         {
             ConversationId = request.ConversationId,
@@ -84,10 +95,34 @@ public sealed class SendMessageHandler : IRequestHandler<SendMessageCommand, Sen
         };
         _db.Messages.Add(message);
 
+        /*
+          PUSH: BİLDİRİM DEFTERİNE SATIR — MESAJLA AYNI SaveChanges'te.
+
+          Hub (ChatHub.SendMessage) ve REST (ConversationsController) ikisi de bu handler'dan
+          geçiyor; satırı burada yazmak iki yolu TEK noktada kapsıyor. Çağıranlara konsaydı
+          birine eklenip diğerinde unutulması, "web'den yazınca bildirim gelmiyor" gibi
+          ancak cihazda görülen bir hata olurdu.
+
+          Satır mesajla atomik: ayrı yazılsaydı mesaj kaydedilip bildirimi kaybolabilir ya
+          da hiç var olmayan bir mesaj için bildirim gidebilirdi. İçerik satıra GİRMEZ —
+          defterde yalnızca kimlikler var, metin gönderim anında kurulur.
+
+          Vade now + MesajGecikmeSaniye (10 sn): web sohbeti görünürken gelen mesajı hemen
+          okundu işaretliyor; bu sürede okunan mesajın bildirimi dağıtıcıda atlanır.
+          Sessiz saat UYGULANMAZ (gece yazan arkadaş da cevap bekliyor).
+        */
+        BildirimKuyrugu.Ekle(_db, BildirimKuyrugu.YeniMesaj(
+            message.Id, request.ConversationId, access.OtherUserId, request.SenderUserId, now, _bildirimGecikmesi));
+
         var conversation = await _db.Conversations.SingleAsync(c => c.Id == request.ConversationId, ct);
-        conversation.LastMessageAtUtc = _clock.UtcNow;
+        conversation.LastMessageAtUtc = now;
 
         await _db.SaveChangesAsync(ct);
+
+        // Commit SONRASI ve fırlatmaz: fırlatsaydı kaydedilmiş mesaj istemciye hata olarak
+        // döner, istemci yeniden gönderir ve mesaj iki kez yazılırdı. Uyanış kaçsa da satır
+        // defterde; dağıtıcı en geç kendi periyodunda bulur.
+        _sinyal.Uyandir();
 
         var dto = new MessageDto(message.Id, message.ConversationId, message.SenderUserId,
             message.Content, message.CreatedAtUtc);

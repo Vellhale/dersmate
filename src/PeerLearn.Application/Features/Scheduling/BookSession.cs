@@ -4,6 +4,7 @@ using Microsoft.Extensions.Options;
 using PeerLearn.Application.Abstractions;
 using PeerLearn.Application.Common;
 using PeerLearn.Application.Economy;
+using PeerLearn.Application.Features.Communication.Bildirimler;
 using PeerLearn.Application.Features.Identity;
 using PeerLearn.Application.Options;
 using PeerLearn.Application.Scheduling;
@@ -46,15 +47,17 @@ public sealed class BookSessionHandler : IRequestHandler<BookSessionCommand, Boo
     private readonly MintGuard _mintGuard;
     private readonly IDistributedLockProvider _locks;
     private readonly EconomyOptions _economy;
+    private readonly IBildirimSinyali _sinyal;
 
     public BookSessionHandler(IAppDbContext db, IClock clock, MintGuard mintGuard,
-        IDistributedLockProvider locks, IOptions<EconomyOptions> economy)
+        IDistributedLockProvider locks, IOptions<EconomyOptions> economy, IBildirimSinyali sinyal)
     {
         _db = db;
         _clock = clock;
         _mintGuard = mintGuard;
         _locks = locks;
         _economy = economy.Value;
+        _sinyal = sinyal;
     }
 
     public async Task<BookSessionResult> Handle(BookSessionCommand request, CancellationToken ct)
@@ -194,7 +197,7 @@ public sealed class BookSessionHandler : IRequestHandler<BookSessionCommand, Boo
 
         await _mintGuard.EnsureCanBookAsync(tutorUserId, request.StudentUserId, start, ct);
 
-        return await ConcurrencyRetry.RunAsync(_db, async () =>
+        var sonuc = await ConcurrencyRetry.RunAsync(_db, async () =>
         {
             await using var tx = await _db.BeginTransactionAsync(cancellationToken: ct);
 
@@ -227,12 +230,33 @@ public sealed class BookSessionHandler : IRequestHandler<BookSessionCommand, Boo
             };
             _db.LessonSessions.Add(session);
 
+            /*
+              PUSH: eğitmene "yeni ders planlandı" — dersle AYNI transaction'da.
+
+              Rezervasyon eğitmen onayı istemiyor ve tek kural başlangıcın gelecekte olması;
+              5 dakika sonrasına yapılan rezervasyonda eğitmenin bunu öğrenmesinin başka
+              yolu yok (hatırlatmalar rezervasyondan önceki anlara düşüyorsa atlanır).
+              Başlangıca 12 saatten az kaldıysa sessiz saat uygulanmaz.
+
+              LAMBDA İÇİNDE YALNIZCA Ekle — bu yan etki değil, izlenen bir satır: xmin
+              çakışmasında ConcurrencyRetry ChangeTracker'ı temizliyor, satır dersle birlikte
+              gidiyor ve yeni deneme yeni dersle yeniden ekliyor. Sinyal ise lambda'nın
+              DIŞINDA (aşağıda); içeride olsaydı her denemede ayrı uyanış olurdu.
+            */
+            BildirimKuyrugu.Ekle(_db, BildirimKuyrugu.DersPlanlandi(
+                session.Id, tutorUserId, request.StudentUserId, _clock.UtcNow, start));
+
             await _db.SaveChangesAsync(ct);
             await tx.CommitAsync(ct);
 
             return new BookSessionResult(
                 session.Id, session.VerificationCode, mintAmount, volunteerOffer, start, end);
         }, ct: ct);
+
+        // Commit SONRASI; fırlatmaz (IBildirimSinyali sözleşmesi).
+        _sinyal.Uyandir();
+
+        return sonuc;
     }
 
     private async Task<string> NewUniqueCodeAsync(CancellationToken ct)
