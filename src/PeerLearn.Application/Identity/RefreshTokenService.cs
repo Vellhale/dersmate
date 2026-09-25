@@ -147,8 +147,10 @@ public sealed class RefreshTokenService
 
         /* Damga "şimdi": bu andan ÖNCE üretilmiş erişim token'ları ölüyor.
 
-           ⚠️ Saat kayması payı BİLEREK verilmedi. Pay verilseydi (ör. now + 1dk)
-           yaptırımın ısırması o kadar gecikirdi; ban akışı da bu metodu çağırıyor. */
+           ⚠️ Saat kayması payı BİLEREK verilmedi. Pay verilseydi (ör. now + 1dk) parola
+           sıfırlama, rol değişimi ve hırsızlık tespitinin ısırması o kadar gecikirdi. Ban bu
+           metodu ÇAĞIRMIYOR: banlı hesap her kimlikli istekte AccountStatusMiddleware'de
+           reddediliyor, push cihaz satırlarını da BanUserHandler kendisi siliyor. */
         user.TokensValidFromUtc = now;
     }
 

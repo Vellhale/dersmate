@@ -33,11 +33,12 @@ public sealed record LogoutCommand(string? RefreshToken, bool TumCihazlar = fals
 /// aynı (çağıran taraf 204 döner).
 ///
 /// ─── SEBEP <see cref="RefreshTokenRevokeReason.SignedOut"/>, Rotated DEĞİL ──────────
-/// Tek cihaz iptalinde sebep bilinçle SignedOut. İptalli token /refresh'e yeniden
-/// sunulursa yeniden-kullanım tespiti (RefreshSessionHandler) yalnızca <c>Rotated</c> +
-/// 30 sn penceresini "masum tekrar" sayıyor; SignedOut o pencereye GİRMEZ. Yani çıkıştan
-/// sonra aynı token'ı sunan (büyük olasılıkla çalınmış bir kopya) tüm zinciri düşürür —
-/// istenen davranış.
+/// Tek cihaz iptalinde sebep bilinçle SignedOut. Hırsızlık varsayımı (zinciri düşürmek)
+/// YALNIZCA pencere dışında yeniden sunulan <c>Rotated</c> token'da
+/// (<see cref="RefreshTokenService.GercekYenidenKullanim"/>); SignedOut'la iptal edilmiş
+/// token /refresh'e yeniden sunulursa 401 alır ama zincir DÜŞÜRÜLMEZ. Sebep Rotated
+/// yazılsaydı, çıkıştan 30 sn sonra eski token'ı bir kez daha sunan istemci (çevrimdışı
+/// kalmış bir sekme) kullanıcının çıkıştan SONRA açtığı taze oturumları da düşürürdü.
 ///
 /// ─── EKONOMİ/KİLİT ÜÇLÜSÜ UYGULANMAZ ────────────────────────────────────────────────
 /// Bu tablo puana dokunmuyor; Redis kilidi + açık transaction + ConcurrencyRetry üçlüsü
