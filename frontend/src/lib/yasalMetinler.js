@@ -70,6 +70,16 @@
  * yapılıyor ve sunucu o anın damgası (DisclosureShownAtUtc) olmadan cihaz kaydını kabul
  * etmiyor.
  *
+ * 2026-09-25 İÇİNDE, YAYINDAN ÖNCE — KOŞULLAR §3 PUAN DÜZELTMESİ (2026-09-26). §3
+ * sunucuyla çelişiyordu: "puan yalnızca ders anlatana yazılır" (Topluluk oyları da puan
+ * basıyor) ve "kazanılan puan 30 günde yanar" (ders ve topluluk kazancı vadesiz). Metin
+ * gerçeğe çekildi (pages/Kosullar.jsx; mobil app/kosullar.jsx aynı gün, aynı cümleler).
+ * SÜRÜM ARTMADI ve bu bir istisna değil, kuralın kendisi: sürüm "kullanıcıya hangi metni
+ * gösterdim" beyanı. 2026-09-25 bugün HİÇBİR yerde yayında değil (sunucu, web ve mobil
+ * main'e birleşmemiş dallarda); bu sürümü kabul etmiş tek bir kullanıcı yok. Yayından
+ * önce aynı sürümün metnini düzeltmek, kimseye gösterilmemiş bir metni değiştirmek.
+ * 2026-09-25 yayına çıktıktan SONRA §3'e dokunan her değişiklik sürümü artırır.
+ *
  * ⚠️ tools/yasal-surum.ps1 bu dosyada sabitin ATAMASINI düzenli ifadeyle arıyor ve İLK
  * eşleşmeyi alıyor. Bu yorumlara sabitin adını eşittir ve tırnaklı bir değerle yazma:
  * yazılırsa betik yorumdaki değeri okur ve bütün e2e paketleri kayıtta düşer.

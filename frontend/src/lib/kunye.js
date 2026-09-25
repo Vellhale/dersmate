@@ -16,14 +16,16 @@
  *     gizlilik politikası adresi istiyor. Mobil yayına çıkarken bu duvara çarpılır.
  *
  * ─── DEĞERLER NEDEN TEK YERDE ───────────────────────────────────────────────
- * Künye BEŞ AYRI YÜZEYDE görünüyor (Layout altbilgisi, AuthShell altbilgisi, yasal
- * metinlerin künye bloğu, Hakkımızda, çerez tercihleri penceresi). Elle beş yere
+ * Künye DÖRT AYRI YÜZEYDE görünüyor (Layout altbilgisi, AuthShell altbilgisi, yasal
+ * metinlerin künye bloğu, çerez tercihleri penceresi). Elle dört yere
  * yazılsaydı biri güncellenip diğerleri unutulurdu ve iki farklı kimlik gösteren bir
  * ürün, hiç kimlik göstermeyenden daha kötüdür: hangisinin doğru olduğu belirsizleşir.
  * Aynı gerekçe yasalMetinler.js'te de yazılı.
  *
  * ⚠️ REKLAM DEĞİL, KÜNYE. Buradaki hiçbir değer bir tanıtım yüzeyi beslemiyor:
- * altbilgide tek satır, yasal metinlerde kimlik bloğu, Hakkımızda'da tek cümle.
+ * altbilgide tek satır, yasal metinlerde kimlik bloğu. (Hakkımızda'daki tek cümlelik
+ * imza 2026-09-26'da kalktı: sayfa zaten Layout altbilgisiyle bitiyordu ve Corventech
+ * orada arka arkaya iki kez yazıyordu.)
  * Ürünün içine Corventech'in başka ürünlerini tanıtan bir alan AÇILMADI ve bu bilinçli
  * bir sınır — Gizlilik §1 "Verini reklam için kullanmıyoruz" diyor; aynı sayfada bir
  * tanıtım kutusu, o cümlenin ağırlığını düşürürdü. Künye güven artırır, reklam düşürür.
