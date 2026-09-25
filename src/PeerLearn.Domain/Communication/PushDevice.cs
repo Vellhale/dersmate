@@ -16,7 +16,10 @@ namespace PeerLearn.Domain.Communication;
 /// Users'a FK Cascade yazıldı ama ona GÜVENİLMİYOR: hesap silme bu üründe Users satırını
 /// silmiyor, anonimleştiriyor. Silmeyi yapan yerler: çıkış (tek cihaz), her yerden çıkış
 /// ve onu kullanan akışlar (TumOturumlariDusurAsync), hesap silme, kalıcı ban,
-/// makbuzdaki DeviceNotRegistered ve çevrimdışı çıkıştan sonra "forget" ucu.
+/// DeviceNotRegistered (bilette ya da makbuzda; satır o kanıttan sonra yeniden kaydedildiyse
+/// SİLİNMEZ, bkz. OluCihaz), çevrimdışı çıkıştan sonra "forget" ucu ve günlük temizlik
+/// (CleanupNotifications: oturum bağı kopmuş, 5 günden uzun süredir kaydını yenilememiş
+/// cihaz — uygulamayı çıkış yapmadan silen kullanıcının satırı başka hiçbir yoldan gitmiyordu).
 ///
 /// ─── GÖNDERİM ŞARTI: OTURUM BAĞI ────────────────────────────────────────────
 /// Satırın var olması tek başına gönderim izni DEĞİL. Bu (UserId, HwidHash) için EN YENİ

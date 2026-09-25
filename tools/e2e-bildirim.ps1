@@ -11,17 +11,23 @@
 #   …OLU]      bilet ok, makbuz DeviceNotRegistered → makbuz işi cihazı silmeli (7)
 #   …YAVAS]    yanıt 3 sn gecikir → gönderim sürerken cihaz silme (7) ve fencing (8)
 #   …YABANCI]  istek düzeyi PUSH_TOO_MANY_EXPERIENCE_IDS → deneyim ayırma (9)
+#   …GECICI]   istek düzeyi HTTP 503 → yeniden deneme vadesi ve sessiz saat (3)
 # Hazırlık adımı sağlayıcının gerçekten Log olduğunu bilet önekinden ('log-') doğruluyor;
 # değilse paket hiçbir şey yapmadan düşer (gerçek Expo'ya sahte token göndermesin).
 #
 # ─── ZAMANA BAĞLI KURALLAR ──────────────────────────────────────────────────────
 # Sessiz saat (22:00–09:00 TR) istek, kabul ve onay satırlarını sabaha kaydırır. Paket
 # gece de koşabilsin diye bu satırların DueAt'i SQL ile şimdiye çekiliyor (VadeyiCek);
-# kaydırmanın kendisi birim testlerde (SessizSaatTests). Hatırlatma işinin iki kaynağı ise
-# sunucunun GERÇEK saatine bağlı ve SQL ile kaydırılamıyor:
+# kaydırmanın kendisi birim testlerde (SessizSaatTests). Dağıtıcı sessiz saati gönderim
+# anında da uyguluyor ama YALNIZCA vadesi sessiz saatin dışında olan satıra: VadeyiCek'in
+# gece yazdığı vade sessiz saatte, yani "bir kuralın bilerek seçtiği an" sayılır ve satır
+# gider. Sunucunun GERÇEK saatine bağlı kontroller:
 #   • otomatik onay 24 sa hatırlatması: an sessiz saate düşerse kayıyor → yalnızca TR 08–21
 #   • günlük istek özeti: yazım penceresi 05:00–08:00 UTC
-# Pencere dışında bu iki kontrol [ATLANDI] basar; özet onları EKSİK sayar (geçti DEĞİL).
+#   • gecikerek sessiz saate giren istek sabaha ertelenir: yalnızca TR 22–09
+#   • geçici hatanın yeniden deneme vadesi: gece sabaha, gündüz 30 sn sonraya (iki hâlde de
+#     koşar; TR 21:55–22:00 arasında sınıra düşebileceği için [ATLANDI])
+# Pencere dışında bu kontroller [ATLANDI] basar; özet onları EKSİK sayar (geçti DEĞİL).
 #
 # ─── BÖLÜMLER ───────────────────────────────────────────────────────────────────
 #   1. Kayıt ve oturum bağı (aydınlatma kapısı, token taşıma, çıkış sonrası PUT, "en yeni
@@ -32,10 +38,13 @@
 #   5. Hatırlatmalar (tekilleştirme, yakın rezervasyon, iptal sonrası DurumDegisti, oto onay)
 #   6. Cihaz silme noktaları (tek cihaz / her yerden çıkış, rol değişimi, hırsızlık tespiti,
 #      hesap silme, ban, geçici askı)
-#   7. Makbuz (ölü cihaz) ve gönderim sürerken cihaz silme
+#   7. Makbuz (ölü cihaz; biletten sonra yeniden kaydolan cihaz korunur) ve gönderim
+#      sürerken cihaz silme
 #   8. Fencing (kirası başkasına geçen satırı eski tur ezemez)
 #   9. Yabancı Expo projesi (ayırma ve yeniden gönderme)
 #  10. Test ucu sınırı
+#  11. Oturumu kapanmış cihaz temizliği (günlük bakım)
+#  12. Uçuştaki gönderim, çağıranın iptaliyle kesilmez
 #
 # BİLİNÇLİ KAPSAM DIŞI (gerekçeli):
 #   • Parola sıfırlama: sıfırlama token'ı yalnızca e-postayla gidiyor (e2e-fixes.ps1 F1 ile
@@ -63,6 +72,21 @@
 #       kaldı, yabancı cihaz silinmedi.
 #   M6  OturumBagi "en yeni token" yerine "herhangi aktif token" → 1: çıkış yapılmış cihaz
 #       yeniden kaydoldu, test ucu 1 cihaz saydı, dağıtıcı Sent yazdı.
+# İnceleme bulgularının düzeltmeleri için eklenenler (ölçüldü, 2026-09-25, TR 07:00 — gece
+# koşan iki kontrol dahil; her biri tek başına, dosya bayt bayt geri yüklenerek):
+#   M7  dağıtıcıdaki gönderim anı sessiz saat kontrolü kaldırılınca → 3: gecikerek sessiz
+#       saate giren istek gece Sent oldu.
+#   M8  yeniden deneme vadesi sessiz saat kuralından geçirilmeyince → 3: gece düşen isteğin
+#       yeniden denemesi 09:00 yerine 30 sn sonraya yazıldı.
+#   M9  hatırlatma yazımındaki silinmiş hesap süzgeci kaldırılınca → 5: silinmiş öğrenciye 2
+#       hatırlatma satırı.
+#   M10 ölü cihaz silmesi yalnızca Id'ye indirgenince (OluCihaz) → 7: biletten sonra aynı
+#       token'la yeniden kaydolan cihaz silindi.
+#   M11 bakımdaki bağlantısız cihaz silmesi kaldırılınca → 11: iki eski kayıt kaldı; bekleme
+#       payı kaldırılınca 4 günlük kayıt silindi; oturum bağı gözetilmeyince canlı ve askıdaki
+#       cihazlar silindi.
+#   M12 Expo çağrısına yeniden çağıranın iptal jetonu verilince (eski hâl) → 12: kesilen
+#       çağrının satırı Pending ve kiralı kaldı, bilet yazılmadı.
 #
 # Kullanım (proje kökünden; API :5000, Push:Provider=Log, PostgreSQL):
 #   powershell -ExecutionPolicy Bypass -File .\tools\e2e-bildirim.ps1
@@ -620,6 +644,56 @@ if (Bolumde 3) { try {
     Esit 'kabul → istekKabul Sent' (BekleSatir $kKosul) 'Sent|'
     Esit 'kabul satırı isteği gönderene ve yeni sohbete bağlı' (Tek "SELECT ""RecipientUserId"" || '|' || ""ConversationId"" FROM comms.""Notifications"" WHERE $kKosul;") "$($k.userId)|$($kabul.conversationId)"
 
+    # Sessiz saat GÖNDERİM ANINDA da: kuyruğa sessiz olmayan vadeyle yazılıp gecikerek (sunucu
+    # kapalıydı, Expo düştü) 22:00'ı geçmiş istek gitmez, deneme sayılmadan sabaha ertelenir.
+    # Vade 12 saat geriye çekiliyor: sessiz aralık 11 saat, şimdi sessizse o an değildir.
+    $inv = [Globalization.CultureInfo]::InvariantCulture
+    $trSimdi = [DateTime]::UtcNow.AddHours(3)
+    $sessiz = ($trSimdi.Hour -ge 22 -or $trSimdi.Hour -lt 9)
+    $sabah = $trSimdi.Date.AddHours(9)
+    if ($sabah -le $trSimdi) { $sabah = $sabah.AddDays(1) }
+    $sabahUtc = $sabah.AddHours(-3).ToString('yyyy-MM-dd HH:mm:ss', $inv)
+    $vadeSql = "to_char(""DueAtUtc"" AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS')"
+    if ($sessiz) {
+        $g1 = NewUser 'sssg'; $g2 = Hazir 'sssa'
+        $gIstek = Api POST '/api/matches' @{ responderUserId = $g2.userId; requestedTopicId = $null; offeredTopicId = $null } $g1.token
+        $gKosul = """RecordId"" = '$gIstek' AND ""Type"" = 'MatchRequest'"
+        Sql "UPDATE comms.""Notifications"" SET ""DueAtUtc"" = now() - interval '12 hours' WHERE $gKosul;" | Out-Null
+        # Dağıtıcı kararını yazana (vade yeniden geleceğe geçene ya da satır işlenene) kadar.
+        $bitis = (Get-Date).AddSeconds(20)
+        do {
+            Start-Sleep -Milliseconds 500
+            $gv = Tek "SELECT (""DueAtUtc"" > now() OR ""Status"" <> 'Pending')::text FROM comms.""Notifications"" WHERE $gKosul;"
+        } while ($gv -ne 'true' -and (Get-Date) -lt $bitis)
+        Esit 'gecikerek sessiz saate giren istek → gitmedi, deneme sayılmadan 09:00 TR''ye ertelendi' (Tek "SELECT ""Status"" || '|' || ""Attempts"" || '|' || $vadeSql || '|' || COALESCE(""LeaseOwner""::text, '-') FROM comms.""Notifications"" WHERE $gKosul;") "Pending|0|$sabahUtc|-"
+    } else {
+        Atla "gecikerek sessiz saate giren istek (yalnızca TR 22–09; şimdi TR $($trSimdi.ToString('HH:mm', $inv)))"
+    }
+
+    # Yeniden deneme vadesi de aynı kuraldan geçer (Log: '…GECICI]' = Expo 503). Gece düşen
+    # isteğin yeniden denemesi sabaha kayar; gündüz 30 sn sonraya.
+    $sinirda = ($trSimdi.Hour -eq 21 -and $trSimdi.Minute -ge 55)
+    if ($sinirda) {
+        Atla "geçici hatanın yeniden deneme vadesi (TR 21:55–22:00 sınırı; şimdi TR $($trSimdi.ToString('HH:mm', $inv)))"
+    } else {
+        $h1 = NewUser 'ssyg'; $h2 = Hazir 'ssya' 'GECICI'
+        $hIstek = Api POST '/api/matches' @{ responderUserId = $h2.userId; requestedTopicId = $null; offeredTopicId = $null } $h1.token
+        $hKosul = """RecordId"" = '$hIstek' AND ""Type"" = 'MatchRequest'"
+        VadeyiCek $hKosul
+        $bitis = (Get-Date).AddSeconds(20)
+        do {
+            Start-Sleep -Milliseconds 500
+            $ha = Tek "SELECT ""Attempts"" FROM comms.""Notifications"" WHERE $hKosul;"
+        } while ($ha -ne '1' -and (Get-Date) -lt $bitis)
+        if ($sessiz) {
+            Esit 'gece geçici hata → yeniden deneme 09:00 TR''ye kaydı (deneme 1)' (Tek "SELECT ""Status"" || '|' || ""Attempts"" || '|' || $vadeSql FROM comms.""Notifications"" WHERE $hKosul;") "Pending|1|$sabahUtc"
+        } else {
+            Esit 'gündüz geçici hata → yeniden deneme 30 sn sonra (deneme 1)' (Tek "SELECT ""Status"" || '|' || ""Attempts"" || '|' || (""DueAtUtc"" > now() AND ""DueAtUtc"" <= now() + interval '35 seconds')::text FROM comms.""Notifications"" WHERE $hKosul;") 'Pending|1|true'
+        }
+        # Temizlik: kancalı satır kuyrukta dönüp durmasın.
+        Sql "UPDATE comms.""Notifications"" SET ""Status"" = 'Skipped', ""Outcome"" = 'Tekrar', ""ProcessedAtUtc"" = now(), ""LeaseOwner"" = NULL, ""LeaseUntilUtc"" = NULL WHERE $hKosul AND ""Status"" = 'Pending';" | Out-Null
+    }
+
     # 14 günü geçmiş istek: süpürücü henüz geçmemiş olsa bile yanıtlanamaz.
     $k2 = NewUser 'istk2'; $l2 = Hazir 'istl2'
     $eski = Api POST '/api/matches' @{ responderUserId = $l2.userId; requestedTopicId = $null; offeredTopicId = $null } $k2.token
@@ -751,6 +825,18 @@ FROM comms."Notifications" n JOIN scheduling."LessonSessions" s ON s."Id" = n."R
     } else {
         Atla "otomatik onay 24 sa hatırlatması (an sessiz saate düşer; TR saat $trSaat)"
     }
+
+    # Silinmiş hesaba hatırlatma yazılmaz. Hesap silme dersleri kapatmıyor, alıcısı olduğu
+    # defter satırlarını BİR KEZ siliyor; hatırlatma işi ardından aynı kimlik adına yeniden
+    # satır açmamalı (gizlilik: "alıcısı olduğu bildirim kayıtları silinir").
+    $ogr4 = Hazir 'hats'; $egt4 = Hazir 'hatse'
+    $d4 = DersKur $ogr4 $egt4 $konular[3] 90
+    $r = ApiDurum POST '/api/profile/delete' @{ password = 'Parola12345' } $ogr4.token
+    Esit 'dersi olan öğrencinin hesap silmesi başarılı' $r.status 200
+    Hatirlat
+    Hatirlat
+    Esit 'silinmiş öğrenciye hatırlatma satırı yazılmadı' (Tek "SELECT COUNT(*) FROM comms.""Notifications"" WHERE ""RecipientUserId"" = '$($ogr4.userId)';") 0
+    Esit 'eğitmenin hatırlatmaları yine yazıldı (60 ve 10 dk)' (Tek "SELECT COUNT(*) FROM comms.""Notifications"" WHERE ""RecordId"" = '$($d4.id)' AND ""Type"" = 'LessonSoon' AND ""RecipientUserId"" = '$($egt4.userId)';") 2
 } catch { BolumHatasi 5 $_ } }
 
 # ================================================================== 6
@@ -825,11 +911,28 @@ if (Bolumde 7) { try {
     $vs = SonTestSatiri $v.userId
     Esit 'ölü token''a test → Sent (bilet ok)' (BekleSatir """Id"" = '$vs'") 'Sent|'
     Esit 'bilet yazıldı' (Tek "SELECT COUNT(*) FROM comms.""PushTickets"" WHERE ""NotificationId"" = '$vs';") 1
-    # Makbuz 15 dakikadan genç bileti sormuyor.
+    # Makbuz 15 dakikadan genç bileti sormuyor. Cihazın son kaydı da biletten ÖNCEYE çekiliyor
+    # (gerçekte öyle: bilet gönderimden sonra yazılır); yalnızca bilet geri çekilseydi cihaz
+    # "biletten sonra yeniden kaydolmuş" görünür ve korunurdu (OluCihaz, aşağıdaki kontrol).
     Sql "UPDATE comms.""PushTickets"" SET ""CreatedAtUtc"" = now() - interval '16 minutes' WHERE ""NotificationId"" = '$vs';" | Out-Null
+    Sql "UPDATE comms.""PushDevices"" SET ""LastSeenAtUtc"" = now() - interval '17 minutes' WHERE ""UserId"" = '$($v.userId)';" | Out-Null
     Api POST '/api/admin/jobs/push-receipts' $null $admin.token | Out-Null
     Esit 'makbuz DeviceNotRegistered → cihaz silindi' (CihazSayisi $v.userId) 0
     Esit 'sorulan bilet silindi' (Tek "SELECT COUNT(*) FROM comms.""PushTickets"" WHERE ""NotificationId"" = '$vs';") 0
+
+    # Biletten SONRA aynı token'la yeniden kayıt (iOS'ta yeniden kurulum aynı Expo token'ını
+    # verebiliyor, PUT aynı satırı günceller): gecikmiş ölüm haberi yeni kaydı SİLMEZ.
+    $v2 = Hazir 'mkbk' 'OLU'
+    Api POST '/api/push/test' @{ tur = 'mesaj' } $v2.token | Out-Null
+    $vs2 = SonTestSatiri $v2.userId
+    Esit 'ikinci ölü token''a test → Sent' (BekleSatir """Id"" = '$vs2'") 'Sent|'
+    Sql "UPDATE comms.""PushTickets"" SET ""CreatedAtUtc"" = now() - interval '16 minutes' WHERE ""NotificationId"" = '$vs2';" | Out-Null
+    Sql "UPDATE comms.""PushDevices"" SET ""LastSeenAtUtc"" = now() - interval '17 minutes' WHERE ""UserId"" = '$($v2.userId)';" | Out-Null
+    $yenidenKayit = Cihaz $v2 $v2.push
+    Esit 'önkoşul: aynı token yeniden kaydedildi' $yenidenKayit.kayitli $true
+    Api POST '/api/admin/jobs/push-receipts' $null $admin.token | Out-Null
+    Esit 'biletten sonra yeniden kaydolan cihaz → SİLİNMEDİ' (CihazSayisi $v2.userId) 1
+    Esit 'o bilet yine soruldu ve silindi' (Tek "SELECT COUNT(*) FROM comms.""PushTickets"" WHERE ""NotificationId"" = '$vs2';") 0
 
     # Gönderim sürerken (Log 3 sn bekliyor) cihaz unutulur: satır Sent kalır, ikinci gönderim yok.
     $yakalandi = $false
@@ -910,6 +1013,73 @@ if (Bolumde 10) { try {
     Esit '10 dakikada dördüncü çağrı → 429' $kodlar[3] 429
     Esit 'reddedilen çağrı satır yazmadı' (Tek "SELECT COUNT(*) FROM comms.""Notifications"" WHERE ""RecipientUserId"" = '$($tt.userId)' AND ""Type"" = 'Test';") 3
 } catch { BolumHatasi 10 $_ } }
+
+# ================================================================== 11
+if (Bolumde 11) { try {
+    Step '11. Oturumu kapanmış cihaz temizliği'
+
+    # Uygulamayı çıkış yapmadan silen kullanıcı: bildirim olayı olmazsa DeviceNotRegistered hiç
+    # gelmez, satır ancak günlük bakımda gider (oturum bağı kopmuş + 5 günden eski kayıt).
+    # Bakım makbuz ucuyla birlikte koşuyor (admin/jobs/push-receipts).
+    $c1 = Hazir 'tmzo'   # oturumun süresi dolmuş, kayıt 6 günlük → silinir
+    $c2 = Hazir 'tmzy'   # oturumun süresi dolmuş, kayıt 4 günlük → kalır (bekleme payı)
+    $c3 = Hazir 'tmzc'   # oturum canlı, kayıt 6 günlük → kalır
+    $c4 = Hazir 'tmza'   # geçici askıda, kayıt 6 günlük → kalır (askı token iptal etmiyor)
+    $c5 = Hazir 'tmzt'   # o cihaza ait HİÇ token yok (süresi dolanları token temizliği siler) → silinir
+    $ikisi = "'$($c1.userId)', '$($c2.userId)'"
+    # 60 günlük oturum dün doldu (CK_RefreshTokens_Expiry: bitiş oluşturmadan sonra kalmalı).
+    Sql "UPDATE identity.""RefreshTokens"" SET ""CreatedAtUtc"" = now() - interval '61 days', ""ExpiresAtUtc"" = now() - interval '1 day' WHERE ""UserId"" IN ($ikisi);" | Out-Null
+    Sql "UPDATE comms.""PushDevices"" SET ""LastSeenAtUtc"" = now() - interval '6 days' WHERE ""UserId"" IN ('$($c1.userId)', '$($c3.userId)', '$($c4.userId)', '$($c5.userId)');" | Out-Null
+    Sql "UPDATE comms.""PushDevices"" SET ""LastSeenAtUtc"" = now() - interval '4 days' WHERE ""UserId"" = '$($c2.userId)';" | Out-Null
+    Sql "UPDATE comms.""PushDevices"" SET ""HwidHash"" = '$(NewHwid)' WHERE ""UserId"" = '$($c5.userId)';" | Out-Null
+    Api POST "/api/admin/users/$($c4.userId)/sanction" @{ type = 'TemporaryBan'; reason = 'e2e aski'; durationHours = 1 } $admin.token | Out-Null
+    Api POST '/api/admin/jobs/push-receipts' $null $admin.token | Out-Null
+    Esit 'oturumu dolmuş, 6 günlük kayıt → silindi' (CihazSayisi $c1.userId) 0
+    Esit 'hiç token''ı olmayan cihaz, 6 günlük kayıt → silindi' (CihazSayisi $c5.userId) 0
+    Esit 'oturumu dolmuş, 4 günlük kayıt → duruyor (bekleme payı)' (CihazSayisi $c2.userId) 1
+    Esit 'oturumu canlı, 6 günlük kayıt → duruyor' (CihazSayisi $c3.userId) 1
+    Esit 'geçici askıda, 6 günlük kayıt → duruyor' (CihazSayisi $c4.userId) 1
+} catch { BolumHatasi 11 $_ } }
+
+# ================================================================== 12
+if (Bolumde 12) { try {
+    Step '12. Uçuştaki gönderim, çağıranın iptaliyle kesilmez'
+
+    # Dağıtım ucunu çağıran istemci, gönderim sürerken bağlantıyı keser (RequestAborted —
+    # kapanıştaki stoppingToken ile AYNI yol). Expo çağrısı iptal jetonunu alsaydı istek
+    # kesilir, sonuç ve bilet yazılmaz, satır kiralı kalır ve iki dakika sonra İKİNCİ KEZ
+    # giderdi. Beklenen: gönderim tamamlanır, satır Sent, deneme 0, tek bilet.
+    # Satırı ucun mu arka plandaki dağıtıcının mı alacağı yarışa bağlı: uç 1,2 sn içinde
+    # dönerse satırı almamıştır (Log '…YAVAS]' gönderimi 3 sn sürüyor), deneme tekrarlanır.
+    $yakalandi = $false
+    foreach ($deneme in 1..4) {
+        $ku = Hazir 'kpns' 'YAVAS'
+        $ks = [Guid]::NewGuid()
+        Sql @"
+INSERT INTO comms."Notifications" ("Id","Type","DedupeKey","RecipientUserId","RecordId","DueAtUtc","ExpiresAtUtc","Status","CreatedAtUtc")
+VALUES ('$ks','Test','test:mesajlar:$($ks.ToString('N'))','$($ku.userId)','$ks', now(), now() + interval '15 minutes','Pending', now());
+"@ | Out-Null
+        $istemci = New-Object System.Net.Http.HttpClient
+        $istemci.Timeout = [TimeSpan]::FromMilliseconds(1200)
+        $ist = New-Object System.Net.Http.HttpRequestMessage -ArgumentList ([System.Net.Http.HttpMethod]::Post), "$API/api/admin/jobs/push-dispatch"
+        $ist.Headers.Authorization = New-Object System.Net.Http.Headers.AuthenticationHeaderValue -ArgumentList 'Bearer', $admin.token
+        $kesildi = $false
+        try { $istemci.SendAsync($ist).GetAwaiter().GetResult() | Out-Null } catch { $kesildi = $true }
+        $istemci.Dispose()
+        if ($kesildi -and (Durum """Id"" = '$ks'").StartsWith('Pending')) { $yakalandi = $true; break }
+        # Yakalanamayan satır kuyrukta kalmasın.
+        BekleSatir """Id"" = '$ks'" 10 | Out-Null
+    }
+    if ($yakalandi) {
+        OK 'önkoşul: istemci, uç satırı gönderirken bağlantıyı kesti'
+        Esit 'kesilen çağrının gönderimi tamamlandı → Sent' (BekleSatir """Id"" = '$ks'" 10) 'Sent|'
+        Start-Sleep -Seconds 3
+        Esit 'ikinci gönderim yok (Sent, deneme 0)' (Tek "SELECT ""Status"" || '|' || ""Attempts"" FROM comms.""Notifications"" WHERE ""Id"" = '$ks';") 'Sent|0'
+        Esit 'bilet yazıldı (tek)' (Tek "SELECT COUNT(*) FROM comms.""PushTickets"" WHERE ""NotificationId"" = '$ks';") 1
+    } else {
+        Atla 'uçuştaki gönderimin iptali (dört denemede de satırı arka plandaki dağıtıcı aldı)'
+    }
+} catch { BolumHatasi 12 $_ } }
 
 # ------------------------------------------------------------------ Özet
 Write-Host "`n================================" -ForegroundColor Yellow

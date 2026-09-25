@@ -52,13 +52,15 @@ public sealed record DispatchNotificationsCommand : IRequest<PushIsSonucu>;
 /// <list type="number">
 /// <item><b>Sahiplenme</b>: vadesi gelmiş ve kirası olmayan en fazla 200 satır, parti başına
 /// YENİ bir kimlikle (LeaseOwner) 2 dakikalığına kiralanır (<c>FOR UPDATE SKIP LOCKED</c>):
-/// iki sunucu kopyası aynı satırı alamaz.</item>
+/// iki sunucu kopyası aynı satırı alamaz. Kira VERİTABANI saatiyle kurulur ve sınanır.</item>
 /// <item><b>Bağlam</b>: alıcı/aktör durumu, tercihler, engeller, olayların GÜNCEL durumu ve
 /// bağlı cihazlar toplu sorgularla okunur. Metin burada, güncel veriden kurulur.</item>
-/// <item><b>Eleme</b>: gitmeyecek satırlar nedeniyle birlikte (Outcome) tek UPDATE ile yazılır.</item>
+/// <item><b>Eleme</b>: gitmeyecek satırlar nedeniyle birlikte (Outcome) tek UPDATE ile yazılır;
+/// gecikerek sessiz saate girmiş satırlar sabaha ertelenir.</item>
 /// <item><b>Kısma</b>: mesaj satırları için sohbet başına yuva; alınamazsa satır ertelenir.</item>
 /// <item><b>Gönderim</b>: 100'lük alt partiler. Her Expo çağrısından ÖNCE kalan kira
-/// yerel saatle ölçülür; 30 sn'den azsa o alt parti gönderilmeden bırakılır.</item>
+/// yerel saatle ölçülür; 30 sn'den azsa ya da kapanış başladıysa o alt parti gönderilmeden
+/// bırakılır. Başlamış bir Expo çağrısı kapanışta KESİLMEZ.</item>
 /// <item><b>Sonuç yazımı</b>: Expo yanıtından HEMEN SONRA, başka hiçbir yazımdan önce.</item>
 /// <item><b>Bilet ve ölü cihaz</b>: en iyi çaba; düşerse uyarı, durum geri alınmaz.</item>
 /// </list>
@@ -76,9 +78,32 @@ public sealed record DispatchNotificationsCommand : IRequest<PushIsSonucu>;
 /// ayrı: FK çakışması, eşzamanlı silme ya da ağ hatası onları düşürürse durum işaretlemesi
 /// geri alınmaz — kaybedilen yalnızca bir makbuz kontrolü, mükerrer bildirim değil.
 ///
-/// Kalan tek mükerrer penceresi: Expo kabul etti ama süreç sonuç yazılmadan öldü. Bu "en
-/// az bir kez" teslimattır; Android'de tag, iOS'ta apns-collapse-id cihazdaki ikinci kopyayı
-/// yenisiyle DEĞİŞTİRİR, yani kullanıcı iki bildirim görmez.
+/// ─── EXPO ÇAĞRISI KAPANIŞ JETONUNU ALMAZ ────────────────────────────────────
+/// Aynı gerekçe gönderimin KENDİSİ için de geçerli ve bir kez atlanmıştı: çağrıya kapanış
+/// jetonu (ya da admin ucunda RequestAborted) verildiğinde, dağıtım sırasında gelen SIGTERM
+/// ya da bağlantısı kopan istemci uçuştaki isteği kesiyordu. Expo gövdeyi çoktan almış ve
+/// bildirimleri kuyruğa koymuş olabiliyordu, ama OperationCanceledException sonuç yazımını
+/// da bileti de atlıyordu; satır kiralı kalıyor, iki dakika sonra yeni süreç onu İKİNCİ KEZ
+/// gönderiyordu (telefon iki kez çalar: tag ve collapse-id ekrandaki kopyayı değiştirir, sesi
+/// değil). Bu yüzden Expo çağrısı <see cref="CancellationToken.None"/> ile yapılır; süresini
+/// zaten HttpClient.Timeout sınırlıyor (en fazla 25 sn, AddPush) ve .NET'in kapanış bekleme
+/// süresi (30 sn) buna yetiyor. Kapanış alt partiler ARASINDA (ve bölmede istekler arasında)
+/// denetlenir: başlamamış gönderim yapılmaz, satırın kirası bırakılır, sıradaki süreç hemen
+/// alır.
+///
+/// Kalan tek mükerrer penceresi: Expo kabul etti ama süreç sonuç yazılmadan ÖLDÜ (çökme,
+/// SIGKILL, kapanış bekleme süresinin aşılması). Bu "en az bir kez" teslimattır; Android'de
+/// tag, iOS'ta apns-collapse-id cihazdaki ikinci kopyayı yenisiyle değiştirir (ekranda tek
+/// bildirim kalır, ama ses yeniden çalar).
+///
+/// ─── SESSİZ SAAT GÖNDERİM ANINDA DA ─────────────────────────────────────────
+/// Fabrikalar vadeyi kuyruğa yazarken kaydırıyor; ama 21:57'de sessiz olmayan vadeyle
+/// yazılmış bir satır gecikebilir (sunucu kapalıydı, Expo 5xx verdi, kira doldu). Eleme
+/// adımı bu yüzden aynı kuralı (<see cref="BildirimKuyrugu.SessizSaatVadesi"/>) şimdiki ana
+/// yeniden uygular ve satırı deneme saymadan erteler; yeniden deneme vadesi de aynı kuraldan
+/// geçer. Vadesi ZATEN sessiz saatte olan satıra dokunulmaz: o anı bir kural bilerek seçti
+/// (otomatik onaya iki saatten az kala onay bekliyor, 12 saatten yakın ders ya da kuraldan
+/// geçmiş yeniden deneme) ve kural aynı cevabı yeniden verirdi.
 ///
 /// ─── GÜNCEL VERİ, İÇERİKSİZ DEFTER ──────────────────────────────────────────
 /// Satır yalnızca kimlik taşır; mesaj okunmuşsa (Okundu), ders iptal edilmişse, onay damgası
@@ -102,9 +127,18 @@ public sealed class DispatchNotificationsHandler : IRequestHandler<DispatchNotif
     /// <summary>
     /// Expo çağrısından önce kirada en az bu kadar kalmalı. Çağrının zaman aşımı 15 sn;
     /// kalan kira bundan kısaysa yanıt gelmeden kira dolabilir ve satır başka bir turda
-    /// İKİNCİ KEZ gönderilir. Yerel saat (Stopwatch) kullanılıyor: sunucu saatinin DB
-    /// saatinden sapması kira hesabını bozmasın.
+    /// İKİNCİ KEZ gönderilir.
     /// </summary>
+    /// <remarks>
+    /// İki saat, iki ayrı iş: kiranın BİTİŞİ veritabanı saatiyle yazılıp yine onunla sınanır
+    /// (sahiplenme SQL'i), bu kopyanın kirayı ne kadar süredir tuttuğu ise yerel Stopwatch'la
+    /// ölçülür. Hiçbir yerde iki farklı makinenin saati karşılaştırılmıyor. Eskiden bitiş
+    /// uygulama saatiyle yazılıp ÖTEKİ kopyanın uygulama saatiyle sınanıyordu: saati 20 sn
+    /// ileride olan ikinci kopya, birincisinin uçuştaki gönderimi sürerken kirayı "dolmuş"
+    /// sayıp satırı alıyor ve bildirim iki kez gidiyordu (pay ~15 sn saat farkıydı).
+    /// Stopwatch sahiplenmeden ÖNCE başlıyor; yerel ölçüm DB'nin gördüğünden hep uzun, pay
+    /// ihtiyatlı kalır.
+    /// </remarks>
     public static readonly TimeSpan KiraPayi = TimeSpan.FromSeconds(30);
 
     /// <summary>Sonuç yazımının kendi zaman aşımı (kapanış jetonundan bağımsız).</summary>
@@ -154,6 +188,13 @@ public sealed class DispatchNotificationsHandler : IRequestHandler<DispatchNotif
 
         for (var parti = 0; parti < TurBasinaEnFazlaParti; parti++)
         {
+            // Kapanış başladıysa yeni parti kiralanmaz; bu turun sonucu yine döner (arka plan
+            // işi düzgün çıkar, bitmiş partilerin sonucu kaybolmaz).
+            if (ct.IsCancellationRequested)
+            {
+                break;
+            }
+
             var sonuc = await PartiAsync(ct);
             if (sonuc is null)
             {
@@ -175,18 +216,22 @@ public sealed class DispatchNotificationsHandler : IRequestHandler<DispatchNotif
         var kira = Stopwatch.StartNew();
         var now = Utc(_clock.UtcNow);
         var tur = Guid.NewGuid();
-        var kiraSonu = now + KiraSuresi;
 
         /* Alt sorgunun WHERE'i IX_Notifications_Bekleyen filtresini ("Status" = 'Pending')
            BİREBİR içeriyor; yoksa index sessizce devreden çıkar. Kirası dolmuş satır da
-           alınır: onu tutan tur takıldı ya da süreç öldü. */
+           alınır: onu tutan tur takıldı ya da süreç öldü.
+
+           ⛔ Kira bitişi now() ile (VERİTABANI saati) yazılıyor ve now() ile sınanıyor; uygulama
+           saatiyle YAZILMAZ. Kira, kopyalar arasında paylaşılan tek zaman bilgisi: bir kopyanın
+           saatiyle yazılıp ötekinin saatiyle sınanırsa aradaki fark kira payından düşer (bkz.
+           KiraPayi). Vade (DueAtUtc) uygulama saatiyle kalıyor: onu yazan da uygulama. */
         var idler = await _db.Database.SqlQuery<Guid>(
             $"""
-            UPDATE comms."Notifications" SET "LeaseOwner" = {tur}, "LeaseUntilUtc" = {kiraSonu}
+            UPDATE comms."Notifications" SET "LeaseOwner" = {tur}, "LeaseUntilUtc" = now() + {KiraSuresi}
             WHERE "Id" IN (
                 SELECT "Id" FROM comms."Notifications"
                 WHERE "Status" = 'Pending' AND "DueAtUtc" <= {now}
-                  AND ("LeaseUntilUtc" IS NULL OR "LeaseUntilUtc" < {now})
+                  AND ("LeaseUntilUtc" IS NULL OR "LeaseUntilUtc" < now())
                 ORDER BY "DueAtUtc"
                 LIMIT {PartiBoyutu}
                 FOR UPDATE SKIP LOCKED)
@@ -221,8 +266,11 @@ public sealed class DispatchNotificationsHandler : IRequestHandler<DispatchNotif
                     case KararTuru.Atla:
                         parti.Atla(satir.Id, karar.Sonuc!.Value);
                         break;
+                    case KararTuru.Ertele:
+                        parti.Ertele(satir.Id, karar.Vade!.Value);
+                        break;
                     default:
-                        isler.Add(new Is(satir, karar.Taslak!, karar.Cihazlar!, karar.Okunmamislar));
+                        isler.Add(new Is(satir, karar.Taslak!, karar.Cihazlar!, karar.Okunmamislar, karar.SonAn));
                         break;
                 }
             }
@@ -509,6 +557,18 @@ public sealed class DispatchNotificationsHandler : IRequestHandler<DispatchNotif
             return Karar.Atla(atla);
         }
 
+        /* Sessiz saat: olay hâlâ geçerliyken ve cihaz kontrolünden ÖNCE — fabrikanın gece
+           yazdığı satır da 09:00'da cihazına bakılarak gidiyor (gece kaydolan telefon sabah
+           bildirimi alır). Kalıcı eleme nedenleri (Bayat, durum, engel…) yukarıda: sabah yine
+           atlanacak satırı bekletmenin anlamı yok. Vadesi sessiz saatte olan satır ertelenmez
+           (bkz. sınıf açıklaması, SESSİZ SAAT GÖNDERİM ANINDA DA). */
+        var sonAn = SessizSonAn(n, b);
+        if (SessizSaat.SessizMi(now) && !SessizSaat.SessizMi(n.DueAtUtc)
+            && BildirimKuyrugu.SessizSaatVadesi(n.Type, now, sonAn) is var vade && vade > now)
+        {
+            return Karar.Ertele(vade);
+        }
+
         var kanal = BildirimKanallari.Kanal(n.Type, n.Type == NotificationType.Test ? BildirimAnahtarlari.TestKanali(n.DedupeKey) : null);
 
         if (!b.Cihazlar.TryGetValue(n.RecipientUserId, out var tumCihazlar) || tumCihazlar.Count == 0)
@@ -542,7 +602,7 @@ public sealed class DispatchNotificationsHandler : IRequestHandler<DispatchNotif
             Ttl(n, b, now),
             n.Type == NotificationType.NewMessage && b.Rozetler.TryGetValue(n.RecipientUserId, out var rozet) ? rozet : null);
 
-        return Karar.Gonder(taslak, cihazlar, okunmamislar);
+        return Karar.Gonder(taslak, cihazlar, okunmamislar, sonAn);
     }
 
     /// <summary>
@@ -856,9 +916,12 @@ public sealed class DispatchNotificationsHandler : IRequestHandler<DispatchNotif
             return;
         }
 
-        if (parti.Kira.Elapsed > KiraSuresi - KiraPayi)
+        /* Gönderilmeden bırakılır (kirası düşer, sıradaki tur hemen alır):
+           • kalan kira paydan kısa: yanıt kira bitmeden gelmeyebilir;
+           • kapanış başladı: başlamamış gönderim başlatılmaz. Kontrol alt partiler ARASINDA
+             ve bölmede istekler arasında çalışır; uçuştaki isteği kesmez (aşağıda). */
+        if (parti.Kira.Elapsed > KiraSuresi - KiraPayi || ct.IsCancellationRequested)
         {
-            // Yanıt kira bitmeden gelmeyebilir: gönderme, bırak. Bir sonraki tur yeniden alır.
             foreach (var m in mesajlar)
             {
                 m.Sonuc = MesajSonucu.Gonderilmedi;
@@ -870,11 +933,17 @@ public sealed class DispatchNotificationsHandler : IRequestHandler<DispatchNotif
         PushGonderimSonucu sonuc;
         try
         {
-            sonuc = await _gonderici.GonderAsync(mesajlar.Select(m => m.Mesaj).ToList(), ct);
+            /* ⛔ Kapanış jetonu VERİLMEZ (bkz. sınıf açıklaması, EXPO ÇAĞRISI KAPANIŞ JETONUNU
+               ALMAZ): Expo'nun kabul etmiş olabileceği bir isteği kesmek, sonucu yazılmamış ve
+               iki dakika sonra yeniden gönderilecek bir satır bırakır. Süreyi HttpClient.Timeout
+               sınırlıyor. */
+            sonuc = await _gonderici.GonderAsync(mesajlar.Select(m => m.Mesaj).ToList(), CancellationToken.None);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex)
         {
-            // Sözleşme "fırlatmaz" diyor; yine de fırlatırsa geçici hata say, turu düşürme.
+            /* Sözleşme "fırlatmaz (iptal hariç)" diyor ve iptal edilebilir jeton verilmedi;
+               buraya düşen her şey (OperationCanceledException dahil) gönderici hatası. Geçici
+               say, turu düşürme: yukarı kaçsaydı satır sonuçsuz ve kiralı kalırdı. */
             _logger.LogError(ex, "Push göndericisi sözleşme dışı istisna fırlattı.");
             sonuc = PushGonderimSonucu.Hata(new PushIstekHatasi(null, "Istisna", PushTokenKurali.MetniMaskele(ex.Message), null));
         }
@@ -918,7 +987,7 @@ public sealed class DispatchNotificationsHandler : IRequestHandler<DispatchNotif
                 foreach (var m in yabanciMesajlar)
                 {
                     m.Sonuc = new MesajSonucu(MesajSonu.Yabanci, null, PushHataKurali.CokDeneyim, null);
-                    parti.OluCihazlar.Add(m.CihazId);
+                    parti.OluCihazEkle(m);
                 }
 
                 /* Kullanıcı kimliği yazılıyor, token YAZILMIYOR. Aynı kullanıcı tekrar tekrar
@@ -1036,7 +1105,7 @@ public sealed class DispatchNotificationsHandler : IRequestHandler<DispatchNotif
 
             foreach (var m in i.Mesajlar.Where(m => m.Sonuc!.Tur == MesajSonu.CihazOlu))
             {
-                parti.OluCihazlar.Add(m.CihazId);
+                parti.OluCihazEkle(m);
             }
 
             if (sonuclar.Any(s => s.Tur == MesajSonu.Basarili))
@@ -1073,7 +1142,7 @@ public sealed class DispatchNotificationsHandler : IRequestHandler<DispatchNotif
                 }
                 else
                 {
-                    yazilacak.YenidenDene(i.Satir.Id, i.Satir.Attempts, hata);
+                    yazilacak.YenidenDene(i.Satir.Id, i.Satir.Attempts, hata, i.Satir.Type, i.SonAn);
                 }
 
                 continue;
@@ -1149,12 +1218,18 @@ public sealed class DispatchNotificationsHandler : IRequestHandler<DispatchNotif
 
         /* Yeniden deneme: deneme sayısı SQL'de artırılıyor; bekleme sahiplenmede okunan
            sayıdan hesaplanıyor. Satır bizim kiramızda olduğu için sayı arada değişemez
-           (fencing). Aynı sayı ve aynı hatayı taşıyan satırlar tek ifadede: Expo kesintisinde
-           bütün parti aynı hatayla döner, satır başına ifade 200 gidiş-dönüş olurdu. */
-        foreach (var grup in p.Denenecekler.GroupBy(x => (x.OncekiDeneme, x.Hata)))
+           (fencing). Vade sessiz saat kuralından geçer: 21:58'de düşen isteğin yeniden denemesi
+           22:00'ı geçiyorsa sabaha kayar (kaymayan türde aynen kalır). Aynı vade ve aynı hatayı
+           taşıyan satırlar tek ifadede: Expo kesintisinde bütün parti aynı hatayla döner,
+           satır başına ifade 200 gidiş-dönüş olurdu. */
+        var denemeler = p.Denenecekler.Select(x => (
+            x.Id,
+            x.Hata,
+            Vade: BildirimKuyrugu.SessizSaatVadesi(x.Tur, now + PushHataKurali.Bekleme(x.OncekiDeneme + 1), x.SonAn)));
+        foreach (var grup in denemeler.GroupBy(x => (x.Vade, x.Hata)))
         {
             var idler = grup.Select(x => x.Id).ToList();
-            var due = now + PushHataKurali.Bekleme(grup.Key.OncekiDeneme + 1);
+            var due = Utc(grup.Key.Vade);
             var hata = grup.Key.Hata;
             ertelenen += await Benim(idler).ExecuteUpdateAsync(s => s
                 .SetProperty(n => n.Attempts, n => n.Attempts + 1)
@@ -1164,7 +1239,7 @@ public sealed class DispatchNotificationsHandler : IRequestHandler<DispatchNotif
                 .SetProperty(n => n.LeaseUntilUtc, (DateTime?)null), ct);
         }
 
-        // Kısma ertelemesi: deneme sayılmaz, hata değil.
+        // Kısma ve sessiz saat ertelemesi: deneme sayılmaz, hata değil.
         foreach (var x in p.Ertelenenler)
         {
             var id = x.Id;
@@ -1228,9 +1303,9 @@ public sealed class DispatchNotificationsHandler : IRequestHandler<DispatchNotif
         {
             try
             {
-                // ExecuteDelete: satır arada silindiyse 0 satır, hata değil.
-                var olu = p.OluCihazlar.ToList();
-                p.SilinenCihaz += await _db.PushDevices.Where(d => olu.Contains(d.Id)).ExecuteDeleteAsync(ct);
+                // Satır arada silindiyse ya da biz okuduktan SONRA yeniden kaydedildiyse
+                // (OluCihaz) 0 satır, hata değil.
+                p.SilinenCihaz += await OluCihaz.SilAsync(_db, p.OluCihazlar, ct);
             }
             catch (Exception ex)
             {
@@ -1241,7 +1316,10 @@ public sealed class DispatchNotificationsHandler : IRequestHandler<DispatchNotif
         /* Kapsanan mesajlar: gönderilen bildirimin okunmamış sayısına ZATEN giren mesajların
            bekleyen satırları. Kısma onları 60 sn sonraya ertelerdi ve kullanıcı aynı bilgiyi
            ("2 yeni mesaj") ikinci kez, telefon yeniden çalarak alırdı. Başka bir turun
-           kirasındaki satıra dokunulmaz. Düşerse zararı yalnızca o ikinci bildirim. */
+           kirasındaki satıra dokunulmaz; kira, sahiplenmedeki gibi VERİTABANI saatiyle
+           sınanır (LINQ içindeki DateTime.UtcNow SQL'e now() olarak çevriliyor; değişkene
+           alınırsa uygulama saatinden bir parametreye dönüşür ve kural bozulur). Düşerse
+           zararı yalnızca o ikinci bildirim. */
         foreach (var i in p.KapsananMesajlar)
         {
             try
@@ -1255,7 +1333,7 @@ public sealed class DispatchNotificationsHandler : IRequestHandler<DispatchNotif
                     .Where(n => n.Type == NotificationType.NewMessage && n.RecipientUserId == alici && n.ConversationId == sohbet
                                 && n.Status == NotificationStatus.Pending && n.Id != kendisi
                                 && mesajlar.Contains(n.RecordId)
-                                && (n.LeaseUntilUtc == null || n.LeaseUntilUtc < now))
+                                && (n.LeaseUntilUtc == null || n.LeaseUntilUtc < DateTime.UtcNow))
                     .ExecuteUpdateAsync(s => s
                         .SetProperty(n => n.Status, NotificationStatus.Skipped)
                         .SetProperty(n => n.Outcome, (NotificationOutcome?)NotificationOutcome.Birlestirildi)
@@ -1300,6 +1378,15 @@ public sealed class DispatchNotificationsHandler : IRequestHandler<DispatchNotif
     private static (Guid, Guid) Cift(Guid a, Guid b) => a.CompareTo(b) < 0 ? (a, b) : (b, a);
 
     private DateTime OtomatikOnay(DateTime damga) => Utc(damga).AddHours(_ekonomi.AutoApproveHours);
+
+    /// <summary>Sessiz saat kaymasının sınırı (BildirimKuyrugu.SessizSaatVadesi): otomatik onay ya da ders başlangıcı.</summary>
+    private DateTime? SessizSonAn(Notification n, Baglam b) => n.Type switch
+    {
+        NotificationType.ApprovalPending => n.OlayDamgasiUtc is { } damga ? OtomatikOnay(damga) : null,
+        NotificationType.LessonBooked or NotificationType.LessonCancelled
+            => b.Dersler.TryGetValue(n.RecordId, out var d) ? Utc(d.BaslangicUtc) : null,
+        _ => null
+    };
 
     private static string Konu(Baglam b, Guid konuId) => b.Konular.GetValueOrDefault(konuId) ?? "Bir";
 
@@ -1375,39 +1462,46 @@ public sealed class DispatchNotificationsHandler : IRequestHandler<DispatchNotif
         public Dictionary<Guid, string> Konular { get; set; } = [];
     }
 
-    private enum KararTuru { Gonder, Atla }
+    private enum KararTuru { Gonder, Atla, Ertele }
 
+    /// <param name="Vade">Ertele: satırın yeni DueAtUtc'si (sessiz saat).</param>
+    /// <param name="SonAn">Gonder: sessiz saat kaymasının sınırı; yeniden deneme vadesi için.</param>
     private sealed record Karar(
         KararTuru Tur, NotificationOutcome? Sonuc, BildirimTaslagi? Taslak,
-        IReadOnlyList<Cihaz>? Cihazlar, IReadOnlyList<Guid>? Okunmamislar)
+        IReadOnlyList<Cihaz>? Cihazlar, IReadOnlyList<Guid>? Okunmamislar, DateTime? Vade, DateTime? SonAn)
     {
-        public static Karar Atla(NotificationOutcome sonuc) => new(KararTuru.Atla, sonuc, null, null, null);
-        public static Karar Gonder(BildirimTaslagi t, IReadOnlyList<Cihaz> c, IReadOnlyList<Guid>? o)
-            => new(KararTuru.Gonder, null, t, c, o);
+        public static Karar Atla(NotificationOutcome sonuc) => new(KararTuru.Atla, sonuc, null, null, null, null, null);
+        public static Karar Ertele(DateTime vade) => new(KararTuru.Ertele, null, null, null, null, vade, null);
+        public static Karar Gonder(BildirimTaslagi t, IReadOnlyList<Cihaz> c, IReadOnlyList<Guid>? o, DateTime? sonAn)
+            => new(KararTuru.Gonder, null, t, c, o, null, sonAn);
     }
 
     /// <summary>Gönderilecek bir satır: taslak bir kez, mesaj her cihaz için bir kez.</summary>
     private sealed class Is
     {
-        public Is(Notification satir, BildirimTaslagi taslak, IReadOnlyList<Cihaz> cihazlar, IReadOnlyList<Guid>? okunmamislar)
+        public Is(Notification satir, BildirimTaslagi taslak, IReadOnlyList<Cihaz> cihazlar, IReadOnlyList<Guid>? okunmamislar, DateTime? sonAn)
         {
             Satir = satir;
             Okunmamislar = okunmamislar;
+            SonAn = sonAn;
             Mesajlar = cihazlar
-                .Select(c => new CihazMesaji(this, c.Id, BildirimYuku.Kur(taslak, c.Token, c.Platform)))
+                .Select(c => new CihazMesaji(this, c.Id, Utc(c.LastSeenAtUtc), BildirimYuku.Kur(taslak, c.Token, c.Platform)))
                 .ToList();
         }
 
         public Notification Satir { get; }
         public IReadOnlyList<Guid>? Okunmamislar { get; }
+        public DateTime? SonAn { get; }
         public List<CihazMesaji> Mesajlar { get; }
         public bool Yazildi { get; set; }
     }
 
-    private sealed class CihazMesaji(Is sahip, Guid cihazId, PushMesaji mesaj)
+    /// <param name="cihazGorulme">Bağlamda okunan PushDevices.LastSeenAtUtc: ölü cihaz silmesinin sınırı (OluCihaz).</param>
+    private sealed class CihazMesaji(Is sahip, Guid cihazId, DateTime cihazGorulme, PushMesaji mesaj)
     {
         public Is Is { get; } = sahip;
         public Guid CihazId { get; } = cihazId;
+        public DateTime CihazGorulme { get; } = cihazGorulme;
         public PushMesaji Mesaj { get; } = mesaj;
         public MesajSonucu? Sonuc { get; set; }
     }
@@ -1428,12 +1522,13 @@ public sealed class DispatchNotificationsHandler : IRequestHandler<DispatchNotif
         public List<Guid> GonderilenIdler { get; } = [];
         public List<(Guid Id, NotificationOutcome Sonuc)> Atlananlar { get; } = [];
         public List<(Guid Id, string Hata)> Basarisizlar { get; } = [];
-        public List<(Guid Id, int OncekiDeneme, string Hata)> Denenecekler { get; } = [];
+        public List<(Guid Id, int OncekiDeneme, string Hata, NotificationType Tur, DateTime? SonAn)> Denenecekler { get; } = [];
         public List<(Guid Id, DateTime DueAtUtc)> Ertelenenler { get; } = [];
         public List<Guid> Birakilanlar { get; } = [];
 
         public List<(string BiletId, Guid CihazId, Guid BildirimId)> Biletler { get; } = [];
-        public HashSet<Guid> OluCihazlar { get; } = [];
+        /// <summary>Cihaz → bağlamda okunan son görülme; o andan sonra yenilenen satır silinmez.</summary>
+        public Dictionary<Guid, DateTime> OluCihazlar { get; } = [];
         public List<Is> KapsananMesajlar { get; } = [];
         public int SilinenCihaz { get; set; }
         public int KapsananSayisi { get; set; }
@@ -1443,9 +1538,11 @@ public sealed class DispatchNotificationsHandler : IRequestHandler<DispatchNotif
         public void Gonderildi(Guid id) => GonderilenIdler.Add(id);
         public void Atla(Guid id, NotificationOutcome sonuc) => Atlananlar.Add((id, sonuc));
         public void Basarisiz(Guid id, string hata) => Basarisizlar.Add((id, hata));
-        public void YenidenDene(Guid id, int oncekiDeneme, string hata) => Denenecekler.Add((id, oncekiDeneme, hata));
+        public void YenidenDene(Guid id, int oncekiDeneme, string hata, NotificationType tur, DateTime? sonAn)
+            => Denenecekler.Add((id, oncekiDeneme, hata, tur, sonAn));
         public void Ertele(Guid id, DateTime due) => Ertelenenler.Add((id, due));
         public void Birak(Guid id) => Birakilanlar.Add(id);
+        public void OluCihazEkle(CihazMesaji m) => OluCihazlar.TryAdd(m.CihazId, m.CihazGorulme);
 
         public async Task YazAsync(DispatchNotificationsHandler h)
         {

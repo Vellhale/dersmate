@@ -44,6 +44,8 @@ public class LoggingPushGondericiTests
         Assert.True(PushTokenKurali.Gecerli(Tok("OLU")));
         Assert.True(PushTokenKurali.Gecerli(Tok("YABANCI")));
         Assert.True(PushTokenKurali.Gecerli(Tok("YAVAS")));
+        Assert.True(PushTokenKurali.Gecerli(Tok("GECICI")));
+        Assert.EndsWith(LoggingPushGonderici.GeciciEki, Tok("GECICI"));
         Assert.EndsWith(LoggingPushGonderici.OluEki, Tok("OLU"));
         Assert.EndsWith(LoggingPushGonderici.YabanciEki, Tok("YABANCI"));
         Assert.EndsWith(LoggingPushGonderici.YavasEki, Tok("YAVAS"));
@@ -127,6 +129,17 @@ public class LoggingPushGondericiTests
 
         using var iptal = new CancellationTokenSource(TimeSpan.FromMilliseconds(100));
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => g.GonderAsync([Mesaj(Tok("YAVAS"))], iptal.Token));
+    }
+
+    [Fact]
+    public async Task GECICI_istek_duzeyinde_503_ve_gecici_karar()
+    {
+        var sonuc = await Kur().GonderAsync([Mesaj(Tok()), Mesaj(Tok("GECICI"))], default);
+
+        var hata = Assert.IsType<PushIstekHatasi>(sonuc.IstekHatasi);
+        Assert.Empty(sonuc.Biletler);
+        Assert.Equal(503, hata.HttpDurumu);
+        Assert.Equal(IstekKarari.Gecici, PushHataKurali.Istek(hata));
     }
 
     [Fact]

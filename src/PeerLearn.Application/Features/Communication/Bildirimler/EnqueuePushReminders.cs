@@ -5,6 +5,7 @@ using Microsoft.Extensions.Options;
 using PeerLearn.Application.Abstractions;
 using PeerLearn.Application.Options;
 using PeerLearn.Domain.Communication;
+using PeerLearn.Domain.Identity;
 using PeerLearn.Domain.Matchmaking;
 using PeerLearn.Domain.Scheduling;
 
@@ -45,6 +46,17 @@ public sealed record EnqueuePushRemindersCommand : IRequest<PushIsSonucu>;
 /// pencereden çıkana kadar HİÇ yazılmazdı (öndekiler her turda yeniden çakışıp yer tutar).
 /// Ofsetle sayfalamada eşzamanlı bir değişiklik bir kaydı bu turda atlatabilir; bir sonraki
 /// dakika onu yakalar (ileri bakış 2 saat), iki kez okunan kayıt ise çakışıp geçilir.
+///
+/// ─── SİLİNMİŞ HESABA SATIR YAZILMAZ ─────────────────────────────────────────
+/// Hesap silme (DeleteAccount) alıcısı olduğu defter satırlarını BİR KEZ siliyor ama dersleri
+/// ve istekleri kapatmıyor: silinmiş kullanıcının üç saat sonraki dersi Booked, onay bekleyen
+/// dersi AwaitingApproval, yanıtlamadığı istekleri Pending kalıyor. Koşulsuz yazım bir dakika
+/// sonra aynı kimlik adına yeniden hatırlatma ve 14 güne kadar her gün özet satırı açıyordu;
+/// dağıtıcı onları HesapPasif atlasa da 30 gün defterde kalıyorlardı — oysa gizlilik metni
+/// "alıcısı olduğu bildirim kayıtları silinir" diyor. Yazım (<see cref="YazAsync"/>) bu yüzden
+/// alıcının hesap durumunu AYNI ifadede sınar; özet adayları ayrıca sorguda süzülür (aşağıda).
+/// Kalan pencere: silme transaction'ı sürerken yazılan satır (durum henüz commit olmamış);
+/// dağıtıcı onu HesapPasif atlar.
 /// </remarks>
 public sealed class EnqueuePushRemindersHandler : IRequestHandler<EnqueuePushRemindersCommand, PushIsSonucu>
 {
@@ -226,12 +238,18 @@ public sealed class EnqueuePushRemindersHandler : IRequestHandler<EnqueuePushRem
                Özeti zaten yazılmış alıcılar SORGUDA süzülüyor; sayfalama bu yüzden hep ilk
                sayfayı istiyor (yazılanlar bir sonraki sorgudan kendiliğinden düşer). Yuva
                penceresi üç saat ve bu iş dakikada bir koşuyor: süzülmeseydi her tur aynı
-               alıcıları yeniden okuyup çakıştırırdı. */
+               alıcıları yeniden okuyup çakıştırırdı.
+
+               Silinmiş hesaplar da SORGUDA süzülüyor, yalnızca yazımda değil: yazım onları sessizce
+               atladığı için "yazılanlar bir sonraki sorgudan düşer" varsayımı onlarda tutmaz.
+               Tam bir sayfa silinmiş alıcıdan oluşsaydı yazilan == 0 olur ve döngü o gün kalan
+               herkesin özetini keserdi. */
             var alicilar = await _db.Matches.AsNoTracking()
                 .Where(m => m.Status == MatchStatus.Pending && m.CreatedAtUtc > alt && m.CreatedAtUtc <= ust)
                 .Select(m => m.ResponderUserId)
                 .Distinct()
                 .Where(alici => !_db.Notifications.Any(n => n.RecipientUserId == alici && n.DedupeKey == anahtar))
+                .Where(alici => _db.Users.Any(u => u.Id == alici && u.Status != UserStatus.Deleted))
                 .OrderBy(alici => alici)
                 .Take(SayfaBoyutu)
                 .ToListAsync(ct);
@@ -266,6 +284,12 @@ public sealed class EnqueuePushRemindersHandler : IRequestHandler<EnqueuePushRem
     /// 'Pending' (enum metin olarak saklanıyor, bkz. CLAUDE.md). Aynı ifadede iki satır aynı
     /// anahtara düşerse (olmaması gerekir) ikincisi de ON CONFLICT ile atlanır; DO NOTHING
     /// bunu hata saymaz.
+    ///
+    /// Alıcısı silinmiş hesap olan satır yazılmaz (sınıf açıklaması, SİLİNMİŞ HESABA SATIR
+    /// YAZILMAZ). Koşul ayrı bir okuma değil aynı ifadenin JOIN'i: okuma ile yazım arasında
+    /// silinen hesap için pencere açılmasın. Aktör koşulu YOK: aktörü silinmiş satır karşı
+    /// tarafın kaydı ve DeleteAccount onu da silmiyor, Skipped(HesapPasif) yapıyor; dağıtıcı
+    /// aynı kararı gönderim anında veriyor.
     /// </remarks>
     private async Task<int> YazAsync(NotificationType tur, IReadOnlyList<HatirlatmaSatiri> satirlar, DateTime now, CancellationToken ct)
     {
@@ -283,6 +307,7 @@ public sealed class EnqueuePushRemindersHandler : IRequestHandler<EnqueuePushRem
         var anlar = satirlar.Select(s => Utc(s.An)).ToArray();
         var sonlar = satirlar.Select(s => Utc(s.Son)).ToArray();
         var turMetni = tur.ToString();
+        var silinmis = UserStatus.Deleted.ToString();
 
         return await _db.Database.ExecuteSqlInterpolatedAsync(
             $"""
@@ -292,6 +317,8 @@ public sealed class EnqueuePushRemindersHandler : IRequestHandler<EnqueuePushRem
             SELECT v.id, {now}, {turMetni}, v.anahtar, v.alici, v.aktor, v.kayit, v.damga, v.an, v.son, 'Pending', 0
             FROM unnest({idler}, {anahtarlar}, {alicilar}, {aktorler}, {kayitlar}, {damgalar}, {anlar}, {sonlar})
                 AS v(id, anahtar, alici, aktor, kayit, damga, an, son)
+            JOIN identity."Users" u ON u."Id" = v.alici
+            WHERE u."Status" <> {silinmis}
             ON CONFLICT ("RecipientUserId", "DedupeKey") DO NOTHING
             """, ct);
     }

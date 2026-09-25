@@ -26,6 +26,8 @@ namespace PeerLearn.Infrastructure.Services;
 /// deneyimin altında listelenir. Gerçek Expo bu hatayı yalnızca istekte İKİ proje varken
 /// verir; kanca tek başına da verir ki sonuç partinin bileşimine bağlı olmasın.</item>
 /// <item><c>…YAVAS]</c>: yanıt 3 saniye gecikir (gönderim sürerken cihaz silme senaryosu).</item>
+/// <item><c>…GECICI]</c>: istek düzeyi HTTP 503; bütün parti geçici hatayla döner (yeniden
+/// deneme vadesi ve sessiz saat kaydırması senaryosu).</item>
 /// </list>
 /// Gerçek Expo token'ı rastgele 22 karakter; bu eklerle bitmesi pratikte imkânsız ve Log
 /// sağlayıcısı zaten hiçbir şeyi dışarı göndermiyor.
@@ -35,6 +37,7 @@ public sealed class LoggingPushGonderici : IPushGonderici
     public const string OluEki = "OLU]";
     public const string YabanciEki = "YABANCI]";
     public const string YavasEki = "YAVAS]";
+    public const string GeciciEki = "GECICI]";
 
     /// <summary>Kancadaki yabancı deneyimin adı.</summary>
     public const string YabanciDeneyim = "@yabanci/baska-proje";
@@ -65,6 +68,13 @@ public sealed class LoggingPushGonderici : IPushGonderici
         if (mesajlar.Any(m => m.To.EndsWith(YavasEki, StringComparison.Ordinal)))
         {
             await Task.Delay(YavasGecikme, ct);
+        }
+
+        if (mesajlar.Any(m => m.To.EndsWith(GeciciEki, StringComparison.Ordinal)))
+        {
+            // Gerçek Expo'nun 503'ü gibi: bilet yok, istek düzeyi hata, PushHataKurali'na göre geçici.
+            _logger.LogInformation("[PUSH-LOG] {Sayi} mesajlık istek HTTP 503 ile düştü (test kancası).", mesajlar.Count);
+            return PushGonderimSonucu.Hata(new PushIstekHatasi(503, null, "Service Unavailable (test kancası).", null));
         }
 
         var yabancilar = mesajlar.Where(m => m.To.EndsWith(YabanciEki, StringComparison.Ordinal)).Select(m => m.To).ToList();

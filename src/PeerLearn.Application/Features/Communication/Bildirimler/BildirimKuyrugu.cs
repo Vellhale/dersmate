@@ -62,7 +62,7 @@ public static class BildirimKuyrugu
     public static Notification YeniIstek(
         Guid istekId, Guid aliciId, Guid gonderenId, DateTime nowUtc, DateTime istekOlusturmaUtc)
         => Satir(NotificationType.MatchRequest, BildirimAnahtarlari.Istek(istekId), aliciId, gonderenId, istekId, nowUtc,
-            dueAt: SessizSaat.Kaydir(nowUtc),
+            dueAt: SessizSaatVadesi(NotificationType.MatchRequest, nowUtc),
             expiresAt: MatchRules.DusmeAni(istekOlusturmaUtc));
 
     /// <summary>İsteğin kabulü (alıcı: isteği GÖNDEREN). Sessiz saatte kayar.</summary>
@@ -70,7 +70,7 @@ public static class BildirimKuyrugu
     public static Notification IstekKabul(
         Guid istekId, Guid sohbetId, Guid aliciId, Guid kabulEdenId, DateTime nowUtc)
         => Satir(NotificationType.MatchAccepted, BildirimAnahtarlari.IstekKabul(istekId), aliciId, kabulEdenId, istekId, nowUtc,
-            dueAt: SessizSaat.Kaydir(nowUtc),
+            dueAt: SessizSaatVadesi(NotificationType.MatchAccepted, nowUtc),
             expiresAt: null,
             sohbetId: sohbetId);
 
@@ -88,7 +88,7 @@ public static class BildirimKuyrugu
         var otomatikOnay = damgaUtc.AddHours(otomatikOnaySaati);
         var satir = Satir(NotificationType.ApprovalPending, BildirimAnahtarlari.Onay(dersId, damgaUtc), ogrenciId, egitmenId,
             dersId, damgaUtc,
-            dueAt: SessizSaat.Kaydir(damgaUtc, otomatikOnay, OnaySessizPay),
+            dueAt: SessizSaatVadesi(NotificationType.ApprovalPending, damgaUtc, otomatikOnay),
             expiresAt: otomatikOnay);
         satir.OlayDamgasiUtc = Utc(damgaUtc);
         return satir;
@@ -98,7 +98,7 @@ public static class BildirimKuyrugu
     public static Notification DersPlanlandi(
         Guid dersId, Guid egitmenId, Guid ogrenciId, DateTime nowUtc, DateTime baslangicUtc)
         => Satir(NotificationType.LessonBooked, BildirimAnahtarlari.Rezervasyon(dersId), egitmenId, ogrenciId, dersId, nowUtc,
-            dueAt: SessizSaat.UzakPlan(nowUtc, baslangicUtc),
+            dueAt: SessizSaatVadesi(NotificationType.LessonBooked, nowUtc, baslangicUtc),
             expiresAt: baslangicUtc);
 
     /// <summary>
@@ -108,7 +108,7 @@ public static class BildirimKuyrugu
     public static Notification DersIptal(
         Guid dersId, Guid aliciId, Guid iptalEdenId, DateTime nowUtc, DateTime baslangicUtc)
         => Satir(NotificationType.LessonCancelled, BildirimAnahtarlari.Iptal(dersId), aliciId, iptalEdenId, dersId, nowUtc,
-            dueAt: SessizSaat.UzakPlan(nowUtc, baslangicUtc),
+            dueAt: SessizSaatVadesi(NotificationType.LessonCancelled, nowUtc, baslangicUtc),
             expiresAt: baslangicUtc);
 
     /// <summary>
@@ -125,6 +125,42 @@ public static class BildirimKuyrugu
         satir.Id = id;
         return satir;
     }
+
+    /// <summary>
+    /// Sessiz saat kuralının TEK tanımı: <paramref name="tur"/> türünden bir bildirim
+    /// <paramref name="anUtc"/>'de gidecekse, gece sessizliğine göre en erken ne zaman gidebilir.
+    /// Kaymayan türde ve sessiz olmayan anda <paramref name="anUtc"/>'nin kendisi.
+    /// </summary>
+    /// <param name="sonAnUtc">
+    /// Kaymanın sınırı: onay bekliyorda otomatik onay anı, ders planı ve iptalde dersin
+    /// başlangıcı. Diğer türlerde yok sayılır.
+    /// </param>
+    /// <remarks>
+    /// ─── NEDEN AYRI BİR FONKSİYON ───────────────────────────────────────────
+    /// Kural üç yerde uygulanıyor ve üçünde de AYNI olmak zorunda: yukarıdaki fabrikalar
+    /// (satır kuyruğa yazılırken), dağıtıcının eleme adımı (satır sessiz saate GECİKEREK
+    /// girdiğinde: sunucu kapalıydı, Expo hata verdi, kira doldu) ve dağıtıcının yeniden
+    /// deneme vadesi (Expo 21:58'de düştü, yeniden deneme 22:00'ı geçti). Yalnızca kuyruğa
+    /// yazarken uygulandığında 21:57'de kabul edilen istek, iki geçici hatanın ardından gece
+    /// 22:01'de telefonu çaldırıyordu.
+    ///
+    /// Hatırlatmalar (otomatik onay 24/2 sa) buradan GEÇMEZ: kendi kaymalarını
+    /// HatirlatmaPenceresi'nde taşıyorlar ve ömürleri toleransla (30/15 dk) sınırlı; gecikme
+    /// onları sessiz saate en fazla o kadar taşıyabilir, sabaha kaydırmak Bayat yapardı.
+    /// Günlük özet (10:00 TR ± 1 sa) sessiz saate hiç yaklaşmıyor.
+    /// </remarks>
+    public static DateTime SessizSaatVadesi(NotificationType tur, DateTime anUtc, DateTime? sonAnUtc = null) => tur switch
+    {
+        NotificationType.MatchRequest or NotificationType.MatchAccepted => SessizSaat.Kaydir(anUtc),
+        NotificationType.ApprovalPending => sonAnUtc is { } otomatikOnay
+            ? SessizSaat.Kaydir(anUtc, otomatikOnay, OnaySessizPay)
+            : SessizSaat.Kaydir(anUtc),
+        // Başlangıç bilinmiyorsa (ders kaydı yok) hemen: dağıtıcı onu zaten DurumDegisti ile eler.
+        NotificationType.LessonBooked or NotificationType.LessonCancelled => sonAnUtc is { } baslangic
+            ? SessizSaat.UzakPlan(anUtc, baslangic)
+            : Utc(anUtc),
+        _ => Utc(anUtc)
+    };
 
     private static Notification Satir(
         NotificationType tur, string anahtar, Guid aliciId, Guid? aktorId, Guid kayitId, DateTime nowUtc,

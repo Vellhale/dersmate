@@ -250,19 +250,31 @@ daraltmak hatırlatmayı sessizce kaybettirir, genişletmek yalnızca birkaç fa
 
 **Kira sahipliği.** Vadesi gelmiş ve kirası olmayan en fazla 200 satır, parti başına YENİ
 bir kimlikle (`LeaseOwner`) 2 dakikalığına kiralanır (`FOR UPDATE SKIP LOCKED`): iki kopya
-aynı satırı alamaz. Her Expo çağrısından önce kalan kira yerel saatle ölçülür; 30 sn'den
-azsa o alt parti gönderilmeden bırakılır (HTTP zaman aşımı en fazla 25 sn).
+aynı satırı alamaz. Kira bitişi **veritabanı saatiyle** (`now()`) yazılır ve sınanır; uygulama
+saatiyle yazılsaydı saati ileride olan kopya, ötekinin uçuştaki gönderimi sürerken kirayı
+dolmuş sayıp satırı ikinci kez gönderirdi. Her Expo çağrısından önce kalan kira yerel
+Stopwatch'la ölçülür; 30 sn'den azsa o alt parti gönderilmeden bırakılır (HTTP zaman aşımı
+en fazla 25 sn).
 
 **Sonuç yazımı her şeyden önce ve fencing'li.** Expo yanıtından hemen sonra, bilet ve cihaz
 silmeden ÖNCE, `WHERE "LeaseOwner" = @tur AND "Status" = 'Pending'` ile ve kapanış
 jetonuna değil kendi 10 sn'lik jetonuna bağlı. Takılıp kirası dolan tur, satırı almış yeni
-turun sonucunu EZEMEZ. Kalan tek mükerrer penceresi "Expo kabul etti, süreç sonucu yazamadan
-öldü" — en az bir kez teslimat; cihazda aynı etiketli bildirim yenisiyle yer değiştirir.
+turun sonucunu EZEMEZ.
+
+**Expo çağrısı kapanış jetonunu almaz.** Dağıtım sırasında gelen SIGTERM (ya da admin ucunda
+kopan istemci) uçuştaki isteği kesiyordu: Expo bildirimleri almış olabiliyordu ama sonuç da
+bilet de yazılmıyor, satır iki dakika sonra ikinci kez gidiyordu. Çağrı artık
+`CancellationToken.None` ile yapılıyor (süreyi `HttpClient.Timeout` sınırlıyor, ≤ 25 sn;
+.NET'in kapanış beklemesi 30 sn). Kapanış alt partiler ve bölmede istekler ARASINDA
+denetleniyor: başlamamış gönderim yapılmaz, satırın kirası bırakılır. Kalan tek mükerrer
+penceresi "Expo kabul etti, süreç sonucu yazamadan ÖLDÜ" (çökme, SIGKILL) — en az bir kez
+teslimat; cihazda aynı etiketli bildirim yenisiyle yer değiştirir (ses yeniden çalar).
 
 **Eleme sırası** (ucuzdan pahalıya): Bayat → HesapPasif → Engel (yalnızca kişiyi getiren
 türler: mesaj, istek, kabul; ders metinleri engelli/engelsiz vakada bayt bayt aynı) →
-TercihKapali (Test muaf) → olay durumu (Okundu, DurumDegisti, Tekrar) → CihazYok (oturum
-bağı, §8.7) → KanalKapali. Eleme kararları Expo'dan ÖNCE yazılır.
+TercihKapali (Test muaf) → olay durumu (Okundu, DurumDegisti, Tekrar) → sessiz saat
+ertelemesi (§8.5) → CihazYok (oturum bağı, §8.7) → KanalKapali. Eleme kararları Expo'dan
+ÖNCE yazılır.
 
 **Mesaj.** Satır 10 sn gecikmeyle vadelenir (web'de sohbet açıkken okunan mesaj telefonu
 çaldırmasın). Alıcı × sohbet başına 60 sn kısma yuvası; yuva gönderimden ÖNCE alınır (sonra
@@ -277,7 +289,7 @@ bildirimi ya da reddedilmiş istek varsa yenisi `Tekrar`.
 
 | durum | karar |
 |---|---|
-| bilet `DeviceNotRegistered` | cihaz silinir |
+| bilet `DeviceNotRegistered` | cihaz silinir (bağlamda okunduktan sonra yeniden kaydedilmediyse, `OluCihaz`) |
 | bilet `MessageRateExceeded` | geçici |
 | bilet `MessageTooBig`, `InvalidCredentials`, `MismatchSenderId`, tanınmayan | kalıcı: `Failed`, cihaz SİLİNMEZ, `LogError` |
 | istek 400 `PUSH_TOO_MANY_EXPERIENCE_IDS` | yabancı projenin token'ları ayrılır (`CihazGecersiz`, cihaz silinir), kalanlar deneme sayılmadan yeniden gönderilir |
@@ -305,6 +317,16 @@ Süreç içi: diğer kopya satırı en geç 5 sn'lik taramasında görür.
 | otomatik onay 24 sa | 09:00'a kayar (onaydan en az 3 sa önce kalmalı) |
 | otomatik onay 2 sa | önceki 21:30'a çekilir (sabaha kayarsa onaydan sonraya düşerdi) |
 | yeni mesaj, yaklaşan ders | **kaymaz** |
+
+Kural tek yerde: `BildirimKuyrugu.SessizSaatVadesi` (tür, an, son an). Üç yerde uygulanıyor:
+fabrikalar (kuyruğa yazarken), dağıtıcının eleme adımı ve yeniden deneme vadesi. Yalnızca
+kuyruğa yazarken uygulandığında, 21:57'de yazılıp gecikmiş (sunucu kapalıydı, Expo 5xx
+verdi) ya da yeniden denemesi 22:00'ı geçmiş bir istek gece telefonu çaldırıyordu. Dağıtıcı
+yalnızca vadesi sessiz saatin DIŞINDA olan satırı erteler: vadesi zaten sessiz saatte olan
+satırı bir kural bilerek oraya koydu (otomatik onaya iki saatten az kala onay bekliyor, 12
+saatten yakın ders) ve kural aynı cevabı verirdi. Erteleme deneme sayılmaz. Otomatik onay
+hatırlatmaları ömürleri toleransla sınırlı olduğu için buna girmez (gecikme onları en fazla
+30/15 dk taşıyabilir).
 
 Metinlerde takvim sözcüğü ve mutlak saat yok ("yarın", "09:00"): kullanıcının saat dilimi
 bilinmiyor ve bildirim gecikmeli okunabiliyor; süreler göreli ("3 saat sonra").
@@ -337,8 +359,18 @@ her turda uygulanıyor; HWID üç tabloda tek fonksiyonla biçimleniyor (`HwidKu
 Cihaz satırı silinir: tek cihaz çıkışı (Rotated token'la çıkışta halef zinciri de iptal),
 her yerden çıkış, parola sıfırlama, hesap silme, rol değişimi, hırsızlık tespiti
 (`RefreshTokenService.TumOturumlariDusurAsync`), kalıcı ban, `forget` (mobilin çevrimdışı
-çıkıştan sonraki ilk açılışı), makbuzda `DeviceNotRegistered`, yabancı proje. **Geçici
-askıda silinmez**: askı bitince bildirim sürer, askı boyunca dağıtıcı `HesapPasif` yazar.
+çıkıştan sonraki ilk açılışı), bilette ya da makbuzda `DeviceNotRegistered`, yabancı proje,
+ve günlük temizlik (`CleanupNotifications`): oturum bağı kopmuş ve 5 günden uzun süredir
+kaydını yenilememiş cihaz. Sonuncusu olmadan uygulamayı çıkış yapmadan silen kullanıcının
+satırı (o sürede bildirim olayı yoksa DeviceNotRegistered hiç gelmez) hesap silinene kadar
+kalıyordu; gizlilik §5 "oturum kapandıktan en geç 7 gün sonra" diyor. **Geçici askıda
+silinmez**: askı token'ları iptal etmiyor, cihaz bağlı kalır; askı bitince bildirim sürer,
+askı boyunca dağıtıcı `HesapPasif` yazar.
+
+`DeviceNotRegistered` silmesi koşullu: satır, ölüm kanıtından (makbuzda biletin yazıldığı an,
+bilette bağlamın okunduğu an) SONRA yeniden kaydedildiyse silinmez (`OluCihaz`). iOS'ta
+yeniden kurulumda Expo token'ı aynı kalabiliyor ve PUT aynı satırı güncelliyor; saatler sonra
+gelen eski makbuz aksi hâlde yeni ve geçerli kaydı silerdi.
 
 ### 8.8 Uçlar
 
@@ -361,5 +393,5 @@ askıda silinmez**: askı bitince bildirim sürer, askı boyunca dağıtıcı `H
   sinyal, Log sağlayıcısının test kancaları.
 - Uçtan uca: `tools/e2e-bildirim.ps1` (`Push:Provider=Log`, `run-all-tests.ps1` içinde).
   Log sağlayıcısının kancaları token'ın son ekinden seçilir: `…OLU]` makbuzda
-  DeviceNotRegistered, `…YAVAS]` 3 sn gecikme, `…YABANCI]` başka Expo projesi. Mutasyon
-  kanıtı paketin başındaki yorumda.
+  DeviceNotRegistered, `…YAVAS]` 3 sn gecikme, `…YABANCI]` başka Expo projesi, `…GECICI]`
+  istek düzeyi 503 (yeniden deneme vadesi). Mutasyon kanıtı paketin başındaki yorumda.

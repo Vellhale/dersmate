@@ -430,7 +430,8 @@ public sealed class NotificationDispatchJob : BackgroundService
 }
 
 /// <summary>
-/// Expo makbuzları 15 dakikada bir; bildirim defterinin yaş temizliği günde bir.
+/// Expo makbuzları 15 dakikada bir; bildirim defterinin ve oturumu kapanmış push cihazlarının
+/// yaş temizliği günde bir.
 /// </summary>
 /// <remarks>
 /// Temizlik ayrı bir iş olmadı: ikisi de "gönderimden sonra artakalanı toparla" işi ve günde
@@ -487,11 +488,12 @@ public sealed class PushReceiptJob : BackgroundService
                     var temizlik = await mediator.Send(new CleanupNotificationsCommand(), stoppingToken);
                     sonTemizlik = DateTime.UtcNow;
 
-                    if (temizlik.SilinenKayit > 0 || temizlik.Atlanan > 0)
+                    if (temizlik.SilinenKayit > 0 || temizlik.Atlanan > 0 || temizlik.SilinenCihaz > 0)
                     {
                         _logger.LogInformation(
-                            "Bildirim defteri bakımı: {Silinen} satır silindi, {Bayat} bekleyen satır bayat işaretlendi.",
-                            temizlik.SilinenKayit, temizlik.Atlanan);
+                            "Bildirim defteri bakımı: {Silinen} satır silindi, {Bayat} bekleyen satır bayat işaretlendi, " +
+                            "{Cihaz} oturumu kapanmış push cihazı silindi.",
+                            temizlik.SilinenKayit, temizlik.Atlanan, temizlik.SilinenCihaz);
                     }
                 }
             }

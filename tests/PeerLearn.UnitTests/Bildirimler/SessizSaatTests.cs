@@ -16,8 +16,8 @@ namespace PeerLearn.UnitTests.Bildirimler;
 public class SessizSaatTests
 {
     /// <summary>TR duvar saati → UTC (sabit +3, yaz saati yok).</summary>
-    private static DateTime Tr(int gun, int saat, int dakika = 0)
-        => new DateTime(2026, 10, gun, saat, dakika, 0, DateTimeKind.Utc).AddHours(-3);
+    private static DateTime Tr(int gun, int saat, int dakika = 0, int saniye = 0)
+        => new DateTime(2026, 10, gun, saat, dakika, saniye, DateTimeKind.Utc).AddHours(-3);
 
     private static readonly Guid Ders = Guid.Parse("0f8fad5b-d9cb-469f-a165-70867728950e");
     private static readonly Guid Ogrenci = Guid.Parse("7c9e6679-7425-40de-944b-e07fc1f90ae7");
@@ -256,6 +256,88 @@ public class SessizSaatTests
             Assert.Equal(now + TimeSpan.FromSeconds(10),
                 BildirimKuyrugu.YeniMesaj(Guid.NewGuid(), Guid.NewGuid(), Ogrenci, Egitmen, now, TimeSpan.FromSeconds(10)).DueAtUtc);
             Assert.Equal(NotificationStatus.Pending, BildirimKuyrugu.YeniIstek(Guid.NewGuid(), Ogrenci, Egitmen, now, now).Status);
+        }
+    }
+
+    // ─── Gönderim anında: tek kural (BildirimKuyrugu.SessizSaatVadesi) ──────────
+    //
+    // Dağıtıcı, sessiz saate GECİKEREK giren satıra (sunucu kapalıydı, Expo düştü) ve yeniden
+    // deneme vadesine aynı fonksiyonu uyguluyor. Bu testler kuralın kendisini ve fabrikalarla
+    // AYNI kaldığını kilitliyor; dağıtıcıdaki kullanımı e2e-bildirim 3. bölüm sınıyor.
+
+    [Theory]
+    [InlineData(NotificationType.MatchRequest)]
+    [InlineData(NotificationType.MatchAccepted)]
+    public void Istek_ve_kabul_gonderim_aninda_da_sabaha_kayar(NotificationType tur)
+    {
+        Assert.Equal(Tr(2, 9), BildirimKuyrugu.SessizSaatVadesi(tur, Tr(1, 22, 0, 30)));
+        Assert.Equal(Tr(1, 21, 59), BildirimKuyrugu.SessizSaatVadesi(tur, Tr(1, 21, 59)));
+    }
+
+    [Fact]
+    public void Yeniden_deneme_vadesi_22_00_i_gecerse_sabaha_kayar()
+    {
+        // Bulgudaki senaryo: 21:57'de kabul, Expo 503; bekleme 21:58:30 → 22:00:30.
+        var yenidenDeneme = Tr(1, 21, 58, 30) + TimeSpan.FromMinutes(2);
+        Assert.Equal(Tr(2, 9), BildirimKuyrugu.SessizSaatVadesi(NotificationType.MatchAccepted, yenidenDeneme));
+    }
+
+    [Fact]
+    public void Onay_bekliyor_gonderim_aninda_da_otomatik_onay_payini_korur()
+    {
+        var an = Tr(1, 23);
+        // Otomatik onay 48 sa sonra: sabaha kayar.
+        Assert.Equal(Tr(2, 9), BildirimKuyrugu.SessizSaatVadesi(NotificationType.ApprovalPending, an, an.AddHours(48)));
+        // Otomatik onay 10:00'da: 09:00 > 10:00 − 2 sa → hemen (itiraz hakkı gece uyandırmaya değer).
+        Assert.Equal(an, BildirimKuyrugu.SessizSaatVadesi(NotificationType.ApprovalPending, an, Tr(2, 10)));
+    }
+
+    [Fact]
+    public void Ders_plani_ve_iptal_gonderim_aninda_da_on_iki_saat_kuralini_izler()
+    {
+        var an = Tr(1, 22, 5);
+        foreach (var tur in new[] { NotificationType.LessonBooked, NotificationType.LessonCancelled })
+        {
+            Assert.Equal(an, BildirimKuyrugu.SessizSaatVadesi(tur, an, an.AddHours(3)));
+            Assert.Equal(Tr(2, 9), BildirimKuyrugu.SessizSaatVadesi(tur, an, an.AddDays(2)));
+        }
+    }
+
+    [Theory]
+    [InlineData(NotificationType.NewMessage)]
+    [InlineData(NotificationType.LessonSoon)]
+    [InlineData(NotificationType.AutoApproveSoon)]
+    [InlineData(NotificationType.MatchExpiringDigest)]
+    [InlineData(NotificationType.Test)]
+    public void Kaymayan_turler_gonderim_aninda_da_kaymaz(NotificationType tur)
+    {
+        var an = Tr(1, 2);
+        Assert.Equal(an, BildirimKuyrugu.SessizSaatVadesi(tur, an, an.AddHours(30)));
+        Assert.Equal(DateTimeKind.Utc, BildirimKuyrugu.SessizSaatVadesi(tur, DateTime.SpecifyKind(an, DateTimeKind.Unspecified)).Kind);
+    }
+
+    [Fact]
+    public void Fabrikalar_ve_gonderim_ani_ayni_kurali_uygular()
+    {
+        // Sessiz aralığın ve iki yanının her 7 dakikasında fabrika vadesi = kuralın cevabı.
+        // Biri değişip öteki değişmezse gece yazılan satır ile geciken satır farklı saatte giderdi.
+        var bas = Tr(1, 20);
+        for (var dk = 0; dk < 15 * 60; dk += 7)
+        {
+            var now = bas.AddMinutes(dk);
+            var onay = now.AddHours(dk % 3 == 0 ? 10 : 48);
+            var ders = now.AddHours(dk % 2 == 0 ? 5 : 30);
+
+            Assert.Equal(BildirimKuyrugu.SessizSaatVadesi(NotificationType.MatchRequest, now),
+                BildirimKuyrugu.YeniIstek(Guid.NewGuid(), Ogrenci, Egitmen, now, now).DueAtUtc);
+            Assert.Equal(BildirimKuyrugu.SessizSaatVadesi(NotificationType.MatchAccepted, now),
+                BildirimKuyrugu.IstekKabul(Guid.NewGuid(), Guid.NewGuid(), Ogrenci, Egitmen, now).DueAtUtc);
+            Assert.Equal(BildirimKuyrugu.SessizSaatVadesi(NotificationType.ApprovalPending, now, onay),
+                BildirimKuyrugu.OnayBekliyor(Ders, Ogrenci, Egitmen, now, (int)(onay - now).TotalHours).DueAtUtc);
+            Assert.Equal(BildirimKuyrugu.SessizSaatVadesi(NotificationType.LessonBooked, now, ders),
+                BildirimKuyrugu.DersPlanlandi(Ders, Egitmen, Ogrenci, now, ders).DueAtUtc);
+            Assert.Equal(BildirimKuyrugu.SessizSaatVadesi(NotificationType.LessonCancelled, now, ders),
+                BildirimKuyrugu.DersIptal(Ders, Ogrenci, Egitmen, now, ders).DueAtUtc);
         }
     }
 }

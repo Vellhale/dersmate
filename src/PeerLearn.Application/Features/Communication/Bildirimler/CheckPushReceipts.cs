@@ -27,9 +27,13 @@ public sealed record CheckPushReceiptsCommand : IRequest<PushIsSonucu>;
 /// (docs.expo.dev/push-notifications/sending-notifications). Sözlükte olmayan bilet henüz
 /// hazır değildir, yerinde kalır ve sonraki turda yeniden sorulur.
 ///
-/// Her makbuzda bilet silinir: ok → iş bitti; DeviceNotRegistered → cihaz satırı da silinir
-/// (Id ile ExecuteDelete; satır arada silindiyse 0 satır, hata değil); diğer hatalar maskeli
-/// olarak günlüğe yazılır ve bilet silinir — aynı hatayı her turda yeniden sormanın faydası yok.
+/// Her makbuzda bilet silinir: ok → iş bitti; DeviceNotRegistered → cihaz satırı da silinir;
+/// diğer hatalar maskeli olarak günlüğe yazılır ve bilet silinir — aynı hatayı her turda
+/// yeniden sormanın faydası yok.
+///
+/// ⚠️ Cihaz silmesi biletten SONRA yenilenmemiş satırla sınırlı (<see cref="OluCihaz"/>): makbuz
+/// saatler sonra gelebiliyor ve arada aynı token'la yeniden kaydolmuş (iOS'ta yeniden kurulum)
+/// geçerli cihaz, eski kurulumun ölüm haberiyle silinmemeli.
 /// </remarks>
 public sealed class CheckPushReceiptsHandler : IRequestHandler<CheckPushReceiptsCommand, PushIsSonucu>
 {
@@ -105,7 +109,11 @@ public sealed class CheckPushReceiptsHandler : IRequestHandler<CheckPushReceipts
             }
 
             var silinecekBiletler = new List<Guid>();
-            var oluCihazlar = new HashSet<Guid>();
+
+            // Cihaz → ölüm haberi veren EN YENİ biletin yazıldığı an. Biletten sonra yeniden
+            // kaydolmuş satır silinmez; aynı cihaza birden çok bilet varsa en yenisi belirler
+            // (yeniden kayıttan SONRA gönderilmiş bir bilet de ölü diyorsa cihaz gerçekten ölü).
+            var oluCihazlar = new Dictionary<Guid, DateTime>();
 
             foreach (var b in biletler)
             {
@@ -123,7 +131,12 @@ public sealed class CheckPushReceiptsHandler : IRequestHandler<CheckPushReceipts
 
                 if (makbuz.HataKodu == PushHataKurali.CihazKayitliDegil)
                 {
-                    oluCihazlar.Add(b.PushDeviceId);
+                    var biletAni = DateTime.SpecifyKind(b.CreatedAtUtc, DateTimeKind.Utc);
+                    if (!oluCihazlar.TryGetValue(b.PushDeviceId, out var onceki) || biletAni > onceki)
+                    {
+                        oluCihazlar[b.PushDeviceId] = biletAni;
+                    }
+
                     continue;
                 }
 
@@ -136,8 +149,7 @@ public sealed class CheckPushReceiptsHandler : IRequestHandler<CheckPushReceipts
 
             if (oluCihazlar.Count > 0)
             {
-                var olu = oluCihazlar.ToList();
-                silinenCihaz += await _db.PushDevices.Where(d => olu.Contains(d.Id)).ExecuteDeleteAsync(ct);
+                silinenCihaz += await OluCihaz.SilAsync(_db, oluCihazlar, ct);
             }
 
             if (silinecekBiletler.Count > 0)

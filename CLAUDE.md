@@ -133,6 +133,18 @@ Buradakiler ihlali SESSİZ kalanlar:
   dolunca satır ikinci kez gönderilir (e2e-bildirim 8. bölüm bunu kırar).
 - **HTTP zaman aşımı kira payından kısa kalmalı** (`Push:ZamanAsimiSaniye` [1, 25] sn, kira
   payı 30 sn): yanıt kira bitmeden gelmezse satır başka turda yeniden gönderilir.
+- **Expo çağrısına kapanış jetonu (`stoppingToken`, `RequestAborted`) VERİLMEZ**, çağrı
+  `CancellationToken.None` ile yapılır. Uçuştaki istek kesilirse Expo bildirimi almış olabilir
+  ama sonuç yazılmaz ve satır iki dakika sonra ikinci kez gider. Kapanış alt partiler
+  arasında denetlenir; süreyi `HttpClient.Timeout` sınırlıyor.
+- **Kira bitişi veritabanı saatiyle** (`now()`): sahiplenme, kapsanan mesaj güncellemesi ve
+  temizliğin kira koşulu. LINQ'te `DateTime.UtcNow` SQL'e `now()` olarak çevriliyor;
+  değişkene alınırsa uygulama saatinden parametreye döner ve iki kopyanın saat farkı kira
+  payından düşer (fark ~15 sn'yi geçince çift gönderim).
+- **Sessiz saat kuralı tek yerde** (`BildirimKuyrugu.SessizSaatVadesi`): fabrikalar, dağıtıcının
+  eleme adımı ve yeniden deneme vadesi aynı fonksiyonu çağırır. Dağıtıcı yalnızca vadesi sessiz
+  saatin DIŞINDA olan satırı erteler; e2e'nin `VadeyiCek`'i (vadeyi gece `now()`'a çeker) bu
+  yüzden çalışmaya devam ediyor.
 - **Kısma yuvası gönderimden ÖNCE alınır**; sonra alınsaydı iki kopya aynı anda gönderirdi.
 - **Kısmi indeks filtreleri sorguyla birebir**: `IX_Notifications_Bekleyen` (`"Status" =
   'Pending'`), `IX_LessonSessions_YaklasanDers`, `IX_LessonSessions_OnayBekleyen`.
@@ -148,10 +160,13 @@ Buradakiler ihlali SESSİZ kalanlar:
 - **Oturumu bitiren yeni bir akış cihaz kaydını da silmeli.** Bugünkü noktalar:
   `RefreshTokenService.TumOturumlariDusurAsync`, Logout tek cihaz, `BanUser`. Geçici askıda
   bilerek silinmez. İkinci savunma hattı `OturumBagi` ("bu cihazın EN YENİ token'ı aktif mi";
-  "herhangi aktif token" DEĞİL — e2e-bildirim 1. bölüm bunu kırar).
+  "herhangi aktif token" DEĞİL — e2e-bildirim 1. bölüm bunu kırar). Kaçan satırı günlük
+  temizlik 5 gün sonra siler (gizlilik §5 "en geç 7 gün"; pay artarsa metin de değişir).
+- **Ölü cihaz silmesi `OluCihaz.SilAsync` ile**, düz `Id` ile DEĞİL: satır ölüm kanıtından sonra
+  yeniden kaydedildiyse (iOS yeniden kurulumu aynı token'ı verebiliyor) korunur.
 - **`Push:Provider=Log` üretimde de açılır** ve defterde satırlar `Sent` görünür; telefona
   hiçbir şey gitmez. e2e-bildirim bu sağlayıcıyı ister (kancalar token'ın son ekinde:
-  `OLU]`, `YABANCI]`, `YAVAS]`).
+  `OLU]`, `YABANCI]`, `YAVAS]`, `GECICI]`).
 - Geliştirme konsolu dağıtıcının 5 sn'lik sahiplenme SQL'iyle dolar; susturmak için
   `Logging__LogLevel__Microsoft.EntityFrameworkCore.Database.Command=Warning`.
 
