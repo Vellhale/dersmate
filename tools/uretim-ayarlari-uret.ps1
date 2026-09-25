@@ -105,6 +105,14 @@ SMTP_FROM=noreply@$AlanAdi
 # gecerli olur ve giris ucu dakikada 2000 parola denemesine acik kalir.
 RATE_AUTH_PER_MINUTE=10
 RATE_GLOBAL_PER_MINUTE=300
+
+# ─── Push bildirimleri (Expo) ───────────────────────────────────────────────
+# Log: bildirim GONDERILMEZ, uygulama yine acilir (acilista uyari yazar). Expo robot
+# token'i hazir olunca PUSH_PROVIDER=Expo yapip token'i yazin; bos token'la Expo
+# secilirse uygulama ACILMAZ. URETIM robotunun token'i — gelistirmeninki DEGIL.
+# Sira: once bu token'la --test-push, sonra expo.dev'de Enhanced Security (docs/URETIME-CIKIS.md).
+PUSH_PROVIDER=Log
+PUSH_ACCESS_TOKEN=
 "@
 
 Set-Content -Path $Cikti -Value $icerik -Encoding UTF8
@@ -119,6 +127,10 @@ Write-Host ""
 Write-Host "  SIRADAKI ADIM — SMTP alanlari BOS:" -ForegroundColor Yellow
 Write-Host "    SMTP_HOST / SMTP_USERNAME / SMTP_PASSWORD elle doldurulmali."
 Write-Host "    Bos kalirsa uygulama ACILIR ama hic kimse hesabini dogrulayamaz."
+Write-Host ""
+Write-Host "  PUSH BILDIRIMLERI kapali (PUSH_PROVIDER=Log):" -ForegroundColor Yellow
+Write-Host "    Uygulama acilir ama telefona bildirim gitmez. Expo robot token'i hazir olunca"
+Write-Host "    PUSH_PROVIDER=Expo ve PUSH_ACCESS_TOKEN doldurulmali (once --test-push)."
 Write-Host ""
 Write-Host "  Kurulumun tamami: docs/SUNUCUYA-KURULUM.md" -ForegroundColor Cyan
 Write-Host ""

@@ -77,4 +77,37 @@ public static class PushTokenKurali
 
         return token.Length > GorunenKarakter * 2 ? "…" + token[^GorunenKarakter..] : "…";
     }
+
+    /// <summary>
+    /// Serbest metnin İÇİNDEKİ her token'ı <see cref="Maskele"/> ile değiştirir. Expo'nun hata
+    /// metinleri token'ı cümlenin ortasında taşıyor ("ExponentPushToken[…] is not a registered
+    /// push notification recipient"); LastError'a ve günlüğe giden her dış metin buradan geçer.
+    /// </summary>
+    /// <remarks>
+    /// Desen <see cref="Desen"/>'den GEVŞEK: köşeli parantezin içi herhangi bir şey olabilir.
+    /// Doğrulamada katı olmak doğru, maskede değil — Expo biçimi bir gün değişirse ya da metin
+    /// bozuk bir token taşırsa, katı desen eşleşmez ve token olduğu gibi günlüğe düşerdi.
+    /// Zaman aşımında metnin TAMAMI atılır: karar verilemiyorsa güvenli yön yazmamak.
+    /// </remarks>
+    public static string? MetniMaskele(string? metin)
+    {
+        if (string.IsNullOrEmpty(metin))
+        {
+            return metin;
+        }
+
+        try
+        {
+            return MetindekiToken.Replace(metin, m => Maskele(m.Value));
+        }
+        catch (RegexMatchTimeoutException)
+        {
+            return "(metin maskelenemedi)";
+        }
+    }
+
+    private static readonly Regex MetindekiToken = new(
+        @"Expo(nent)?PushToken\[[^\]]*\]",
+        RegexOptions.CultureInvariant | RegexOptions.Compiled,
+        TimeSpan.FromMilliseconds(100));
 }

@@ -2,6 +2,8 @@ using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using PeerLearn.Application.Abstractions;
+using PeerLearn.Application.Features.Communication.Bildirimler;
 using PeerLearn.Application.Features.Economy;
 using PeerLearn.Application.Features.Identity;
 using PeerLearn.Application.Features.Maintenance;
@@ -271,6 +273,235 @@ public sealed class RefreshTokenCleanupJob : BackgroundService
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Yenileme token'ı bakımı başarısız; sonraki turda tekrar denenecek.");
+            }
+        } while (await timer.WaitForNextTickAsync(stoppingToken));
+    }
+}
+
+// ─── Push bildirimleri (2026-09-25) ─────────────────────────────────────────────
+// Üç iş, üç sıklık. Mimari: docs/ASAMA-2-BACKEND.md. İş mantığı Application'daki komutlarda
+// (Features/Communication/Bildirimler); buradakiler yalnızca tetikleyici.
+
+/// <summary>
+/// Hatırlatmaları (yaklaşan ders, otomatik onay, günlük istek özeti) deftere ÖNCEDEN yazar;
+/// dakikada bir.
+/// </summary>
+/// <remarks>
+/// SessionSweepJob'a EKLENMEDİ: onun 10 dakikalık aralığı "10 dakika kala" hatırlatması için
+/// fazla kaba. Hatırlatmanın kendi zamanlaması aralığa bağlı değil (satırlar iki saat önceden
+/// yazılıyor, dağıtıcı DueAt'e göre gönderiyor); ama rezervasyondan hemen sonra derse az kalan
+/// bir dersin satırının geç yazılmaması için aralık kısa. İlk tur açılıştan 1 dakika sonra:
+/// göç ve ısınmayla yarışmasın.
+/// </remarks>
+public sealed class PushReminderJob : BackgroundService
+{
+    private static readonly TimeSpan Interval = TimeSpan.FromMinutes(1);
+    private static readonly TimeSpan InitialDelay = TimeSpan.FromMinutes(1);
+
+    private readonly IServiceScopeFactory _scopeFactory;
+    private readonly ILogger<PushReminderJob> _logger;
+
+    public PushReminderJob(IServiceScopeFactory scopeFactory, ILogger<PushReminderJob> logger)
+    {
+        _scopeFactory = scopeFactory;
+        _logger = logger;
+    }
+
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        try
+        {
+            await Task.Delay(InitialDelay, stoppingToken);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+
+        using var timer = new PeriodicTimer(Interval);
+        do
+        {
+            try
+            {
+                using var scope = _scopeFactory.CreateScope();
+                var mediator = scope.ServiceProvider.GetRequiredService<IMediator>();
+                var sonuc = await mediator.Send(new EnqueuePushRemindersCommand(), stoppingToken);
+
+                if (sonuc.Eklenen > 0)
+                {
+                    _logger.LogDebug("Push hatırlatmaları: {Eklenen} yeni satır kuyruğa yazıldı.", sonuc.Eklenen);
+                }
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                break;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Push hatırlatma kuyruklaması başarısız; sonraki turda tekrar denenecek.");
+            }
+        } while (await timer.WaitForNextTickAsync(stoppingToken));
+    }
+}
+
+/// <summary>
+/// Bildirim defterini gönderir: sinyalle ANINDA, sinyal yoksa en geç 5 saniyede bir.
+/// </summary>
+/// <remarks>
+/// ─── NEDEN PERIODICTIMER DEĞİL ──────────────────────────────────────────────
+/// Handler'lar commit'ten sonra IBildirimSinyali.Uyandir() çağırıyor; iş beklerken sinyal
+/// gelirse beklemeyi kesip hemen tarar. Sinyal süreç içi: diğer sunucu kopyasının satırlarını,
+/// kirası dolmuş satırları ve DueAt'i sonradan gelen satırları (mesajda +10 sn, hatırlatmalar,
+/// yeniden denemeler) 5 saniyelik tarama yakalar. Boş turun maliyeti tek bir kısmi index
+/// sorgusu. Mesajlar 10 sn gecikmeli kuyruğa girdiği için mesaj bildirimi 10–15 sn sonra gider.
+///
+/// ─── ARDIŞIK HATADA GERİ ÇEKİLME ────────────────────────────────────────────
+/// Veritabanı düştüyse (ya da göç henüz uygulanmadıysa) 5 saniyede bir hata günlüğü yazmak
+/// asıl sorunu gürültüde boğardı. Ardışık hatada bekleme 5 sn'den 1 dakikaya kadar ikiye
+/// katlanır; ilk başarılı turda sıfırlanır.
+/// </remarks>
+public sealed class NotificationDispatchJob : BackgroundService
+{
+    public static readonly TimeSpan TaramaAraligi = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan HataBeklemeTavani = TimeSpan.FromMinutes(1);
+
+    private readonly IServiceScopeFactory _scopeFactory;
+    private readonly IBildirimSinyali _sinyal;
+    private readonly ILogger<NotificationDispatchJob> _logger;
+
+    public NotificationDispatchJob(
+        IServiceScopeFactory scopeFactory, IBildirimSinyali sinyal, ILogger<NotificationDispatchJob> logger)
+    {
+        _scopeFactory = scopeFactory;
+        _sinyal = sinyal;
+        _logger = logger;
+    }
+
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        var ardisikHata = 0;
+
+        while (!stoppingToken.IsCancellationRequested)
+        {
+            try
+            {
+                using var scope = _scopeFactory.CreateScope();
+                var mediator = scope.ServiceProvider.GetRequiredService<IMediator>();
+                var sonuc = await mediator.Send(new DispatchNotificationsCommand(), stoppingToken);
+                ardisikHata = 0;
+
+                if (!sonuc.BosMu)
+                {
+                    _logger.LogDebug(
+                        "Push dağıtımı: {Gonderilen} gönderildi, {Atlanan} atlandı, {Ertelenen} ertelendi, " +
+                        "{Basarisiz} başarısız, {SilinenCihaz} cihaz silindi.",
+                        sonuc.Gonderilen, sonuc.Atlanan, sonuc.Ertelenen, sonuc.Basarisiz, sonuc.SilinenCihaz);
+                }
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                break;
+            }
+            catch (Exception ex)
+            {
+                ardisikHata++;
+                _logger.LogError(ex, "Push dağıtım turu başarısız ({Sayi}. ardışık); sonraki turda tekrar denenecek.", ardisikHata);
+            }
+
+            try
+            {
+                if (ardisikHata == 0)
+                {
+                    await _sinyal.BekleAsync(TaramaAraligi, stoppingToken);
+                }
+                else
+                {
+                    var us = Math.Min(ardisikHata - 1, 4);
+                    var bekleme = TimeSpan.FromTicks(Math.Min(TaramaAraligi.Ticks * (1L << us), HataBeklemeTavani.Ticks));
+                    await Task.Delay(bekleme, stoppingToken);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
+        }
+    }
+}
+
+/// <summary>
+/// Expo makbuzları 15 dakikada bir; bildirim defterinin yaş temizliği günde bir.
+/// </summary>
+/// <remarks>
+/// Temizlik ayrı bir iş olmadı: ikisi de "gönderimden sonra artakalanı toparla" işi ve günde
+/// bir koşan bir sorgu için ayrı zamanlayıcı gereksiz. "Günde bir" süreç içi bir damgayla
+/// izleniyor: yeniden başlatma temizliği öne çeker, o kadar — komut idempotent. İki sunucu
+/// kopyası da günde bir koşar; aynı satırları ikinci kez işlemek zararsız.
+///
+/// İlk tur açılıştan 5 dakika sonra: gönderim bu sürede biletleri zaten yazmış olur ve açılış
+/// kalabalığına bir tarama daha eklenmez.
+/// </remarks>
+public sealed class PushReceiptJob : BackgroundService
+{
+    private static readonly TimeSpan Interval = TimeSpan.FromMinutes(15);
+    private static readonly TimeSpan InitialDelay = TimeSpan.FromMinutes(5);
+    private static readonly TimeSpan TemizlikAraligi = TimeSpan.FromHours(24);
+
+    private readonly IServiceScopeFactory _scopeFactory;
+    private readonly ILogger<PushReceiptJob> _logger;
+
+    public PushReceiptJob(IServiceScopeFactory scopeFactory, ILogger<PushReceiptJob> logger)
+    {
+        _scopeFactory = scopeFactory;
+        _logger = logger;
+    }
+
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        try
+        {
+            await Task.Delay(InitialDelay, stoppingToken);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+
+        DateTime? sonTemizlik = null;
+        using var timer = new PeriodicTimer(Interval);
+        do
+        {
+            try
+            {
+                using var scope = _scopeFactory.CreateScope();
+                var mediator = scope.ServiceProvider.GetRequiredService<IMediator>();
+
+                var makbuz = await mediator.Send(new CheckPushReceiptsCommand(), stoppingToken);
+                if (makbuz.SilinenCihaz > 0)
+                {
+                    _logger.LogInformation("Push makbuzları: {Cihaz} kayıtlı olmayan cihaz silindi.", makbuz.SilinenCihaz);
+                }
+
+                if (sonTemizlik is null || DateTime.UtcNow - sonTemizlik.Value >= TemizlikAraligi)
+                {
+                    var temizlik = await mediator.Send(new CleanupNotificationsCommand(), stoppingToken);
+                    sonTemizlik = DateTime.UtcNow;
+
+                    if (temizlik.SilinenKayit > 0 || temizlik.Atlanan > 0)
+                    {
+                        _logger.LogInformation(
+                            "Bildirim defteri bakımı: {Silinen} satır silindi, {Bayat} bekleyen satır bayat işaretlendi.",
+                            temizlik.SilinenKayit, temizlik.Atlanan);
+                    }
+                }
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                break;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Push makbuz/bakım turu başarısız; sonraki turda tekrar denenecek.");
             }
         } while (await timer.WaitForNextTickAsync(stoppingToken));
     }
