@@ -160,6 +160,9 @@ public class BildirimMetniTests
     [InlineData("A\u200Bli", "Ali")]                // sıfır genişlikli boşluk
     [InlineData("M.Ali Kaya", "M.Ali Kaya")]         // kısaltma alan adı sayılmaz
     [InlineData("Resmiye", "Resmiye")]               // 'resmi' kökü bilerek rezerve değil
+    [InlineData("Ali\u3164Veli", "Ali Veli")]        // Hangul dolgusu: harf ama boşluk gibi çiziliyor
+    [InlineData("Ali\uFFA0\u2800Veli", "Ali Veli")]  // yarım genişlik dolgu + Braille boşluğu
+    [InlineData("Ali\uFF0EVeli", "Ali\uFF0EVeli")]   // tam genişlik nokta tek başına URL değil
     public void Ad_temizlenir(string ham, string beklenen)
         => Assert.Equal(beklenen, BildirimMetni.AdTemizle(ham));
 
@@ -181,6 +184,16 @@ public class BildirimMetniTests
     [InlineData("Moderatör")]
     [InlineData("GÜVENLİK")]
     [InlineData("Support")]
+    // Unicode ile atlatma (2026-09-25 bulgusu): denetim normalleştirilmiş metinde.
+    [InlineData("kampanya\uFF0Ecom")]                // tam genişlik nokta (NFKC → '.')
+    [InlineData("kampanya\u2024com")]                // ONE DOT LEADER (NFKC → '.')
+    [InlineData("kampanya\u3002com")]                // ideografik nokta (NFKC ayrıştırmıyor)
+    [InlineData("kampanya.\u0441om")]                // Kiril с ile "com"
+    [InlineData("Ders\u3164Mate")]                   // Hangul dolgusu: ekranda "Ders Mate"
+    [InlineData("Ders\uFFA0Mate")]                   // yarım genişlik Hangul dolgusu
+    [InlineData("Des\u3164tek")]
+    [InlineData("Y\u00F6\u3164netim")]
+    [InlineData("\u115Fdersmate")]
     public void Kotuye_kullanilabilir_ad_genel_metne_duser(string ham)
     {
         Assert.Null(BildirimMetni.AdTemizle(ham));
@@ -193,6 +206,9 @@ public class BildirimMetniTests
     [InlineData("   ")]
     [InlineData("\u200B\u200E")]
     [InlineData("\u200D")]
+    [InlineData("\u3164")]                            // yalnızca dolgu: boş özne bırakmasın
+    [InlineData("\u3164\u1160\uFFA0")]
+    [InlineData("\u2800")]
     public void Bos_ya_da_gorunmez_ad_null(string? ham)
         => Assert.Null(BildirimMetni.AdTemizle(ham));
 

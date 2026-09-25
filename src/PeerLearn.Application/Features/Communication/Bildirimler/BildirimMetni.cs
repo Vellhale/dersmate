@@ -47,7 +47,8 @@ public static class BildirimMetni
     /// <remarks>
     /// Sıra:
     /// <list type="number">
-    /// <item>Her türlü boşluk (satır sonu, sekme, NBSP…) tek boşluğa.</item>
+    /// <item>Her türlü boşluk (satır sonu, sekme, NBSP…) ve boşluk gibi çizilen HARFLER
+    /// (<see cref="GorunmezDolgu"/>: Hangul dolguları, Braille boşluğu) tek boşluğa.</item>
     /// <item>Kontrol (Cc) ve biçim (Cf) karakterleri silinir: yön değiştiriciler (RLO,
     /// LRI… — "evil.com" adı "moc.live" gibi görünmesin), sıfır genişlikli görünmezler.
     /// TEK İSTİSNA ZWJ (U+200D): emoji dizilerini (👨‍👩‍👧) birleştiriyor; silinirse tek emoji
@@ -55,7 +56,9 @@ public static class BildirimMetni
     /// sözcük kontrolü yalnızca harf ve rakama bakıyor.</item>
     /// <item>URL benzeri (://, www., alan adı) ya da rezerve sözcük (ürün adı, destek,
     /// yönetim, admin…) içeriyorsa null. Bildirim uygulamanın kimliğiyle görünüyor;
-    /// "dersmate Destek" adlı biri kilit ekranında resmî duyuru gibi görünmemeli.</item>
+    /// "dersmate Destek" adlı biri kilit ekranında resmî duyuru gibi görünmemeli. İkisi de
+    /// NORMALLEŞTİRİLMİŞ metinde aranır (<see cref="UrlBicimi"/>, <see cref="Katla"/>):
+    /// "kampanya．com" (tam genişlik nokta) ekranda "kampanya.com" gibi görünüyor.</item>
     /// <item>En fazla <see cref="AdEnFazla"/> grafem (StringInfo: emoji ve birleşik harf
     /// bölünmez); kesilirse sonu "…".</item>
     /// </list>
@@ -72,7 +75,7 @@ public static class BildirimMetni
         var oncekiBosluk = false;
         foreach (var ch in ad)
         {
-            if (char.IsWhiteSpace(ch))
+            if (char.IsWhiteSpace(ch) || GorunmezDolgu(ch))
             {
                 if (!oncekiBosluk && sb.Length > 0)
                 {
@@ -110,6 +113,18 @@ public static class BildirimMetni
     private const char Zwj = '‍';
 
     /// <summary>
+    /// Boşluk gibi çizilen ama boşluk SAYILMAYAN karakterler. Hangul dolguları (U+115F,
+    /// U+1160, U+3164, U+FFA0) Unicode'da HARF (Lo) ve Default_Ignorable: char.IsWhiteSpace
+    /// false, kategori Cf değil, NFKD de onları harf olarak bırakıyor. Temizlenmeseydi
+    /// "Ders" + U+3164 + "Mate" ekranda "Ders Mate" görünür ama katlanmış biçimi "ders" +
+    /// U+1160 + "mate" olur ve rezerve kök denetiminden geçerdi (düz boşluklu "Ders Mate" ise
+    /// yakalanıyor — kuralın korumak istediği vakanın ta kendisi). Braille boşluğu (U+2800)
+    /// harf değil ama tamamen boş çiziliyor; yalnızca ondan oluşan ad bildirimde boş bir özne
+    /// bırakırdı. Hepsi boşluğa çevrilir: gösterimde tek boşluk, katlamada yok sayılır.
+    /// </summary>
+    private static bool GorunmezDolgu(char ch) => ch is '\u115F' or '\u1160' or '\u3164' or '\uFFA0' or '\u2800';
+
+    /// <summary>
     /// Alan adı deseni: nokta (etrafında boşluk olabilir) + bilinen bir üst düzey alan,
     /// ardından harf/rakam yok. Genel "x.yz" deseni "M.Ali" gibi kısaltmaları da yakardı;
     /// liste bu yüzden dar ve kötüye kullanımda sık görülenlerden oluşuyor.
@@ -119,7 +134,29 @@ public static class BildirimMetni
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled,
         TimeSpan.FromMilliseconds(100));
 
-    private static bool UrlBenzeri(string ad)
+    /// <summary>
+    /// URL denetiminin baktığı biçim: NFKC (tam genişlik harf ve noktalar, "․" gibi uyumluluk
+    /// karakterleri sade karşılığına) → ideografik nokta ("。", NFKC'de ayrışmıyor) noktaya →
+    /// küçük harf ve Kiril/Yunan benzeri harfler Latin'e. Katla'dan farkı: noktalama ve boşluk
+    /// KORUNUR, çünkü alan adı deseni onlara bakıyor. Yalnızca denetim için; gösterilen ad
+    /// değişmez.
+    /// </summary>
+    private static string UrlBicimi(string ad)
+    {
+        var nfkc = ad.Normalize(NormalizationForm.FormKC);
+        var sb = new StringBuilder(nfkc.Length);
+        foreach (var ch in nfkc)
+        {
+            sb.Append(ch == '\u3002' ? '.' : HarfBenzeri(char.ToLowerInvariant(ch)));
+        }
+
+        return sb.ToString();
+    }
+
+    /// <summary>Ham metin de denenir: normalleştirme bir şeyi yakalanmaz hâle getirmesin.</summary>
+    private static bool UrlBenzeri(string ad) => UrlBenzeriHam(ad) || UrlBenzeriHam(UrlBicimi(ad));
+
+    private static bool UrlBenzeriHam(string ad)
     {
         if (ad.Contains("://", StringComparison.Ordinal) || ad.Contains("www.", StringComparison.OrdinalIgnoreCase))
         {
@@ -162,28 +199,28 @@ public static class BildirimMetni
 
     /// <summary>
     /// Karşılaştırma biçimi: NFKD (tam genişlikli harfler, aksanlar ayrışır) → birleşik
-    /// işaretler atılır → Türkçe ı/İ düzeltilir → yaygın Kiril/Yunan benzerleri ve rakam
-    /// ikameleri Latin harfe → yalnızca harf ve rakam, küçük harf.
+    /// işaretler ve görünmez dolgu harfleri atılır → Türkçe ı/İ düzeltilir → yaygın
+    /// Kiril/Yunan benzerleri ve rakam ikameleri Latin harfe → yalnızca harf ve rakam,
+    /// küçük harf.
     /// </summary>
+    /// <remarks>
+    /// Dolgu harfleri AdTemizle'de zaten boşluğa çevriliyor; burada da atılması ikinci savunma
+    /// hattı (NFKD, U+3164'ü U+1160'a çeviriyor; ikisi de listede).
+    /// </remarks>
     private static string Katla(string metin)
     {
         var sb = new StringBuilder(metin.Length);
         foreach (var ch in metin.Normalize(NormalizationForm.FormKD))
         {
-            if (char.GetUnicodeCategory(ch) == UnicodeCategory.NonSpacingMark)
+            if (char.GetUnicodeCategory(ch) == UnicodeCategory.NonSpacingMark || GorunmezDolgu(ch))
             {
                 continue;
             }
 
-            var kucuk = char.ToLowerInvariant(ch);
+            var kucuk = HarfBenzeri(char.ToLowerInvariant(ch));
             kucuk = kucuk switch
             {
-                'ı' => 'i',
-                // Kiril ve Yunan'dan Latin'e görünüşte eş harfler.
-                'а' => 'a', 'е' => 'e', 'о' => 'o', 'р' => 'p', 'с' => 'c', 'х' => 'x', 'у' => 'y',
-                'і' => 'i', 'ѕ' => 's', 'ԁ' => 'd', 'м' => 'm', 'т' => 't', 'к' => 'k', 'н' => 'h',
-                'ο' => 'o', 'α' => 'a', 'ε' => 'e', 'ι' => 'i', 'κ' => 'k', 'ν' => 'v', 'τ' => 't',
-                // Rakam ikameleri ("adm1n", "d3rsmate").
+                // Rakam ikameleri ("adm1n", "d3rsmate"). URL biçiminde YOK: orada rakam rakamdır.
                 '0' => 'o', '1' => 'i', '3' => 'e', '4' => 'a', '5' => 's', '7' => 't',
                 _ => kucuk
             };
@@ -196,6 +233,19 @@ public static class BildirimMetni
 
         return sb.ToString();
     }
+
+    /// <summary>
+    /// Küçük harfe çevrilmiş karakterde Türkçe ı ve görünüşte Latin'e eş Kiril/Yunan harfleri
+    /// (Katla ve UrlBicimi ortak).
+    /// </summary>
+    private static char HarfBenzeri(char kucuk) => kucuk switch
+    {
+        'ı' => 'i',
+        'а' => 'a', 'е' => 'e', 'о' => 'o', 'р' => 'p', 'с' => 'c', 'х' => 'x', 'у' => 'y',
+        'і' => 'i', 'ѕ' => 's', 'ԁ' => 'd', 'м' => 'm', 'т' => 't', 'к' => 'k', 'н' => 'h',
+        'ο' => 'o', 'α' => 'a', 'ε' => 'e', 'ι' => 'i', 'κ' => 'k', 'ν' => 'v', 'τ' => 't',
+        _ => kucuk
+    };
 
     /// <summary>
     /// En fazla <paramref name="enFazlaGrafem"/> grafem; kesilirse son grafem "…" olur
