@@ -31,8 +31,11 @@ export default function HesapSilme() {
         </p>
         <Maddeler>
           <li>
-            <strong>Mobil uygulamada:</strong> Profil sekmesini aç, sayfanın en altındaki{' '}
-            <strong>“Hesabımı sil”</strong> bağlantısına dokun.
+            {/* "Profil sekmesi" 2026-09-23'te bayatladı: mobilde sekme çubuğu yok, Profil'e
+                çekmecenin başındaki ada dokunarak gidiliyor (mobil Cekmece.jsx). */}
+            <strong>Mobil uygulamada:</strong> sol üstteki menüyü aç ve adına dokunarak
+            Profil’e git; sayfanın en altındaki <strong>“Hesabımı sil”</strong> bağlantısına
+            dokun.
           </li>
           <li>
             <strong>Web sitesinde:</strong>{' '}
@@ -50,7 +53,8 @@ export default function HesapSilme() {
 
       <Bolum no="2" baslik="Ne siliniyor">
         <Maddeler>
-          <li>Adın, e-posta adresin, telefon numaran ve profil fotoğrafın</li>
+          {/* "telefon numaran" 2026-09-25'te çıkarıldı: toplanmıyor (bkz. Gizlilik.jsx başı). */}
+          <li>Adın, e-posta adresin ve profil fotoğrafın</li>
           <li>Biyografin, üniversite ve bölüm bilgin</li>
           <li>Açtığın ders ilanları (arz ve talep)</li>
           <li>Veri toplama tercihlerin</li>

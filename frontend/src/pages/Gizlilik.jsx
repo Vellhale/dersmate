@@ -40,6 +40,19 @@ import { ISLETMECI, ISLETMECI_ADRESI, ISLETMECI_ALAN_ADI, MARKA } from '../lib/k
     3. LegalDocuments.CurrentVersion + web yasalMetinler.js'i artır
     4. sunucuyu dağıt
 
+  ─── 2026-09-25'te DÜZELTİLEN YANLIŞ BEYAN: TELEFON NUMARASI ────────────────
+  §2 "isteğe bağlı profil bilgileri" arasında ve §6'da "telefon numaran" yazıyordu.
+  TOPLANMIYOR. Ölçüldü: Domain/Identity/User.cs'te PhoneNumber alanı VAR, ama sunucu
+  ağacında ona YAZAN tek satır DeleteAccount.cs'teki `user.PhoneNumber = null` — yani
+  yalnızca silinirken boşaltılıyor. ProfileCommands telefona dokunmuyor, bu arayüzde de
+  bir telefon alanı yok. Mobil metin aynı hatayı 2026-09-22'de düzeltmiş ve "web'de aynı
+  hata duruyor" diye not düşmüştü; iki metin aynı olguyu söylemeli. Aynı cümle
+  HesapSilme.jsx §2'den ve Profile.jsx'teki "Silinecekler" listesinden de çıkarıldı.
+  Toplanmayan bir veriyi "topluyoruz" demek, bir denetimde metnin tamamını şüpheli yapar.
+
+  Aynı turda §7'deki "mobilde Profil sekmesi" de düzeltildi: mobilde sekme çubuğu
+  2026-09-23'te kalktı, Profil'e sol üstteki menüden (adına dokunarak) gidiliyor.
+
   ⚠️ METİN HÂLÂ TASLAK. Sürüm borcunun kapanması metnin hukuken tamamlandığı anlamına
   GELMEZ. §1 artık veri sorumlusunu adıyla söylüyor ama tescil bilgileri (ticari unvan,
   adres, MERSIS) lib/kunye.js'te BOŞ ve bilerek boş — uydurulmadı. MetinSayfasi'ndeki
@@ -101,8 +114,8 @@ export default function Gizlilik() {
         </p>
         <p>
           <strong>İsteğe bağlı profil bilgileri:</strong> profil fotoğrafın, kendini
-          anlattığın metin, okulun ve bölümün, telefon numaran. Bunların hiçbiri zorunlu
-          değildir; boş bırakabilirsin.
+          anlattığın metin, okulun ve bölümün. Bunların hiçbiri zorunlu değildir; boş
+          bırakabilirsin.
         </p>
         <p>
           <strong>Kullanım verileri:</strong> anlattığın ders sayısı ve süresi,
@@ -199,8 +212,8 @@ export default function Gizlilik() {
         <p>
           Profilinde <strong>senin girdiğin</strong> bilgiler (adın, fotoğrafın,
           okulun, kendini anlattığın metin, anlatabildiğin konular, aldığın
-          değerlendirmeler) platformdaki diğer kullanıcılara açıktır. E-posta adresin,
-          telefon numaran ve cihaz kimliğin <strong>hiçbir kullanıcıya gösterilmez</strong>.
+          değerlendirmeler) platformdaki diğer kullanıcılara açıktır. E-posta adresin ve
+          cihaz kimliğin <strong>hiçbir kullanıcıya gösterilmez</strong>.
         </p>
         <p>
           <strong>Arkadaş sayın</strong> profilinde herkese görünür. Tam arkadaş listeni
@@ -280,7 +293,8 @@ export default function Gizlilik() {
           </li>
           <li>
             <strong>Silme:</strong> hesabını kendin silebilirsin — Profil sayfasının
-            (mobilde Profil sekmesinin) en altındaki “Hesabımı sil” bağlantısı. Onay için
+            (mobil uygulamada Profil ekranının; ona sol üstteki menüden, adına dokunarak
+            gidilir) en altındaki “Hesabımı sil” bağlantısı. Onay için
             parolan yeniden sorulur ve işlem geri alınamaz. Kimlik bilgilerin siliniyor;
             ders geçmişi, kazandırdığın puanlar ve değerlendirmeler karşı tarafa ait
             olduğu için kalıyor ve orada adın yerine “Silinmiş kullanıcı” görünüyor.

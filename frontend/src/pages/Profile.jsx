@@ -359,7 +359,9 @@ function HesabiSilModali({ open, onClose, onDeleted }) {
         <div>
           <p className="text-sm font-semibold text-slate-900">Silinecekler</p>
           <ul className="mt-1.5 list-disc space-y-1 pl-5 text-sm text-slate-600">
-            <li>Adın, e-postan, telefonun ve profil fotoğrafın</li>
+            {/* "telefonun" 2026-09-25'te çıkarıldı: telefon numarası toplanmıyor
+                (bkz. Gizlilik.jsx başı). Liste mobil profil/index.jsx ile aynı olmalı. */}
+            <li>Adın, e-postan ve profil fotoğrafın</li>
             <li>Biyografin, üniversite ve bölüm bilgin</li>
             <li>Açtığın ders ilanları</li>
             <li>Veri tercihlerin ve cihaz kaydın</li>
