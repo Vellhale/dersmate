@@ -80,7 +80,8 @@ public sealed class LogoutHandler : IRequestHandler<LogoutCommand, Unit>
 
         if (request.TumCihazlar)
         {
-            // Her yerden çıkış: mevcut ilkel (tüm aktif token iptali + damga) çağrılıyor.
+            // Her yerden çıkış: mevcut ilkel (tüm aktif token iptali + damga + tüm push
+            // cihaz kayıtlarının silinmesi) çağrılıyor.
             var user = await _db.Users.SingleOrDefaultAsync(u => u.Id == satir.UserId, ct);
             if (user is not null)
             {
@@ -91,15 +92,131 @@ public sealed class LogoutHandler : IRequestHandler<LogoutCommand, Unit>
             return Unit.Value;
         }
 
+        var now = _clock.UtcNow;
+
+        /* Bu çıkışın kapsadığı cihazlar: sunulan token'ın ve (varsa) halef zincirinin
+           HWID'leri. Push kaydı bunlar üzerinden silinecek. */
+        var cihazlar = new HashSet<string>(StringComparer.Ordinal);
+        if (satir.DeviceHwidHash is { } hwid)
+        {
+            cihazlar.Add(hwid);
+        }
+
+        var degisti = false;
+
         // Tek cihaz: yalnızca sunulan token. Zaten iptalliyse (dönüşüm, önceki çıkış,
-        // yaptırım...) dokunma — idempotent.
+        // yaptırım...) YENİDEN iptal edilmez — idempotent.
         if (satir.RevokedAtUtc is null)
         {
-            satir.RevokedAtUtc = _clock.UtcNow;
+            satir.RevokedAtUtc = now;
             satir.RevokeReason = RefreshTokenRevokeReason.SignedOut;
+            degisti = true;
+        }
+        else if (satir.RevokeReason == RefreshTokenRevokeReason.Rotated)
+        {
+            degisti = await HalefleriIptalEtAsync(satir, now, cihazlar, ct);
+        }
+
+        /* ⛔ PUSH SİLMESİ İPTAL DURUMUNDAN BAĞIMSIZ (2026-09-25). Yukarıdaki `if`in içine
+           yazılsaydı, zaten iptal edilmiş bir token'la yapılan çıkış (yanıtı yolda kaybolmuş
+           bir yenilemeden sonra telefonun elindeki Rotated token) cihaz kaydını yerinde
+           bırakırdı ve çıkış yapılmış telefonun kilit ekranına bildirim gitmeye devam ederdi.
+
+           (UserId, HwidHash) ile: kullanıcı-cihaz başına tek satır var (tekil index). HWID'i
+           olmayan eski token'da silinecek bir şey bilinemez; atlanır. Web oturumlarının push
+           kaydı yok, orada 0 satır.
+
+           ExecuteDelete, token iptalinin SaveChanges'inden ÖNCE: bildirimi kesen adım,
+           sonrasında düşebilecek bir yazıma bağlı kalmasın. Tersi sırada kalan bir satırı da
+           dağıtıcının oturum bağı süzgeci yakalardı; bu sıra yalnızca daha erken kesiyor. */
+        if (cihazlar.Count > 0)
+        {
+            var kullaniciId = satir.UserId;
+            var hwidler = cihazlar.ToList();
+            await _db.PushDevices
+                .Where(d => d.UserId == kullaniciId && hwidler.Contains(d.HwidHash))
+                .ExecuteDeleteAsync(ct);
+        }
+
+        if (degisti)
+        {
             await _db.SaveChangesAsync(ct);
         }
 
         return Unit.Value;
+    }
+
+    /// <summary>
+    /// Zincirde izlenecek en fazla halef. Gerçek durumda 1: telefon Rotated token'ı tutuyor,
+    /// sunucuda tek bir aktif halef var. Sınır, uzun ya da bozuk bir zincirin tek bir çıkış
+    /// isteğini onlarca sorguya çevirmesine karşı.
+    /// </summary>
+    private const int ZincirSiniri = 16;
+
+    /// <summary>
+    /// Sunulan token DÖNÜŞMÜŞSE (Rotated), <see cref="RefreshToken.ReplacedByTokenId"/>
+    /// zincirini izler ve AKTİF halefleri SignedOut ile iptal eder. Haleflerin HWID'lerini
+    /// <paramref name="cihazlar"/>'a ekler (push silmesi için).
+    /// </summary>
+    /// <returns>En az bir halef iptal edildiyse true.</returns>
+    /// <remarks>
+    /// ─── NEDEN (2026-09-25) ─────────────────────────────────────────────────────
+    /// Yenileme yanıtı yolda kaybolursa sunucu token'ı dönüştürmüş, telefon ise eskisini
+    /// tutuyor olur. O telefondan çıkış yapılınca sunulan token zaten iptal (Rotated) ve eski
+    /// davranış "idempotent, dokunma" idi — sunucuda kimsenin elinde olmayan AKTİF halef 60
+    /// gün yaşardı. Push'tan önce bu yalnızca sahipsiz bir token'dı; push'la birlikte o
+    /// halef oturum bağını (bu cihazın EN YENİ token'ı aktif mi) geçirir ve çıkış yapılmış
+    /// telefona bildirim gitmesine yol açardı.
+    ///
+    /// SEBEP SignedOut: SignedOut'la iptal edilmiş token'ın /refresh'e tekrar sunulması zincir
+    /// DÜŞÜRMEZ (yalnızca Rotated düşürür, RefreshTokenService.GercekYenidenKullanim). Yani
+    /// bu iptal, kullanıcının başka cihazlarda sonradan açtığı taze oturumlara dokunmaz.
+    ///
+    /// ⚠️ Rotated token'ı sunan saldırgan (çalınmış eski kopya) bununla yalnızca o zincirin
+    /// halefini kapatabilir; aynı token'ı /refresh'e sunsa zaten kullanıcının TÜM zincirini
+    /// düşürürdü (hırsızlık tespiti). Yeni bir yetki açılmıyor.
+    /// </remarks>
+    private async Task<bool> HalefleriIptalEtAsync(
+        RefreshToken satir, DateTime now, HashSet<string> cihazlar, CancellationToken ct)
+    {
+        var iptalEdildi = false;
+        var gorulen = new HashSet<Guid> { satir.Id };
+        var sonraki = satir.ReplacedByTokenId;
+
+        for (var adim = 0; sonraki is { } halefId && adim < ZincirSiniri; adim++)
+        {
+            // Döngüye karşı (bozuk veri): aynı satıra ikinci kez gelinmez.
+            if (!gorulen.Add(halefId))
+            {
+                break;
+            }
+
+            var halef = await _db.RefreshTokens.SingleOrDefaultAsync(t => t.Id == halefId, ct);
+
+            // Halef başka kullanıcıya ait olamaz; olursa (bozuk veri) zincire dokunma.
+            if (halef is null || halef.UserId != satir.UserId)
+            {
+                break;
+            }
+
+            if (halef.DeviceHwidHash is { } hwid)
+            {
+                cihazlar.Add(hwid);
+            }
+
+            if (halef.RevokedAtUtc is null)
+            {
+                // Aktif token'ın halefi olmaz: zincirin ucu burası.
+                halef.RevokedAtUtc = now;
+                halef.RevokeReason = RefreshTokenRevokeReason.SignedOut;
+                iptalEdildi = true;
+                break;
+            }
+
+            // Halef de dönüşmüşse zincir devam ediyor; başka sebeple iptalse uç burası.
+            sonraki = halef.RevokeReason == RefreshTokenRevokeReason.Rotated ? halef.ReplacedByTokenId : null;
+        }
+
+        return iptalEdildi;
     }
 }

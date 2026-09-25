@@ -96,7 +96,9 @@ public sealed class RefreshTokenService
     /// <summary>
     /// Kullanıcının TÜM aktif yenileme token'larını iptal eder ve
     /// <see cref="User.TokensValidFromUtc"/> damgasını ileri alır — yani elindeki erişim
-    /// token'ları da anında geçersizleşir. SaveChanges ÇAĞIRMAZ.
+    /// token'ları da anında geçersizleşir. Ayrıca kullanıcının TÜM push cihaz kayıtlarını
+    /// siler. Token iptali ve damga için SaveChanges ÇAĞIRMAZ; push silmesi ise HEMEN
+    /// çalışır (aşağıya bakın).
     /// </summary>
     /// <remarks>
     /// ⚠️ İKİSİ BİRLİKTE ANLAMLI, tek başına hiçbiri yetmez:
@@ -105,6 +107,21 @@ public sealed class RefreshTokenService
     ///   • yalnızca iptal: eldeki erişim token'ı ömrü dolana kadar (120 dk) çalışmaya
     ///     devam eder.
     /// Bu yüzden tek metotta toplandı; ayrı ayrı çağrılabilir olsalardı biri unutulurdu.
+    ///
+    /// ─── PUSH CİHAZLARI NEDEN BURADA SİLİNİYOR (2026-09-25) ─────────────────────
+    /// Bu metodu çağıran beş akış (her yerden çıkış, parola sıfırlama, hesap silme, rol
+    /// değişimi, hırsızlık tespiti) hepsi "bu kullanıcının bütün cihazları dışarı" demek.
+    /// Push kaydı oturumdan uzun yaşarsa çıkış yapılmış telefonun kilit ekranına bildirim
+    /// gitmeye devam eder. Silme her çağıranda ayrı yazılsaydı biri unutulurdu — token
+    /// iptalinin buraya toplanmasıyla aynı gerekçe.
+    ///
+    /// ExecuteDelete (izlenen silme DEĞİL): eşzamanlı bir silme (forget ucu, makbuzdaki
+    /// DeviceNotRegistered) satırı önce kaldırmışsa izlenen silme SaveChanges'te
+    /// DbUpdateConcurrencyException fırlatır ve çağıranın bütün yazımını düşürürdü. Bedeli:
+    /// silme çağıranın SaveChanges'inden ÖNCE ve ondan bağımsız çalışır (çağıran kendi
+    /// transaction'ını açtıysa ona katılır). Çağıranın yazımı düşerse cihaz satırı yine de
+    /// silinmiş olur — güvenli yönde bir hata: bildirim eksik gider, oturum hâlâ geçerliyse
+    /// uygulama bir sonraki öne gelişinde kendini yeniden kaydeder.
     /// </remarks>
     public async Task TumOturumlariDusurAsync(
         User user,
@@ -112,6 +129,8 @@ public sealed class RefreshTokenService
         CancellationToken ct)
     {
         var now = _clock.UtcNow;
+
+        await _db.PushDevices.Where(d => d.UserId == user.Id).ExecuteDeleteAsync(ct);
 
         /* Filtre, kısmi index'in filtresini BİREBİR tekrarlıyor
            ("RevokedAtUtc" IS NULL). Başka bir ifadeyle yazılırsa index sessizce
