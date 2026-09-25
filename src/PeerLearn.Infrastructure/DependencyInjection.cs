@@ -1,8 +1,11 @@
+using System.Net;
+using System.Net.Http.Headers;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using PeerLearn.Application.Abstractions;
+using PeerLearn.Application.Features.Communication.Bildirimler;
 using PeerLearn.Application.Options;
 using PeerLearn.Infrastructure.Caching;
 using PeerLearn.Infrastructure.Jobs;
@@ -99,12 +102,71 @@ public static class DependencyInjection
             });
         }
 
+        AddPush(services, configuration);
+
         services.AddHostedService<CreditExpiryJob>();
         services.AddHostedService<SessionSweepJob>();
         services.AddHostedService<StorageCleanupJob>();
         services.AddHostedService<CommunityRewardJob>();
         services.AddHostedService<RefreshTokenCleanupJob>();
+        services.AddHostedService<PushReminderJob>();
+        services.AddHostedService<NotificationDispatchJob>();
+        services.AddHostedService<PushReceiptJob>();
 
         return services;
+    }
+
+    /// <summary>
+    /// Push bildirimleri (2026-09-25): seçenekler, etiket, sinyal ve gönderici.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ BU KAYITLAR OLMADAN API HİÇ AÇILMAZ (Development'ta ValidateOnBuild) ve üretimde
+    /// mesaj, istek, kabul, rezervasyon, iptal, tamamlama ve itiraz kararı çalışma anında 500
+    /// döner: o handler'ların hepsi IBildirimSinyali alıyor, kayıt ucu BildirimEtiketi alıyor.
+    ///
+    /// Gönderici e-posta kalıbıyla AYARDAN seçilir: "Expo" gerçek gönderim, geri kalan her
+    /// değer "Log". Fark: üretimde "Log" açılışı DURDURMAZ (Program.cs uyarı yazar), çünkü push
+    /// yokken uygulama çalışmaya devam eder; bilinmeyen bir değer ise ProductionGuard'da durur.
+    /// </remarks>
+    private static void AddPush(IServiceCollection services, IConfiguration configuration)
+    {
+        services.Configure<PushOptions>(configuration.GetSection(PushOptions.SectionName));
+
+        // Etiket anahtarı Jwt:Key'den HKDF ile bir kez türetiliyor; durumsuz ve iş parçacığı güvenli.
+        services.AddSingleton<BildirimEtiketi>();
+
+        // Tek kanal, tek dinleyici (dağıtım işi): handler'lar ile iş AYNI örneği görmeli.
+        services.AddSingleton<IBildirimSinyali, BildirimSinyali>();
+
+        var push = configuration.GetSection(PushOptions.SectionName).Get<PushOptions>() ?? new PushOptions();
+        if (push.ExpoMu)
+        {
+            /*
+              Typed client: IHttpClientFactory handler'ı havuzlar ve 5 dakikada bir yeniler
+              (DNS değişikliği yakalansın, soket tükenmesin). Yanıtlar gzip/deflate ile açılıyor;
+              aynı sunucuya en fazla 6 eşzamanlı bağlantı — dağıtıcı zaten sıralı gönderiyor,
+              sınır iki iş (dağıtım + makbuz) aynı anda koşarken Expo'ya yığılmayı keser.
+              Zaman aşımı (15 sn) dağıtıcının kira payından (30 sn) kısa olmak ZORUNDA:
+              yanıt kira bitmeden gelmeli, yoksa satır başka bir turda yeniden gönderilir.
+            */
+            services.AddHttpClient<ExpoPushGonderici>(c =>
+                {
+                    c.BaseAddress = new Uri(ExpoPushGonderici.TemelAdres);
+                    c.Timeout = TimeSpan.FromSeconds(Math.Clamp(push.ZamanAsimiSaniye, 1, 25));
+                    c.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+                })
+                .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+                {
+                    AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate,
+                    MaxConnectionsPerServer = 6,
+                    PooledConnectionLifetime = TimeSpan.FromMinutes(5),
+                });
+
+            services.AddTransient<IPushGonderici>(sp => sp.GetRequiredService<ExpoPushGonderici>());
+        }
+        else
+        {
+            services.AddSingleton<IPushGonderici, LoggingPushGonderici>();
+        }
     }
 }

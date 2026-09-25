@@ -630,6 +630,13 @@ yayından önce kapandığı için kimse kayıt ekranında kilitlenmedi.
 > kalkmadı, yalnızca bu kez bedelsiz ödendi. Sonraki artışta sıra yine:
 > mobil `yasalMetinler.js` → APK → `LegalDocuments.CurrentVersion` + web sabiti → dağıt.
 
+**2026-09-25: yeniden artırıldı (`2026-09-19` → `2026-09-25`), push bildirimleri için.**
+Gizlilik metnine yeni bir veri türü (cihazın bildirim adresi), yeni alıcılar (Expo, Google
+FCM, Apple APNs) ve yurt dışı aktarım girdi. Üç yer — sunucu `LegalDocuments.cs`, web ve mobil
+`yasalMetinler.js` — **aynı dalda aynı değere** çekildi; mağazada hâlâ uygulama olmadığı için
+"önce mobil yayın" sırası bu kez de gerekmedi. Mevcut kullanıcılar yeniden onaylatılmıyor.
+Mağazaya ilk çıkış bu değerle olmalı; sonraki artışta yukarıdaki sıra geçerli.
+
 ### ⚠️ AÇIK BORÇ: künyedeki tescil bilgileri
 
 dersmate'in **kim tarafından işletildiği** artık üründe yazılı — Corventech, beş yüzeyde
@@ -721,3 +728,89 @@ varsayılan `combined` biçimi tam istek satırını (token dahil) erişim günl
 yerine `$request_method $uri` — `$uri` sorgu dizesi içermez) ve `/hubs/` için onu kullanan
 ayrı bir `location`. Hub trafiği yine loglanıyor, token düşüyor. Kod değişmedi; token akışı
 olduğu gibi. Şablon; canlıda `deploy/nginx.conf`'a kopyalanırken taşınmalı (§3).
+
+---
+
+## Push bildirimleri (2026-09-25)
+
+Uygulama kapalıyken de gelen bildirimler (Expo Push → FCM / APNs). Sunucu, web api yüzeyi ve
+mobil aynı işte değişti. Mimari `docs/ASAMA-2-BACKEND.md` §8; üretimde açma sırası
+`docs/URETIME-CIKIS.md` §11 (**önce Bearer'la gönder, sonra Enhanced Security**).
+
+Kapsam: yeni mesaj, gelen istek ve kabulü, günlük "düşmek üzere" istek özeti, onay bekliyor,
+otomatik onay 24/2 sa, yeni ders planlandı (eğitmene), ders iptal edildi (iptal etmeyen
+tarafa), yaklaşan ders 60/10 dk, test bildirimi.
+
+### Bilerek yapılmayanlar
+
+- **Ret bildirilmez.** Engelleme de bekleyen istekleri `Declined` yazıyor; ret bildirimi
+  engeli karşı tarafa sızdırırdı. İsteği gönderen, isteğin 14 günde düştüğünü görür.
+- **Forum (Topluluk) bildirimi yok.** Yorum, oy ve moderasyon kararı bildirilmiyor; kapsam
+  bilerek ders ve ilişki olaylarıyla sınırlı tutuldu.
+- **Mesaj önizlemesi yok.** Mesaj içeriği push'a hiç girmez (kilit ekranı, sağlayıcı
+  sunucuları); gövde yalnızca gönderenin temizlenmiş adı ve okunmamış sayısı.
+- **İstek ve ders bildirimlerinde kişi adı yok.** İstek önceden ilişki gerektirmeden herkese
+  gidebiliyor ve görünen ad serbest metin; ders metinleri engelli ve engelsiz vakada bayt
+  bayt aynı kalmalı. Rezerve ad kuralı (ürün adı, destek, yönetim…) YALNIZCA bildirim
+  metninde uygulanıyor; kayıt ve profil kuralı değişmedi (ayrı iş).
+- **İtirazın öğrenci lehine sonuçlanması "ders iptal edildi" yazmaz.** Ders `Cancelled`
+  oluyor ama tasarımın olay listesinde yok; o dersin bekleyen hatırlatma ve onay satırları
+  gönderim anında `DurumDegisti` olur.
+- **Yabancı Expo projesi token'ları için sayaç yok**; ayırma anında uyarı günlüğü yeter.
+
+### Kabul edilmiş sınırlar
+
+- **Çevrimdışı çıkıştan sonra uygulama hiç açılmazsa** telefon bildirim almaya devam eder:
+  sunucu çıkışı hiç duymadı, yenileme token'ı iptal edilmedi, yani oturum bağı da "bağlı"
+  diyor. Mobil bir "unutulacak" işareti tutuyor ve ilk açılışta `forget` çağırıyor; hiç
+  açılmazsa sınır yenileme token'ının ömrü (60 gün). Gizlilik §5'te yazılı.
+- **En az bir kez teslimat.** Expo kabul etti ama süreç sonucu yazamadan öldüyse satır kira
+  dolunca yeniden gönderilir. Cihazda aynı etiketli bildirim (Android `tag`, iOS
+  `apns-collapse-id`) yenisiyle yer değiştirir; kullanıcı iki bildirim görmez.
+- **İki sunucu kopyası aynı çiftin iki istek satırını aynı anda sahiplenirse ikisi de
+  gidebilir** (tekrar freni öncekinin `Sent`'ini henüz göremez). Cihazda `i-` etiketi
+  birleştiriyor. Tek kopyada olmuyor.
+- **Kira yerel saatle ölçülüyor, `LeaseUntilUtc` uygulama saatiyle yazılıyor.** Kopyalar
+  arası saat kayması 30 sn'lik payı yiyebilir; NTP'siz sunucuda iki kopya aynı satırı
+  gönderebilir (yine etiketle birleşir).
+- **Kapsanan mesajların birleştirilmesi en iyi çaba.** Gönderilen "3 yeni mesaj"
+  bildiriminin kapsadığı mesajların bekleyen satırları `Birlestirildi` yapılıyor; o anda
+  başka bir turun kirasındaysalar ertelenip 60 sn sonra aynı sayıyla bir kez daha çalabilir.
+- **Sessiz saat sabit UTC+3.** Yurt dışındaki kullanıcı için yanlış saatte kayar;
+  kullanıcının saat dilimi bilinmiyor, kitle Türkiye. Metinlerde bu yüzden mutlak saat ve
+  "yarın/bugün" yok.
+- **Özet yuvası saatinde sunucu kapalıysa o günün özeti yazılmaz** (ya da `Bayat` olur);
+  ertesi gün kendi penceresini kapsar. O istekler düşmeden önce yalnızca bu yolla haber alamaz.
+- **Banlı ve askıdaki hesaba gönderimi yalnızca dağıtıcının durum süzgeci durduruyor.** Ban
+  oturumları iptal etmiyor (cihaz satırını siliyor); geçici askıda satır bilerek duruyor ki
+  askı bitince bildirim sürsün. Süzgeç kaldırılırsa askıdaki hesaba bildirim gider.
+- **Erişim token'ı artığı**: tek cihaz çıkışından sonra eldeki erişim token'ı (≤2 sa) ile
+  `PUT /push/devices` çağrılabilir; oturum bağı bunu `kayitli:false` ile reddediyor.
+
+### Açık işler
+
+- ⬜ **Firebase otomatik başlatma ölçümü (cihazda, kullanıcı).** Otomatik başlatma kapalıyken
+  `getExpoPushTokenAsync`'in token verip vermediği ve aydınlatmadan önce Firebase alan
+  adlarına istek gidip gitmediği release APK'da ölçülecek. Web ve mobil Gizlilik §6'daki
+  "aktarım yalnızca bildirimler açılınca başlar" cümlesi bu ölçüme dayanıyor; sonuç farklı
+  çıkarsa iki metin birlikte düzeltilir.
+- ⬜ **Expo robot rolü.** Viewer'ın gönderime yetip yetmediği `--test-push` ile ölçülüp
+  `URETIME-CIKIS.md` §11'e yazılacak.
+- ⬜ **`/gizlilik-uygulama`** (mağaza formlarındaki gizlilik adresi): ayrı PR.
+- ⬜ **Web ana paket 500 kB uyarı eşiğini geçti** (499,47 → 506,37 kB, yasal metin
+  büyümesi). Hata değil; yasal sayfaların tembel yüklenmesi ayrı iş.
+
+### Testler
+
+- Birim: `tests/PeerLearn.UnitTests/Bildirimler/` (+ `HwidKuraliTests`), 387 vaka.
+  On mutasyonun hepsi ilgili sınıfı kırdı (Android `collapseId`, sessiz saat sınırı, HKDF
+  bilgisi, Login'de kendi HWID kopyası, OLU kancası, Test muafiyeti, dar sorgu aralığı, katı
+  maske, tick damgası, paylaşılan Bearer başlığı).
+- Uçtan uca: `tools/e2e-bildirim.ps1`, `run-all-tests.ps1` içinde; 97 kontrol, iki sunucu
+  saatine bağlı kontrol pencere dışında `[ATLANDI]`. Mutasyon kanıtı (tekil index, engel,
+  Logout silmesi, LeaseOwner koşulu, deneyim ayırma, "herhangi aktif token") paketin başında.
+- **Paketin sınamadıkları** (gerekçeli, paketin başında): parola sıfırlama (token yalnızca
+  e-postayla gidiyor; aynı silme kodu üç başka yoldan sınanıyor), banlı hesabın silinmesi
+  (HTTP'den sürülemiyor), bildirim gövdesi (Log sağlayıcısı bilerek yazmıyor; birim testte),
+  dağıtıcının 400'de parti bölmesi (Log sağlayıcısında tetikleyecek kanca yok; S6'nın
+  handler düzeyindeki doğrulamasında ölçüldü).

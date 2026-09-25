@@ -4,8 +4,10 @@ using Microsoft.Extensions.Options;
 using PeerLearn.Application.Abstractions;
 using PeerLearn.Application.Common;
 using PeerLearn.Application.Options;
+using PeerLearn.Application.Features.Communication.Bildirimler;
 using PeerLearn.Application.Features.Community;
 using PeerLearn.Application.Features.Identity;
+using PeerLearn.Application.Matchmaking;
 using PeerLearn.Domain.Communication;
 using PeerLearn.Domain.Identity;
 using PeerLearn.Domain.Matchmaking;
@@ -41,15 +43,17 @@ public sealed class CreateMatchRequestHandler : IRequestHandler<CreateMatchReque
     private readonly IClock _clock;
     private readonly IDistributedLockProvider _locks;
     private readonly EconomyOptions _economy;
+    private readonly IBildirimSinyali _sinyal;
 
     public CreateMatchRequestHandler(
         IAppDbContext db, IClock clock,
-        IDistributedLockProvider locks, IOptions<EconomyOptions> economy)
+        IDistributedLockProvider locks, IOptions<EconomyOptions> economy, IBildirimSinyali sinyal)
     {
         _db = db;
         _clock = clock;
         _locks = locks;
         _economy = economy.Value;
+        _sinyal = sinyal;
     }
 
     public async Task<Guid> Handle(CreateMatchRequestCommand request, CancellationToken ct)
@@ -221,7 +225,25 @@ public sealed class CreateMatchRequestHandler : IRequestHandler<CreateMatchReque
         };
 
         _db.Matches.Add(match);
+
+        /*
+          PUSH: "yeni arkadaş isteği" satırı istekle AYNI SaveChanges'te.
+
+          Eşzamanlı çift istek kısmi tekil indekse çarpınca bildirim satırı da onunla
+          birlikte geri alınır — yazılmamış bir istek için bildirim kalmaz. Vade sessiz
+          saate göre (gece gelen istek 09:00'da), ömür isteğin düşme anı (MatchRules).
+
+          Gönderenin adı METNE GİRMEZ (BildirimMetni.YeniIstek): istek önceden ilişki
+          gerektirmeden herkese gidebiliyor ve ad serbest metin. Aynı kişiden yağan
+          isteklerin push'unu dağıtıcının çift freni keser; istek yine oluşur.
+        */
+        BildirimKuyrugu.Ekle(_db, BildirimKuyrugu.YeniIstek(
+            match.Id, request.ResponderUserId, request.InitiatorUserId, _clock.UtcNow, match.CreatedAtUtc));
+
         await _db.SaveChangesAsync(ct); // Partial unique index (Pending) eşzamanlı istekte son savunma.
+
+        // Commit sonrası; fırlatmaz (IBildirimSinyali sözleşmesi).
+        _sinyal.Uyandir();
 
         return match.Id;
     }
@@ -238,12 +260,14 @@ public sealed class RespondMatchHandler : IRequestHandler<RespondMatchCommand, R
     private readonly IAppDbContext _db;
     private readonly IClock _clock;
     private readonly BadgeEngine _badges;
+    private readonly IBildirimSinyali _sinyal;
 
-    public RespondMatchHandler(IAppDbContext db, IClock clock, BadgeEngine badges)
+    public RespondMatchHandler(IAppDbContext db, IClock clock, BadgeEngine badges, IBildirimSinyali sinyal)
     {
         _db = db;
         _clock = clock;
         _badges = badges;
+        _sinyal = sinyal;
     }
 
     public async Task<RespondMatchResult> Handle(RespondMatchCommand request, CancellationToken ct)
@@ -261,6 +285,33 @@ public sealed class RespondMatchHandler : IRequestHandler<RespondMatchCommand, R
         {
             throw new AppException(ErrorCodes.MatchNotPending,
                 $"İstek zaten yanıtlanmış ({match.Status}).", statusCode: 409);
+        }
+
+        var now = _clock.UtcNow;
+
+        /*
+          ⛔ SÜRESİ DOLMUŞ İSTEK — süpürücü henüz geçmemiş olsa bile YANITLANAMAZ.
+
+          İstek 14. günde düşüyor ama düşüşü 10 dakikada bir koşan süpürücü yazıyor; arada
+          kalan pencerede (birikme varsa daha uzun) istek hâlâ Pending görünüyor. Kural
+          süpürücünün NE ZAMAN geçtiğine bağlı olmamalı: günlük özet alıcıya "yaklaşık N saat
+          sonra düşecek" diyor, o an geçtikten sonra kabul edilebilmesi o sözü boşa çıkarır.
+
+          Sınır MatchRules.SuresiDoldu — süpürücüyle ve günlük "düşmek üzere" özetiyle TEK
+          tanım. Ret için de geçerli: süresi dolmuş istek artık kimsenin kararını beklemiyor.
+
+          YARIŞ: Match'te xmin yok. Süpürücü eskiden istekleri okuyup bellekte Expired
+          yapıyordu ve arada commit olan kabulü EZİYORDU — push ile bu, gönderilmiş "isteğin
+          kabul edildi" bildiriminin düşmüş bir eşleşmenin erişilemeyen sohbetine götürmesi
+          olurdu. O yön süpürücüde koşullu güncellemeyle kapandı (SweepSessions faz 3). Ters
+          yön (kabul sınırdan önce kontrol edilip süpürücüden SONRA yazılır ve Expired'ı ezer)
+          tutarlı bir Accepted bırakır: kabul, verildiği anda geçerliydi. Bu kontrol o
+          pencereyi sınırın hemen önündeki birkaç milisaniyeye daraltıyor.
+        */
+        if (MatchRules.SuresiDoldu(match.CreatedAtUtc, now))
+        {
+            throw new AppException(ErrorCodes.MatchNotPending,
+                "Bu istek süresi dolduğu için artık yanıtlanamıyor.", statusCode: 409);
         }
 
         /*
@@ -286,14 +337,32 @@ public sealed class RespondMatchHandler : IRequestHandler<RespondMatchCommand, R
         }
 
         match.Status = request.Accept ? MatchStatus.Accepted : MatchStatus.Declined;
-        match.RespondedAtUtc = _clock.UtcNow;
+        match.RespondedAtUtc = now;
 
         Conversation? conversation = null;
         if (request.Accept)
         {
             conversation = new Conversation { MatchId = match.Id };
             _db.Conversations.Add(conversation);
+
+            /*
+              PUSH: "isteğin kabul edildi" — alıcı isteği GÖNDEREN. Aşağıdaki transaction'ın
+              içinde, sohbetle birlikte yazılır: çift kabul Conversation.MatchId tekil
+              indeksine çarpınca bildirim satırı da geri alınır (ikinci bildirim olmaz).
+              Dokunuş sohbete götürür; kimlik burada, commit'ten önce belli.
+            */
+            BildirimKuyrugu.Ekle(_db, BildirimKuyrugu.IstekKabul(
+                match.Id, conversation.Id, match.InitiatorUserId, match.ResponderUserId, now));
         }
+
+        /*
+          ⛔ RET BİLDİRİLMEZ — bilinçli.
+
+          BlockUserHandler bekleyen istekleri de Declined yazıyor (RespondedAtUtc ile);
+          veride gerçek ret ile engelden doğan ret ayırt edilemiyor. Yalnızca buradan ret
+          push'u atılsaydı, engelde bildirimin GELMEMESİ karşı tarafa engeli ilan ederdi.
+          Tek tutarlı seçenek ikisinde de sessiz kalmak.
+        */
 
         /*
           ROZET DEĞERLENDİRMESİ BURADA ÇAĞRILIR.
@@ -315,6 +384,12 @@ public sealed class RespondMatchHandler : IRequestHandler<RespondMatchCommand, R
         await _db.SaveChangesAsync(ct);
 
         await tx.CommitAsync(ct);
+
+        // Commit SONRASI; fırlatmaz. Ret dalında deftere satır yazılmadı, uyandırılacak iş yok.
+        if (request.Accept)
+        {
+            _sinyal.Uyandir();
+        }
 
         return new RespondMatchResult(match.Id, match.Status.ToString(), conversation?.Id);
     }

@@ -127,6 +127,14 @@ services:
       Email__FromAddress: ${SMTP_FROM:?SMTP_FROM tanımsız}
       Email__PublicWebUrl: ${PUBLIC_WEB_URL}
 
+      # PUSH BİLDİRİMLERİ (Expo). Varsayılan 'Log': bildirim GÖNDERİLMEZ, açılışta uyarı
+      # yazılır ama uygulama AÇILIR — sunucu dağıtımı Expo token'ının hazır olmasına bağlı
+      # olmasın diye bilinçli olarak `:?` (zorunlu) değil. 'Expo' seçilince token boşsa
+      # ProductionGuard açılışı durdurur. Token ÜRETİM robotunun token'ı (geliştirmeninki
+      # değil); sırası ve rol: docs/URETIME-CIKIS.md. Deneyim kimliği appsettings.json'da.
+      Push__Provider: ${PUSH_PROVIDER:-Log}
+      Push__AccessToken: ${PUSH_ACCESS_TOKEN:-}
+
       # ⚠️ AÇIKÇA VERİLİYOR. appsettings.json üretimde de taban yapılandırma olarak
       # yükleniyor ve içindeki geliştirme değerleri (2000/20000) koddaki güvenli
       # varsayılanları EZİYOR. Verilmezse giriş ucu dakikada 2000 parola denemesine

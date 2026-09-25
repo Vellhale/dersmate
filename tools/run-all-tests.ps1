@@ -102,6 +102,13 @@ try {
     # (aday belgeleri) ve öğrencilerin yüklediği kimlik belgeleri sessizce silindi.
     Betik 'Artık süpürme (referans kümesi)' 'e2e-artik-supurme.ps1'
 
+    # Push bildirimleri: olay noktasından cihaz kaydının silinmesine kadar. API
+    # Push:Provider=Log ile koşmalı — paket bunu ilk adımda bilet önekinden doğruluyor ve
+    # değilse durur (gerçek Expo'ya sahte token gitmesin). İki kontrol SUNUCUNUN saatine
+    # bağlı (günlük özet 05–08 UTC, otomatik onay hatırlatması TR 08–21) ve pencere dışında
+    # [ATLANDI] basar: özet paketi EKSİK gösterir, geçti değil. Tam kapsam 08–11 TR arası.
+    Betik 'Push bildirimleri' 'e2e-bildirim.ps1'
+
     # Suistimal frenleri sona yakın: eşzamanlılık paketi gibi İKİ instance ister (B adımı)
     # ve bir eğitmene bağlı ~35 hesap üretir. Tek instance'ta kendini [ATLANDI] ile
     # bildirir, yani özet "eksik koştu" der — sessizce yeşile dönmez.

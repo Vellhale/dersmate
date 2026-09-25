@@ -199,6 +199,17 @@ public sealed class RefreshTokenConfiguration : IEntityTypeConfiguration<Refresh
             .HasFilter("\"RevokedAtUtc\" IS NULL")
             .HasDatabaseName("IX_RefreshTokens_AktifKullanici");
 
+        /* Push oturum bağı: "bu (UserId, DeviceHwidHash) için EN YENİ token aktif mi"
+           (OturumBagi). Kayıt ucu ve dağıtıcı her turda soruyor.
+
+           ⚠️ FİLTRESİZ ve bu ŞART: soru EN YENİ satırın durumunu soruyor, en yeni satır
+           iptal edilmiş olabilir. Yukarıdaki gibi "RevokedAtUtc IS NULL" filtreli olsaydı
+           iptal edilmiş en yeni satır index'te görünmez, bir önceki (hâlâ aktif) artık
+           satır "en yeni" sanılırdı — çıkış yapılmış cihaza bildirim giderdi. Login aynı
+           cihazın eski token'larını iptal etmediği için böyle artıklar gerçekten var. */
+        builder.HasIndex(x => new { x.UserId, x.DeviceHwidHash, x.CreatedAtUtc })
+            .HasDatabaseName("IX_RefreshTokens_KullaniciCihaz");
+
         builder.Property(x => x.RevokeReason).HasConversion<string>().HasMaxLength(20);
 
         // UserDevices.HwidHash ile AYNI uzunluk — aynı değerin kopyası, ayrışmasın.

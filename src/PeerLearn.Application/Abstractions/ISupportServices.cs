@@ -147,3 +147,165 @@ public interface IEmailSender
 {
     Task SendAsync(string to, string subject, string body, CancellationToken ct = default);
 }
+
+// ─── Push bildirimleri (2026-09-25) ─────────────────────────────────────────────
+// Yerleşim e-posta kalıbının karşılığı: arayüz burada, "Log" ve "Expo" uygulamaları
+// Infrastructure/Services'te, seçim Push:Provider ile. Mimari: docs/ASAMA-2-BACKEND.md.
+
+/// <summary>
+/// Expo push servisinin sınırları (docs.expo.dev/push-notifications/sending-notifications).
+/// Aşılırsa Expo isteği bütünüyle reddeder; parçalama çağıranın değil gönderenin işi.
+/// </summary>
+public static class PushSinirlari
+{
+    /// <summary>Tek istekte en fazla mesaj.</summary>
+    public const int EnFazlaMesaj = 100;
+
+    /// <summary>Tek makbuz isteğinde en fazla bilet.</summary>
+    public const int EnFazlaBilet = 1000;
+
+    /// <summary>Tek mesajın yük sınırı (Android ve iOS için aynı).</summary>
+    public const int EnFazlaBayt = 4096;
+
+    /// <summary>Başlık üst sınırı (grafem). Kilit ekranında zaten kesiliyor; biz bilerek keseriz.</summary>
+    public const int BaslikEnFazla = 50;
+
+    /// <summary>Gövde üst sınırı (grafem).</summary>
+    public const int GovdeEnFazla = 150;
+}
+
+/// <summary>
+/// Bildirimin <c>data</c> alanı. YALNIZCA bu üçü: kişi kimliği, içerik, ad YOK.
+/// </summary>
+/// <param name="Tur">Mobilin tanıdığı tür ("mesaj", "istek", "onay"…). Bkz. BildirimKanallari.VeriTuru.</param>
+/// <param name="Url">Dokununca açılacak rota. Mobil yalnızca beyaz listedeki biçimleri kabul eder.</param>
+/// <param name="Alici">
+/// Alıcının HMAC etiketi (BildirimEtiketi.Alici). userId'nin yerine: mobil, hesap değişmiş
+/// bir telefonda önceki hesaba ait bildirimi bununla tanıyıp yok sayar; kimlik açığa çıkmaz.
+/// </param>
+public sealed record PushVerisi(string Tur, string Url, string Alici);
+
+/// <summary>
+/// Expo'ya giden TEK mesaj, tek alıcı token'ı. Özellik adları camelCase serileştirilince
+/// Expo'nun alan adlarıyla birebir aynı (BildirimYuku.JsonAyarlari). Null alanlar yazılmaz.
+/// </summary>
+/// <remarks>
+/// Kurulumu BildirimYuku'da, platforma göre: Android'de ChannelId/Priority/Tag var,
+/// CollapseId YOK; iOS'ta Sound/Badge/CollapseId/ThreadId var. Elle kurma.
+/// </remarks>
+public sealed record PushMesaji
+{
+    public required string To { get; init; }
+    public required string Title { get; init; }
+    public required string Body { get; init; }
+    public required PushVerisi Data { get; init; }
+
+    /// <summary>Saniye. Süre dolunca sağlayıcı yeniden teslim etmeye çalışmaz.</summary>
+    public int? Ttl { get; init; }
+
+    // ── Android ──
+    public string? ChannelId { get; init; }
+
+    /// <summary>"high" | "normal".</summary>
+    public string? Priority { get; init; }
+
+    /// <summary>Cihazda aynı etiketli bildirimin YERİNE geçer.</summary>
+    public string? Tag { get; init; }
+
+    // ── iOS ──
+    public string? Sound { get; init; }
+    public int? Badge { get; init; }
+
+    /// <summary>apns-collapse-id: ekrandaki aynı kimlikli bildirimin yerine geçer.</summary>
+    public string? CollapseId { get; init; }
+
+    public string? ThreadId { get; init; }
+}
+
+/// <summary>
+/// Gönderimdeki tek mesajın bileti; <see cref="PushGonderimSonucu.Biletler"/>'de mesajlarla
+/// AYNI SIRADA. Expo mesaj ↔ bilet eşlemesini yalnızca sırayla veriyor.
+/// </summary>
+/// <param name="Basarili">Expo "ok" dedi: kabul edildi (teslim edildi DEĞİL, o makbuzda).</param>
+/// <param name="HataKodu">details.error: DeviceNotRegistered, MessageTooBig, MessageRateExceeded…</param>
+/// <param name="HataMesaji">⚠️ MASKELENMİŞ olmalı: Expo'nun metni token'ı içeriyor.</param>
+public sealed record PushBileti(bool Basarili, string? BiletId, string? HataKodu, string? HataMesaji);
+
+/// <summary>
+/// İsteğin BÜTÜNÜYLE düştüğü durum (hiç bilet yok): HTTP hatası, zaman aşımı, ağ hatası
+/// ya da Expo'nun istek düzeyi hatası.
+/// </summary>
+/// <param name="HttpDurumu">Null: yanıt hiç gelmedi (zaman aşımı / ağ hatası).</param>
+/// <param name="Kod">Expo hata kodu (ör. PUSH_TOO_MANY_EXPERIENCE_IDS) ya da "ZamanAsimi" / "AgHatasi".</param>
+/// <param name="Mesaj">⚠️ Maskelenmiş.</param>
+/// <param name="DeneyimTokenlari">
+/// PUSH_TOO_MANY_EXPERIENCE_IDS'te Expo'nun verdiği "deneyim → token listesi" eşlemesi:
+/// başka bir Expo projesine ait token'ları ayırmanın tek yolu.
+/// </param>
+public sealed record PushIstekHatasi(
+    int? HttpDurumu,
+    string? Kod,
+    string? Mesaj,
+    IReadOnlyDictionary<string, IReadOnlyList<string>>? DeneyimTokenlari);
+
+/// <summary>
+/// Gönderim sonucu. İKİSİNDEN BİRİ dolu: ya <see cref="IstekHatasi"/> (bilet yok) ya da
+/// mesaj sayısı kadar <see cref="Biletler"/>.
+/// </summary>
+public sealed record PushGonderimSonucu(PushIstekHatasi? IstekHatasi, IReadOnlyList<PushBileti> Biletler)
+{
+    public static PushGonderimSonucu Hata(PushIstekHatasi hata) => new(hata, []);
+}
+
+/// <summary>Bir biletin makbuzu: teslimin sağlayıcıya (FCM/APNs) ulaşıp ulaşmadığı.</summary>
+/// <param name="HataKodu">DeviceNotRegistered ise cihaz satırı silinir.</param>
+/// <param name="HataMesaji">⚠️ Maskelenmiş.</param>
+public sealed record PushMakbuzu(bool Basarili, string? HataKodu, string? HataMesaji);
+
+/// <summary>
+/// Push gönderici. İki uygulama: LoggingPushGonderici (geliştirme, yalnızca maskeli log)
+/// ve ExpoPushGonderici (düz HTTP, harici SDK yok).
+/// </summary>
+/// <remarks>
+/// ⛔ İSTEK İŞLEYİCİSİNDEN (handler) ÇAĞRILMAZ. Handler bildirim defterine satır yazar
+/// (BildirimKuyrugu), gönderimi dağıtım işi yapar. Handler'da Expo'yu beklemek isteği
+/// yavaşlatır ve sunucu yeniden başlarsa bildirimi kaybettirirdi.
+///
+/// Uygulamalar FIRLATMAZ (iptal hariç): ağ ve HTTP hataları <see cref="PushIstekHatasi"/>
+/// olarak döner, çünkü dağıtıcı her hatayı satır bazında sınıflandırıp yazmak zorunda.
+/// </remarks>
+public interface IPushGonderici
+{
+    /// <summary>En fazla <see cref="PushSinirlari.EnFazlaMesaj"/> mesaj.</summary>
+    Task<PushGonderimSonucu> GonderAsync(IReadOnlyList<PushMesaji> mesajlar, CancellationToken ct);
+
+    /// <summary>
+    /// En fazla <see cref="PushSinirlari.EnFazlaBilet"/> bilet. Sözlükte olmayan bilet
+    /// henüz hazır değildir.
+    /// </summary>
+    Task<IReadOnlyDictionary<string, PushMakbuzu>> MakbuzlariAlAsync(IReadOnlyList<string> biletler, CancellationToken ct);
+}
+
+/// <summary>
+/// "Kuyrukta iş var" sinyali: handler commit'ten sonra dağıtım işini uyandırır. İş en geç
+/// birkaç saniyede bir zaten tarıyor; sinyal yalnızca gecikmeyi kısaltır, doğruluk ona
+/// bağlı değil.
+/// </summary>
+public interface IBildirimSinyali
+{
+    /// <summary>
+    /// Dağıtım işini uyandırır. ⛔ HİÇBİR KOŞULDA FIRLATMAZ ve sayaç biriktirmez (art arda
+    /// bin çağrı tek bir uyanış bırakır).
+    /// </summary>
+    /// <remarks>
+    /// Handler'lar bunu commit'ten SONRA çağırıyor. Fırlatsaydı commit olmuş bir mesaj
+    /// istemciye hata olarak döner, istemci yeniden gönderir ve mesaj iki kez yazılırdı.
+    /// </remarks>
+    void Uyandir();
+
+    /// <summary>
+    /// Sinyal gelene ya da <paramref name="enFazla"/> dolana kadar bekler. Sinyalle
+    /// uyandıysa true. Yalnızca dağıtım işi çağırır.
+    /// </summary>
+    Task<bool> BekleAsync(TimeSpan enFazla, CancellationToken ct);
+}

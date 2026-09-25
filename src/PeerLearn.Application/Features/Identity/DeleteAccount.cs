@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using PeerLearn.Application.Abstractions;
 using PeerLearn.Application.Common;
 using PeerLearn.Application.Identity;
+using PeerLearn.Domain.Communication;
 using PeerLearn.Domain.Identity;
 
 namespace PeerLearn.Application.Features.Identity;
@@ -34,6 +35,11 @@ namespace PeerLearn.Application.Features.Identity;
 ///   • Veri tercihleri (UserPreferences) ve öğretmen adaylığı beyanı/belgesi
 ///   • İlanlar (PortfolioEntries) — aktif arz/talep, silinen hesapta keşfette durmamalı
 ///   • Cihaz kayıtları (UserDevices) — BANLI HESAPLAR HARİÇ, aşağıya bakın
+///   • Push bildirim kayıtları — BANLI HESAP DAHİL: cihaz token'ları (PushDevices), bildirim
+///     tercihleri ve aydınlatma damgası (NotificationPreferences), alıcısı olduğu bildirim
+///     defteri satırları (Notifications) ve mesaj kısma kayıtları (MessagePushThrottles).
+///     Aktörü olduğu (henüz gitmemiş) bildirimler de Skipped(HesapPasif) yapılıyor: silinmiş
+///     hesap adına "yeni mesaj" bildirimi gitmesin.
 ///
 /// KALAN (kişiyi tanımlamayan ya da başkasına ait kayıt):
 ///   • Ders oturumları, eşleşmeler, mesaj satırları, değerlendirmeler
@@ -69,12 +75,14 @@ public sealed class DeleteAccountHandler : IRequestHandler<DeleteAccountCommand,
     private readonly IAppDbContext _db;
     private readonly IPasswordHasher _hasher;
     private readonly RefreshTokenService _refresh;
+    private readonly IClock _clock;
 
-    public DeleteAccountHandler(IAppDbContext db, IPasswordHasher hasher, RefreshTokenService refresh)
+    public DeleteAccountHandler(IAppDbContext db, IPasswordHasher hasher, RefreshTokenService refresh, IClock clock)
     {
         _db = db;
         _hasher = hasher;
         _refresh = refresh;
+        _clock = clock;
     }
 
     public async Task<DeleteAccountResult> Handle(DeleteAccountCommand request, CancellationToken ct)
@@ -97,6 +105,15 @@ public sealed class DeleteAccountHandler : IRequestHandler<DeleteAccountCommand,
         {
             throw new AppException(ErrorCodes.InvalidCredentials, "Parola doğrulanamadı.", statusCode: 401);
         }
+
+        /*
+          TRANSACTION (2026-09-25): push temizliği toplu SQL ile (ExecuteDelete/ExecuteUpdate)
+          yapılıyor ve bunlar SaveChanges'i beklemeden HEMEN çalışıyor. Transaction olmasaydı
+          sondaki SaveChanges düştüğünde (ör. Users satırına eşzamanlı yazım, xmin) hesap
+          silinmemiş ama bildirim tercihleri ve aydınlatma damgası gitmiş olurdu. Artık
+          hepsi birlikte yazılıyor ya da hiçbiri.
+        */
+        await using var tx = await _db.BeginTransactionAsync(cancellationToken: ct);
 
         var avatarKey = user.AvatarUrl;
 
@@ -155,6 +172,35 @@ public sealed class DeleteAccountHandler : IRequestHandler<DeleteAccountCommand,
         }
 
         /*
+          PUSH BİLDİRİMLERİ (2026-09-25) — KOŞULSUZ, banlı hesap DAHİL.
+
+          Yukarıdaki ban istisnası push kayıtlarına UYGULANMAZ: HWID banı HwidBans'ta ve
+          UserDevices'ta yaşıyor; push token'ının moderasyon değeri yok, yalnızca o telefona
+          bildirim göndermeye yarıyor. Silinmiş hesapta tutmanın hiçbir meşru amacı kalmıyor.
+
+          • PushDevices burada DEĞİL, aşağıdaki TumOturumlariDusurAsync içinde siliniyor —
+            "bütün oturumlar düşerken bütün push kayıtları da düşer" kuralının tek yeri orası.
+          • Bildirim defteri: alıcısı olduğu satırlar silinir (içerik yok ama kime ne zaman
+            bildirim gittiği kişisel veri). Aktörü olduğu satırlar KARŞI TARAFIN kaydı; silinmez,
+            bekleyenler Skipped(HesapPasif) olur. Dağıtıcı aktör durumunu gönderim anında da
+            sınıyor, bu yalnızca kuyruğu hemen boşaltıyor.
+          • Filtre `"Status" = 'Pending'` kısmi index'in (IX_Notifications_Bekleyen) koşuluyla
+            BİREBİR aynı: bekleyen satırlar azdır, taranan da yalnızca onlar olur.
+        */
+        var uid = user.Id;
+        var now = _clock.UtcNow;
+
+        await _db.NotificationPreferences.Where(p => p.UserId == uid).ExecuteDeleteAsync(ct);
+        await _db.MessagePushThrottles.Where(t => t.RecipientUserId == uid).ExecuteDeleteAsync(ct);
+        await _db.Notifications.Where(n => n.RecipientUserId == uid).ExecuteDeleteAsync(ct);
+        await _db.Notifications
+            .Where(n => n.ActorUserId == uid && n.Status == NotificationStatus.Pending)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(n => n.Status, NotificationStatus.Skipped)
+                .SetProperty(n => n.Outcome, NotificationOutcome.HesapPasif)
+                .SetProperty(n => n.ProcessedAtUtc, (DateTime?)now), ct);
+
+        /*
           ⛔ YENİLEME TOKEN'LARI ELLE İPTAL EDİLİYOR — Cascade BURADA ÇALIŞMAZ.
 
           RefreshTokens tablosunda Users'a Cascade FK var, ama bu akış satırı SİLMİYOR:
@@ -170,6 +216,7 @@ public sealed class DeleteAccountHandler : IRequestHandler<DeleteAccountCommand,
         await _refresh.TumOturumlariDusurAsync(user, RefreshTokenRevokeReason.AccountDeleted, ct);
 
         await _db.SaveChangesAsync(ct);
+        await tx.CommitAsync(ct);
 
         return new DeleteAccountResult(user.Id, avatarKey);
     }

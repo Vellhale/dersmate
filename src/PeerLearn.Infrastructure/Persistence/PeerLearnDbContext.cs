@@ -51,6 +51,11 @@ public sealed class PeerLearnDbContext : DbContext, IAppDbContext
     // Communication (İletişim)
     public DbSet<Conversation> Conversations => Set<Conversation>();
     public DbSet<Message> Messages => Set<Message>();
+    public DbSet<PushDevice> PushDevices => Set<PushDevice>();
+    public DbSet<Notification> Notifications => Set<Notification>();
+    public DbSet<PushTicket> PushTickets => Set<PushTicket>();
+    public DbSet<NotificationPreference> NotificationPreferences => Set<NotificationPreference>();
+    public DbSet<MessagePushThrottle> MessagePushThrottles => Set<MessagePushThrottle>();
 
     // Scheduling (Ders Oturumları + Kanıt)
     public DbSet<LessonSession> LessonSessions => Set<LessonSession>();

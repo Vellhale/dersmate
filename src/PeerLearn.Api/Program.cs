@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using PeerLearn.Api.Authorization;
@@ -14,6 +15,7 @@ using PeerLearn.Api.Middleware;
 using PeerLearn.Api.Startup;
 using PeerLearn.Application;
 using PeerLearn.Application.Abstractions;
+using PeerLearn.Application.Features.Communication.Bildirimler;
 using PeerLearn.Application.Options;
 using PeerLearn.Infrastructure;
 using PeerLearn.Infrastructure.Persistence;
@@ -259,6 +261,113 @@ if (testEmailIndex >= 0)
 }
 
 /*
+  PUSH SINAMASI: "dotnet run -- --test-push ExponentPushToken[…] [--platform Ios]"
+
+  --test-email'in push karşılığı ve aynı boşluğu kapatıyor: ProductionGuard yalnızca
+  ayarların VARLIĞINI denetliyor, erişim token'ının Expo'da ÇALIŞTIĞINI değil. Dağıtıcı ise
+  hataları satır satır yazıp devam ediyor; yanlış token'la site "çalışıyor" görünür, hiçbir
+  bildirim gitmez ve tek iz günlükteki bir CRITICAL satırı olur.
+
+  Bu komut kuyruğu ATLAR: doğrudan göndericiyi çağırır, bileti yazdırır, 20 sn bekleyip
+  makbuzu sorar. Robot token'ı için gereken en düşük rolü ölçmek (Viewer yetiyor mu) ve
+  "Enhanced Security" açılmadan önce Bearer'ın kabul edildiğini görmek de bununla yapılır.
+  Kullanıcının hesabına bağlı bir uçtan uca deneme için uygulamadaki "Test bildirimi gönder"
+  (POST /push/test) var; o kuyruktan geçer.
+
+  Token günlüğe yalnızca maskeli yazılır.
+*/
+var testPushIndex = Array.IndexOf(args, "--test-push");
+if (testPushIndex >= 0)
+{
+    var token = testPushIndex + 1 < args.Length ? args[testPushIndex + 1].Trim() : null;
+    var platformIndex = Array.IndexOf(args, "--platform");
+    var platformMetni = platformIndex >= 0 && platformIndex + 1 < args.Length ? args[platformIndex + 1] : "Android";
+
+    using var pushScope = app.Services.CreateScope();
+    var pushLogger = pushScope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+
+    if (!PushTokenKurali.Gecerli(token) ||
+        !Enum.TryParse<PeerLearn.Domain.Communication.PushPlatform>(platformMetni, ignoreCase: true, out var platform))
+    {
+        pushLogger.LogError(
+            "Kullanım: dotnet PeerLearn.Api.dll --test-push ExponentPushToken[…] [--platform Android|Ios]. " +
+            "Token biçimi tutmuyor ya da platform tanınmıyor.");
+        Environment.ExitCode = 1;
+        return;
+    }
+
+    var gonderici = pushScope.ServiceProvider.GetRequiredService<IPushGonderici>();
+
+    // Log sağlayıcısıyla "çalışıyor" demek yanıltıcı olurdu: hiçbir şey gönderilmiyor.
+    if (gonderici is not ExpoPushGonderici)
+    {
+        pushLogger.LogError(
+            "Push:Provider 'Expo' DEĞİL ({Tur}) — hiçbir bildirim gönderilmiyor. " +
+            "Ortam değişkeni: Push__Provider=Expo (ve Push__AccessToken).", gonderici.GetType().Name);
+        Environment.ExitCode = 1;
+        return;
+    }
+
+    var etiket = pushScope.ServiceProvider.GetRequiredService<BildirimEtiketi>();
+    var kanal = BildirimKanallari.Mesajlar;
+    var mesaj = BildirimYuku.Kur(
+        new BildirimTaslagi(
+            PeerLearn.Domain.Communication.NotificationType.Test,
+            kanal,
+            BildirimMetni.Test(kanal),
+            "/bildirimler",
+            etiket.Alici(Guid.Empty),
+            etiket.Test(Guid.NewGuid()),
+            TtlSaniye: 900,
+            Rozet: null),
+        token!,
+        platform);
+
+    var gonderim = await gonderici.GonderAsync([mesaj], CancellationToken.None);
+    if (gonderim.IstekHatasi is { } istekHatasi)
+    {
+        pushLogger.LogError(
+            "PUSH ÇALIŞMIYOR — Expo isteği reddetti (HTTP {Durum}, {Kod}): {Mesaj}. 401/403 ise erişim " +
+            "token'ı yanlış ya da robotun rolü yetmiyor.", istekHatasi.HttpDurumu, istekHatasi.Kod, istekHatasi.Mesaj);
+        Environment.ExitCode = 1;
+        return;
+    }
+
+    var bilet = gonderim.Biletler.Single();
+    if (!bilet.Basarili || bilet.BiletId is null)
+    {
+        pushLogger.LogError("PUSH ÇALIŞMIYOR — bilet hata döndü ({Kod}): {Mesaj}. Token {Token}.",
+            bilet.HataKodu, bilet.HataMesaji, PushTokenKurali.Maskele(token));
+        Environment.ExitCode = 1;
+        return;
+    }
+
+    pushLogger.LogInformation("Expo bildirimi kabul etti, bilet {Bilet}. Makbuz 20 sn sonra soruluyor…", bilet.BiletId);
+    await Task.Delay(TimeSpan.FromSeconds(20));
+
+    var makbuzlar = await gonderici.MakbuzlariAlAsync([bilet.BiletId], CancellationToken.None);
+    if (!makbuzlar.TryGetValue(bilet.BiletId, out var makbuz))
+    {
+        pushLogger.LogWarning(
+            "Makbuz henüz hazır değil (bilet {Bilet}). Gönderim kabul edildi; cihazda göründüğünü elle doğrulayın.",
+            bilet.BiletId);
+    }
+    else if (makbuz.Basarili)
+    {
+        pushLogger.LogInformation(
+            "PUSH ÇALIŞIYOR — makbuz ok, bildirim {Platform} sağlayıcısına teslim edildi. Cihazda GÖRÜNDÜĞÜNÜ " +
+            "doğrulayın: sağlayıcının kabul etmesi, telefonda gösterildiği anlamına gelmez.", platform);
+    }
+    else
+    {
+        pushLogger.LogError("PUSH ÇALIŞMIYOR — makbuz hata döndü ({Kod}): {Mesaj}.", makbuz.HataKodu, makbuz.HataMesaji);
+        Environment.ExitCode = 1;
+    }
+
+    return;
+}
+
+/*
   İLK YÖNETİCİYİ AÇ: "dotnet run -- --promote-admin eposta@alan.com"
 
   ⛔ BU ADIM OLMADAN TAZE BİR ÜRETİM VERİTABANINDA MODERASYON ULAŞILAMAZ.
@@ -336,6 +445,25 @@ if (promoteIndex >= 0)
     promoteLogger.LogWarning(
         "{Eposta} artık Admin ({OncekiRol} idi). Denetim izine yazıldı.", hedefEposta, oncekiRol);
     return;
+}
+
+/*
+  PUSH SAĞLAYICISI "Log" İSE ÜRETİMDE UYAR, DURMA (2026-09-25 kararı).
+
+  E-postadan bilinçli fark: sunucu dağıtımı Expo erişim token'ının hazır olmasına bağlanmasın.
+  Push yokken uygulama çalışır, yalnızca telefona bildirim gitmez. Ama bu SESSİZ kalmamalı:
+  bildirim defteri dolmaya ve satırlar "Sent" görünmeye devam eder (Log sağlayıcısı Expo gibi
+  bilet döndürüyor), yani veritabanına bakan biri push'un çalıştığını sanabilir. Bu satır
+  "neden kimseye bildirim gitmiyor" sorusunun cevabı. Tanınmayan sağlayıcı ve boş token ise
+  ProductionGuard'da açılışı durduruyor.
+*/
+if (!app.Environment.IsDevelopment() &&
+    !app.Services.GetRequiredService<IOptions<PushOptions>>().Value.ExpoMu)
+{
+    app.Logger.LogWarning(
+        "Push:Provider 'Log' — push bildirimleri GÖNDERİLMİYOR, yalnızca günlüğe yazılıyor (defterdeki " +
+        "satırlar yine de Sent görünür). Açmak için: Push__Provider=Expo ve Push__AccessToken=<üretim robotu>; " +
+        "önce --test-push ile sınayın. Ayrıntı: docs/URETIME-CIKIS.md");
 }
 
 // Geliştirmede şemayı otomatik kur + katalog seed'i (yukarıdaki adımı elle koşmaya gerek kalmasın).

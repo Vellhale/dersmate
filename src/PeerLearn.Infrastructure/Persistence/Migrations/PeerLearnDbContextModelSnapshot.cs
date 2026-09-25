@@ -197,6 +197,237 @@ namespace PeerLearn.Infrastructure.Persistence.Migrations
                     b.ToTable("Messages", "comms");
                 });
 
+            modelBuilder.Entity("PeerLearn.Domain.Communication.MessagePushThrottle", b =>
+                {
+                    b.Property<Guid>("RecipientUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ConversationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("LastSentAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("RecipientUserId", "ConversationId");
+
+                    b.ToTable("MessagePushThrottles", "comms");
+                });
+
+            modelBuilder.Entity("PeerLearn.Domain.Communication.Notification", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("ActorUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
+                    b.Property<Guid?>("ConversationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DedupeKey")
+                        .IsRequired()
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)");
+
+                    b.Property<DateTime>("DueAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("ExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<Guid?>("LeaseOwner")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("LeaseUntilUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("OlayDamgasiUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Outcome")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<DateTime?>("ProcessedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("RecipientUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("RecordId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAtUtc");
+
+                    b.HasIndex("DueAtUtc")
+                        .HasDatabaseName("IX_Notifications_Bekleyen")
+                        .HasFilter("\"Status\" = 'Pending'");
+
+                    b.HasIndex("RecipientUserId", "ConversationId");
+
+                    b.HasIndex("RecipientUserId", "DedupeKey")
+                        .IsUnique();
+
+                    b.HasIndex("RecipientUserId", "Type", "ActorUserId");
+
+                    b.ToTable("Notifications", "comms", t =>
+                        {
+                            t.HasCheckConstraint("CK_Notifications_Attempts", "\"Attempts\" >= 0");
+                        });
+                });
+
+            modelBuilder.Entity("PeerLearn.Domain.Communication.NotificationPreference", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("DisclosureShownAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("LessonApproval")
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
+                    b.Property<bool>("LessonPlan")
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
+                    b.Property<bool>("Messages")
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
+                    b.Property<int>("PromptDeferCount")
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
+                    b.Property<DateTime?>("PromptDeferredAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("Requests")
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId")
+                        .IsUnique();
+
+                    b.ToTable("NotificationPreferences", "comms", t =>
+                        {
+                            t.HasCheckConstraint("CK_NotificationPreferences_PromptDeferCount", "\"PromptDeferCount\" >= 0");
+                        });
+                });
+
+            modelBuilder.Entity("PeerLearn.Domain.Communication.PushDevice", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("HwidHash")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string[]>("KapaliKanallar")
+                        .IsRequired()
+                        .HasColumnType("text[]")
+                        .HasDefaultValueSql("'{}'");
+
+                    b.Property<DateTime>("LastSeenAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Platform")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)");
+
+                    b.Property<string>("Token")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Token")
+                        .IsUnique();
+
+                    b.HasIndex("UserId", "HwidHash")
+                        .IsUnique();
+
+                    b.ToTable("PushDevices", "comms");
+                });
+
+            modelBuilder.Entity("PeerLearn.Domain.Communication.PushTicket", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("NotificationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("PushDeviceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("TicketId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAtUtc");
+
+                    b.HasIndex("TicketId")
+                        .IsUnique();
+
+                    b.ToTable("PushTickets", "comms");
+                });
+
             modelBuilder.Entity("PeerLearn.Domain.Community.Badge", b =>
                 {
                     b.Property<Guid>("Id")
@@ -710,6 +941,9 @@ namespace PeerLearn.Infrastructure.Persistence.Migrations
                     b.HasIndex("UserId", "ExpiresAtUtc")
                         .HasDatabaseName("IX_RefreshTokens_AktifKullanici")
                         .HasFilter("\"RevokedAtUtc\" IS NULL");
+
+                    b.HasIndex("UserId", "DeviceHwidHash", "CreatedAtUtc")
+                        .HasDatabaseName("IX_RefreshTokens_KullaniciCihaz");
 
                     b.ToTable("RefreshTokens", "identity", t =>
                         {
@@ -1510,7 +1744,15 @@ namespace PeerLearn.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("CompletionRequestedAtUtc")
+                        .HasDatabaseName("IX_LessonSessions_OnayBekleyen")
+                        .HasFilter("\"Status\" = 'AwaitingApproval'");
+
                     b.HasIndex("MatchId");
+
+                    b.HasIndex("ScheduledStartUtc")
+                        .HasDatabaseName("IX_LessonSessions_YaklasanDers")
+                        .HasFilter("\"Status\" = 'Booked'");
 
                     b.HasIndex("TopicId");
 
@@ -1788,6 +2030,24 @@ namespace PeerLearn.Infrastructure.Persistence.Migrations
                         .IsRequired();
 
                     b.Navigation("Conversation");
+                });
+
+            modelBuilder.Entity("PeerLearn.Domain.Communication.NotificationPreference", b =>
+                {
+                    b.HasOne("PeerLearn.Domain.Identity.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("PeerLearn.Domain.Communication.PushDevice", b =>
+                {
+                    b.HasOne("PeerLearn.Domain.Identity.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("PeerLearn.Domain.Community.CommunityComment", b =>

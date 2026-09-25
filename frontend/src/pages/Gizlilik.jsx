@@ -40,6 +40,64 @@ import { ISLETMECI, ISLETMECI_ADRESI, ISLETMECI_ALAN_ADI, MARKA } from '../lib/k
     3. LegalDocuments.CurrentVersion + web yasalMetinler.js'i artır
     4. sunucuyu dağıt
 
+  ─── 2026-09-25'te DÜZELTİLEN YANLIŞ BEYAN: TELEFON NUMARASI ────────────────
+  §2 "isteğe bağlı profil bilgileri" arasında ve §6'da "telefon numaran" yazıyordu.
+  TOPLANMIYOR. Ölçüldü: Domain/Identity/User.cs'te PhoneNumber alanı VAR, ama sunucu
+  ağacında ona YAZAN tek satır DeleteAccount.cs'teki `user.PhoneNumber = null` — yani
+  yalnızca silinirken boşaltılıyor. ProfileCommands telefona dokunmuyor, bu arayüzde de
+  bir telefon alanı yok. Mobil metin aynı hatayı 2026-09-22'de düzeltmiş ve "web'de aynı
+  hata duruyor" diye not düşmüştü; iki metin aynı olguyu söylemeli. Aynı cümle
+  HesapSilme.jsx §2'den ve Profile.jsx'teki "Silinecekler" listesinden de çıkarıldı.
+  Toplanmayan bir veriyi "topluyoruz" demek, bir denetimde metnin tamamını şüpheli yapar.
+
+  Aynı turda §7'deki "mobilde Profil sekmesi" de düzeltildi: mobilde sekme çubuğu
+  2026-09-23'te kalktı, Profil'e sol üstteki menüden (adına dokunarak) gidiliyor.
+
+  ─── 2026-09-25: PUSH BİLDİRİMLERİ — SÖZLEŞME SÜRÜMÜ ARTTI ─────────────────
+  §1/§2/§3/§5/§6/§7 push için genişledi; sürüm 2026-09-19 → 2026-09-25 (üç yer birlikte,
+  gerekçe lib/yasalMetinler.js). Bölüm numaraları DEĞİŞMEDİ. Push YALNIZCA mobil
+  uygulamada var; metin bu yüzden "mobil uygulamada bildirimleri açtıysan" kapsamıyla
+  yazıldı — TEK İSTİSNA bildirim defteri (§2): sunucu, bildirim gerektiren her olay için
+  alıcı hangi istemciyi kullanırsa kullansın kısa bir kayıt yazıyor, yani web kullanıcısı
+  için de tutuluyor. Onu "mobilde" kapsamına sokmak eksik beyan olurdu.
+
+  Metin yine KOD OKUNARAK yazıldı:
+    • Sunucuda saklananlar   → Domain/Communication/PushDevice.cs (token, platform, HWID
+                               özeti, kapalı Android kanalları, tarihler),
+                               NotificationPreference.cs (dört tercih, aydınlatma damgası,
+                               erteleme sayacı), Notification.cs (defter: tür, kayıt ve
+                               aktör kimlikleri, zamanlar, sonuç — İÇERİK KOPYALANMIYOR)
+    • Push'un içeriği        → Features/Communication/Bildirimler/BildirimMetni.cs (başlıklar
+                               sabit; ad yalnızca mesaj ve kabulde, istek/ders bildiriminde
+                               konu geçebilir) ve BildirimYuku.cs (data yalnızca tür, url,
+                               alıcı etiketi; etiket HMAC türevi)
+    • Sessiz saat            → Bildirimler/SessizSaat.cs (22.00–09.00 TR; mesaj ve yaklaşan
+                               ders muaf)
+    • Silme noktaları        → Logout, RefreshTokenService.TumOturumlariDusurAsync (her
+                               yerden çıkış, parola sıfırlama, rol değişimi, hırsızlık
+                               tespiti), DeleteAccount, BanUser, makbuzdaki
+                               DeviceNotRegistered, mobilde çevrimdışı çıkıştan sonra forget,
+                               günlük temizlik (CleanupNotifications: oturum bağı kopmuş cihaz)
+    • Süreler                → CleanupNotifications.cs (defter 30 gün, kısma kaydı 1 gün,
+                               oturumu kapanmış cihaz 5 gün + günde bir temizlik = §5'teki
+                               "en geç 7 gün"), CheckPushReceipts.cs (makbuz en geç 24 saat),
+                               RefreshToken ömrü (60 gün — çevrimdışı çıkış sınırı)
+
+  Mobil metinle (mobil depo app/gizlilik.jsx) AYNI OLGULARI söylemeli: taşıyıcılar,
+  süreler, silme noktaları, adın hangi bildirimde geçtiği. İfade platforma göre
+  ayrışabilir (web'de "mobil uygulamada" diye kapsanıyor), olgu ayrışamaz. Mobildeki §4
+  (cihazda saklananlar: bildirim bileşeninin kurulum numarası, çevrimdışı çıkış işareti)
+  buraya TAŞINMADI: web §4 çerezleri anlatıyor ve o kayıtlar telefonda duruyor, tarayıcıda
+  değil; mobil kullanıcı onları uygulamanın kendi metninde okuyor.
+
+  ⚠️ BİR OLGU HENÜZ ÖLÇÜLMEDİ, METİN TASARIMA GÜVENİYOR: "bildirim iletimi için aktarım
+  yalnızca bildirimleri açtığında başlar" (§6). Android'de Firebase otomatik başlatması
+  kapalı kuruluyor; release APK'da taze kurulumda ağ ölçümüyle doğrulanacak. Ölçüm başka
+  bir şey gösterirse §6 burada da, mobil metinde de düzeltilmeli.
+
+  ⚠️ /gizlilik-uygulama (mağazalara verilecek, mobil metni sunan herkese açık adres) bu
+  turda YOK — ayrı PR.
+
   ⚠️ METİN HÂLÂ TASLAK. Sürüm borcunun kapanması metnin hukuken tamamlandığı anlamına
   GELMEZ. §1 artık veri sorumlusunu adıyla söylüyor ama tescil bilgileri (ticari unvan,
   adres, MERSIS) lib/kunye.js'te BOŞ ve bilerek boş — uydurulmadı. MetinSayfasi'ndeki
@@ -88,8 +146,9 @@ export default function Gizlilik() {
         </p>
         <p>
           Verini reklam için kullanmıyoruz, satmıyoruz ve üçüncü taraflara pazarlama
-          amacıyla aktarmıyoruz. Topladığımız her şey ya hesabını çalıştırmak ya da
-          platformu kötüye kullanımdan korumak için.
+          amacıyla aktarmıyoruz. Topladığımız her şey hesabını çalıştırmak, mobil
+          uygulamada açtıysan sana bildirimle haber vermek ya da platformu kötüye
+          kullanımdan korumak için.
         </p>
       </Bolum>
 
@@ -101,8 +160,8 @@ export default function Gizlilik() {
         </p>
         <p>
           <strong>İsteğe bağlı profil bilgileri:</strong> profil fotoğrafın, kendini
-          anlattığın metin, okulun ve bölümün, telefon numaran. Bunların hiçbiri zorunlu
-          değildir; boş bırakabilirsin.
+          anlattığın metin, okulun ve bölümün. Bunların hiçbiri zorunlu değildir; boş
+          bırakabilirsin.
         </p>
         <p>
           <strong>Kullanım verileri:</strong> anlattığın ders sayısı ve süresi,
@@ -119,6 +178,33 @@ export default function Gizlilik() {
           ayarların, saat dilimin, ekran çözünürlüğün, işlemci çekirdek sayın, dokunmatik
           desteğin ve tarayıcının bir çizim testine verdiği sonuç. Bu bilgilerin
           kendisini değil, yalnızca özetini saklıyoruz.
+        </p>
+        {/* Push YALNIZCA mobilde. Cihaz kimliği cümlesiyle ÇELİŞMEMELİ: dışarı (Expo/Google/
+            Apple) giden şey bildirim adresi; cihaz kimliği özeti yalnızca sunucumuzda, adresi
+            hangi cihaza ait olduğuna bağlamak için duruyor (PushDevice.HwidHash). */}
+        <p>
+          <strong>Bildirim kaydı (yalnızca mobil uygulamada bildirimleri açarsan):</strong>{' '}
+          telefonuna bildirim gönderebilmek için telefonunun <strong>bildirim
+          adresini</strong> (Expo’nun verdiği ve Android’de Google’ın, iPhone’da Apple’ın
+          bildirim adresini taşıyan bir numara), telefonunun türünü (Android ya da iOS),
+          adresin hangi cihazına ait olduğunu bilmek için mobil uygulamanın o telefon için
+          ürettiği cihaz kimliği özetini, Android’de telefon ayarlarından kapattığın bildirim
+          türlerini ve kaydın tarihlerini saklıyoruz. Bildirim adresi bildirimi ileten
+          hizmetlere gider (bkz. §6); cihaz kimliği özeti gitmez.
+        </p>
+        {/* Defter TÜM kullanıcılar için yazılıyor (olay noktaları alıcının istemcisine
+            bakmıyor; cihazı olmayan alıcının satırı "cihaz yok" diye kapanıyor). Bu yüzden
+            bu paragraf "mobilde" kapsamında DEĞİL. */}
+        <p>
+          <strong>Bildirim tercihlerin ve bildirim kayıtları:</strong> mobil uygulamada hangi
+          bildirim türlerini almak istediğin, bildirimlerle ilgili açıklamayı görüp
+          bildirimleri açtığın an, bildirim sorusunu kaç kez ertelediğin ve en son ne zaman
+          ertelediğin (soruyu sık sık tekrarlamamak için). Bunlardan ayrı olarak sunucu —
+          bildirimleri açmamış olsan ya da yalnızca web sitesini kullansan da — sana
+          bildirim gerektiren her olay için kısa bir kayıt tutar: bildirimin türü, olayın ve
+          olayı başlatan kişinin kayıt numaraları, ne zaman gönderildiği ya da neden
+          gönderilmediği. Bildirimin metni ve mesajlarının içeriği bu kayda{' '}
+          <strong>kopyalanmaz</strong>.
         </p>
       </Bolum>
 
@@ -141,6 +227,15 @@ export default function Gizlilik() {
           <li>
             <strong>Anlaşmazlıkları çözmek için:</strong> ders kanıtları ve şikayet
             kayıtları.
+          </li>
+          <li>
+            <strong>Sana haber vermek için (mobil uygulamada bildirimler):</strong> bildirim
+            adresi, bildirim tercihlerin ve bildirim kayıtları. Yeni mesajı, arkadaş
+            isteğini, ders onayını ve yaklaşan dersi zamanında haber vermek; kapattığın
+            türleri göndermemek; aynı olayı iki kez bildirmemek ve aynı kişinin sana art
+            arda istek bildirimi düşürmesini sınırlamak için. Hukuki sebebi, kullandığın
+            hizmetin parçası olduğu için sözleşmenin ifasıdır (KVKK m.5/2-c). Bildirimler
+            isteğe bağlıdır: açmazsan platformun geri kalanı aynı biçimde çalışır.
           </li>
         </Maddeler>
       </Bolum>
@@ -182,6 +277,38 @@ export default function Gizlilik() {
           <li>
             <strong>Mesajlar:</strong> konuşma silinene kadar.
           </li>
+          {/* Süreler ve silme noktaları sunucudan: PushDevice.cs başındaki liste, RefreshToken
+              ömrü (60 gün), CleanupNotifications (30 gün / 1 gün; oturum bağı kopmuş cihaz
+              BaglantisizCihazSaklama 5 gün + günde bir temizlik ≤ 7 gün), CheckPushReceipts
+              (24 sa). "60 gün" sınırı BİLEREK yazılı — "çıkınca hemen biter" demek yanlış beyan
+              olurdu. Son cümle 2026-09-25'te eklendi: önceki metin uygulamayı kaldıranın
+              kaydını "bir sonraki bildirim denemesinde" silinir diye bitiriyordu, ama deneme
+              hiç olmazsa satır süresiz kalıyordu (sunucuda bu yolu kapatan temizlik yoktu).
+              Mobil metindeki §5 ile aynı olguları söylemeli. */}
+          <li>
+            <strong>Bildirim kaydı (mobil uygulama, telefonunun bildirim adresi):</strong> o
+            telefonda çıkış yapana kadar. Çıkış yaptığında, “her yerden çıkış” yaptığında ya
+            da parolanı sıfırladığında, hesabın kalıcı olarak kapatıldığında ya da hesabını
+            sildiğinde hemen silinir. Uygulamayı telefondan kaldırırsan adres geçersizleşir
+            ve kayıt, o adrese bir sonraki bildirim denemesinde silinir. Hesabın geçici
+            olarak askıya alınırsa kayıt silinmez, yalnızca bildirim gönderilmez. İnternet
+            yokken çıkış yaptıysan sunucu çıkışını o an öğrenemez: kayıt, uygulamayı bir
+            sonraki açışında silinir; uygulamayı bir daha hiç açmazsan, o telefondaki
+            oturumunun süresi dolana kadar (en fazla 60 gün) o telefona bildirim gelmeye
+            devam edebilir. Bu yollardan hiçbiri işlemese de kayıt süresiz kalmaz: o
+            telefondaki oturum kapandıktan ya da süresi dolduktan (uygulamayı son
+            kullanmandan en fazla 60 gün sonra) en geç 7 gün sonra silinir.
+          </li>
+          <li>
+            <strong>Bildirim tercihlerin:</strong> hesabın açık olduğu sürece.
+          </li>
+          <li>
+            <strong>Bildirim kayıtları: 30 gün.</strong> Bildirim gönderildikten ya da
+            gönderilmeyeceği anlaşıldıktan 30 gün sonra silinir. Bildirim hizmetinin teslim
+            makbuzları (bildirimin telefona ulaşıp ulaşmadığını gösteren kısa kayıt) ve aynı
+            sohbetten art arda bildirim gitmesin diye tutulan son gönderim zamanı ise bir
+            gün dolduktan sonraki ilk temizlikte silinir.
+          </li>
           <li>
             <strong>Yedekler.</strong> Sistemi bir arıza ya da veri kaybından geri
             getirebilmek için düzenli yedek alıyoruz. Bir veri canlı sistemden silindiğinde
@@ -199,8 +326,8 @@ export default function Gizlilik() {
         <p>
           Profilinde <strong>senin girdiğin</strong> bilgiler (adın, fotoğrafın,
           okulun, kendini anlattığın metin, anlatabildiğin konular, aldığın
-          değerlendirmeler) platformdaki diğer kullanıcılara açıktır. E-posta adresin,
-          telefon numaran ve cihaz kimliğin <strong>hiçbir kullanıcıya gösterilmez</strong>.
+          değerlendirmeler) platformdaki diğer kullanıcılara açıktır. E-posta adresin ve
+          cihaz kimliğin <strong>hiçbir kullanıcıya gösterilmez</strong>.
         </p>
         <p>
           <strong>Arkadaş sayın</strong> profilinde herkese görünür. Tam arkadaş listeni
@@ -249,7 +376,38 @@ export default function Gizlilik() {
             ölçüm yapar. İzin vermezsen hiçbir istek gönderilmez. İznini istediğin zaman
             geri alabilirsin (bkz. §4).
           </li>
+          {/* Taşıyıcı olguları mobildeki aydınlatma sorusu (BildirimIzniSorusu → TASIYICI_METNI),
+              Bildirim ayarları ekranı ve mobil gizlilik §6 ile AYNI olmalı: kullanıcı
+              telefonda "Aç"a basarken okuduğundan farklı bir şeyi burada bulmamalı. */}
+          <li>
+            <strong>
+              Bildirim iletimi — Expo, Google (Firebase Cloud Messaging) ve Apple (Apple Push
+              Notification service).
+            </strong>{' '}
+            Yalnızca mobil uygulamada bildirimleri açtıysan. Sunucumuz bildirimi Expo’ya
+            verir; Expo onu Android’de Google’ın, iPhone’da Apple’ın bildirim hizmeti
+            üzerinden telefonuna ulaştırır. Onlara giden veri: telefonunun bildirim adresi;
+            bildirimin başlığı ve metni; açıldığında doğru ekrana gidebilmek için bildirimin
+            türü ve <strong>anlamsız, rastgele bir kayıt numarası</strong> (sohbetin ya da
+            dersin numarası); aynı telefonda başka bir hesap açıkken bildirimin
+            gösterilmemesi için hesabından türetilen ve geri çözülemeyen kısa bir etiket.
+            Bildirim adresini alırken uygulama Expo’ya ayrıca bildirim bileşeninin rastgele
+            kurulum numarasını gönderir. Mesajlarının içeriği bildirimlere{' '}
+            <strong>hiçbir zaman</strong> girmez; kişi adı yalnızca yeni mesaj ve kabul
+            edilen istek bildiriminde, arkadaşının görünen adı olarak geçer. Diğer istek
+            ve ders bildirimlerinde kimsenin adı geçmez; dersin ya da isteğin konusu
+            geçebilir.
+            E-posta adresin ve cihaz kimliği özetin bu hizmetlere gönderilmez.
+          </li>
         </Maddeler>
+        <p>
+          <strong>Kilit ekranı (mobil uygulama).</strong> Telefonunun kilit ekranı
+          ayarına göre bildirimin başlığı görünebilir; içeriğini telefon ayarlarından
+          gizleyebilirsin. iPhone’da:
+          Ayarlar › Bildirimler › Önizlemeleri Göster. Gece 22.00–09.00 arasında acil
+          olmayan bildirimler sabaha kalır; yeni mesaj ve yaklaşan ders bildirimleri
+          beklemez.
+        </p>
 
         <h3 className="mt-6 text-base font-semibold text-slate-900">
           Yurt dışına aktarım
@@ -257,10 +415,12 @@ export default function Gizlilik() {
         <p>
           Yukarıdaki sağlayıcıların bir kısmı sunucularını <strong>Türkiye dışında</strong>{' '}
           işletiyor. Bu, KVKK m.9 anlamında yurt dışına aktarım sayılır ve hesap açarken
-          verdiğin onay bunu da kapsar. Aktarılan veri, her sağlayıcı için yalnızca o
-          hizmetin gerektirdiği kadarıdır: e-posta gönderimi için adresin ve iletinin
-          içeriği, yedekleme için yedek dosyalarının kendisi, analitik için —
-          <strong> izin verdiysen</strong> — sayfa kullanım ölçümleri.
+          verdiğin onay bunu da kapsar; bildirim iletimi için yapılan aktarım ise yalnızca
+          mobil uygulamada bildirimleri açtığında başlar. Aktarılan veri, her sağlayıcı için
+          yalnızca o hizmetin gerektirdiği kadarıdır: e-posta gönderimi için adresin ve
+          iletinin içeriği, yedekleme için yedek dosyalarının kendisi, analitik için —
+          <strong> izin verdiysen</strong> — sayfa kullanım ölçümleri, bildirim iletimi için
+          yukarıda sayılan bildirim bilgileri.
         </p>
         <p>
           Bu listeyi değiştirdiğimizde metni günceller ve üstteki tarihi değiştiririz
@@ -280,15 +440,27 @@ export default function Gizlilik() {
           </li>
           <li>
             <strong>Silme:</strong> hesabını kendin silebilirsin — Profil sayfasının
-            (mobilde Profil sekmesinin) en altındaki “Hesabımı sil” bağlantısı. Onay için
+            (mobil uygulamada Profil ekranının; ona sol üstteki menüden, adına dokunarak
+            gidilir) en altındaki “Hesabımı sil” bağlantısı. Onay için
             parolan yeniden sorulur ve işlem geri alınamaz. Kimlik bilgilerin siliniyor;
-            ders geçmişi, kazandırdığın puanlar ve değerlendirmeler karşı tarafa ait
-            olduğu için kalıyor ve orada adın yerine “Silinmiş kullanıcı” görünüyor.
+            bildirim kayıtların, bildirim ayarların ve bildirim alan cihazların da
+            siliniyor. Ders geçmişi, kazandırdığın puanlar ve değerlendirmeler karşı tarafa
+            ait olduğu için kalıyor ve orada adın yerine “Silinmiş kullanıcı” görünüyor.
             Adım adım anlatım:{' '}
             <Link to="/hesap-silme" className="font-medium text-brand-700 hover:underline">
               hesabını silme
             </Link>
             .
+          </li>
+          {/* Bildirim ayarlarının TEK girişi mobil Profil › "Bildirim ayarları" (mobil
+              app/profil/index.jsx). Web'de bu ayar bilerek YOK: web'de push yok, anahtar
+              burada hiçbir şeyi açıp kapatmazdı. */}
+          <li>
+            <strong>Bildirimleri kapatma (mobil uygulama):</strong> Profil › Bildirim
+            ayarları’ndan bildirim türlerini tek tek kapatabilirsin; kapattığın türler sana
+            hiç gönderilmez. Bildirimleri telefonunun ayarlarından da tamamen
+            kapatabilirsin. O telefonun bildirim kaydını sunucudan kaldırmak için orada
+            çıkış yapman yeterli (bkz. §5).
           </li>
           <li>
             <strong>Erişim ve hesabına giremiyorsan:</strong> verinin bir kopyasını alma

@@ -74,8 +74,9 @@ public sealed class RefreshSessionHandler : IRequestHandler<RefreshSessionComman
 
         /* HWID normalizasyonu Login ile BİREBİR AYNI olmak zorunda (trim → küçük harf →
            ilk 128 karakter). Farklı normalize edilseydi aynı cihaz iki farklı değer
-           üretir, cihaz kaydı ve ban eşleşmesi sessizce tutmazdı. */
-        var hwid = Normalize(request.HwidHash)
+           üretir, cihaz kaydı ve ban eşleşmesi sessizce tutmazdı. Bu yüzden iki uç da
+           (ve push cihaz kaydı) aynı fonksiyonu çağırıyor: HwidKurali. */
+        var hwid = HwidKurali.Normalize(request.HwidHash)
                    ?? throw new AppException(ErrorCodes.HwidRequired, "Cihaz kimliği (HWID) zorunludur.");
 
         var ham = request.RefreshToken?.Trim();
@@ -208,11 +209,5 @@ public sealed class RefreshSessionHandler : IRequestHandler<RefreshSessionComman
             user.Role.ToString(),
             user.CanModerate,
             yeniHam);
-    }
-
-    private static string? Normalize(string? hwid)
-    {
-        var trimmed = hwid?.Trim().ToLowerInvariant();
-        return string.IsNullOrEmpty(trimmed) ? null : trimmed[..Math.Min(trimmed.Length, 128)];
     }
 }

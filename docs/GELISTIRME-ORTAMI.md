@@ -139,6 +139,15 @@ curl http://localhost:5000/health/ready     # PostgreSQL + Redis yoklar
 `Degraded` dönüyorsa Redis kopuktur — uygulama çalışır ama kilit ve önbellek süreç içine
 düşer. `Unhealthy` ise veritabanına ulaşamıyor; 1. adıma dön.
 
+Push bildirimleri geliştirmede **`Push:Provider = Log`** (appsettings.json): hiçbir şey
+gönderilmez, konsola maskeli `[PUSH-LOG]` satırları düşer ve defterde satırlar `Sent` görünür.
+Gerçek bir telefona göndermek için geliştirme robotunun Expo token'ını
+`appsettings.Development.json`'a (`.gitignore`'da) ya da ortam değişkenine yaz
+(`Push__Provider=Expo`, `Push__AccessToken=…`) ve önce `dotnet run --project src/PeerLearn.Api
+-- --test-push 'ExponentPushToken[…]'` ile sına. Dağıtıcı 5 sn'de bir sorgu attığı için konsol
+EF satırlarıyla dolar; `Logging__LogLevel__Microsoft.EntityFrameworkCore.Database.Command=Warning`
+susturur.
+
 ## 4. Arayüz
 
 ```bash
@@ -167,6 +176,10 @@ ister** (1–3. adımlar):
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\tools\e2e-admin-credits.ps1
 ```
+
+Push paketi (`tools/e2e-bildirim.ps1`) API'nin **Log** sağlayıcısıyla koşmasını ister ve
+bunu ilk adımda doğrular; iki kontrolü sunucu saatine bağlı olduğu için 08–11 TR dışında
+`[ATLANDI]` basar. `-Bolum 2,8` ile yalnızca seçilen bölümler koşar.
 
 Ayrıntı: `frontend/e2e/README.md` ve `docs/DEVAM-EDILECEK.md`.
 
