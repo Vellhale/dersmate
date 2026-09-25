@@ -21,11 +21,20 @@ public sealed class SessionsController : ControllerBase
     /// <summary>
     /// Derslerim (eğitmen + öğrenci rolleri), aksiyon bayraklarıyla birlikte.
     /// Aktif dersler her zaman tam döner; yalnızca geçmiş sayfalanır.
+    ///
+    /// <c>pastStatus</c> (isteğe bağlı): geçmişi tek nihai duruma süzer — Completed,
+    /// Cancelled ya da Expired (ad, büyük/küçük harf duyarsız). Başka her değer 400
+    /// VALIDATION_FAILED. Verilmezse yanıt öncekiyle aynı. DİZGE olarak bağlanıyor,
+    /// gerekçesi <see cref="DersGecmisi.SuzgeciCoz"/>'de.
     /// </summary>
     [HttpGet]
     public async Task<MySessionsDto> GetMine(
-        CancellationToken ct, [FromQuery] int pastPage = 1, [FromQuery] int pastPageSize = 20)
-        => await _mediator.Send(new GetMySessionsQuery(User.GetUserId(), pastPage, pastPageSize), ct);
+        CancellationToken ct,
+        [FromQuery] int pastPage = 1,
+        [FromQuery] int pastPageSize = 20,
+        [FromQuery] string? pastStatus = null)
+        => await _mediator.Send(new GetMySessionsQuery(
+            User.GetUserId(), pastPage, pastPageSize, DersGecmisi.SuzgeciCoz(pastStatus)), ct);
 
     public sealed record BookRequest(Guid MatchId, Guid TopicId, DateTime ScheduledStartUtc, int DurationMinutes);
 

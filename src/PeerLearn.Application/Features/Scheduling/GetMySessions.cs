@@ -34,9 +34,97 @@ namespace PeerLearn.Application.Features.Scheduling;
 /// sınırsız. Tavanı asıl tutan şey bugün MintGuard'ın davranışsal sınırları; buradaki
 /// kesme ise son savunma. Ve SESSİZ değil: gerçek toplam ayrıca dönülür, arayüz
 /// kesildiğini söyler.
+///
+/// <para>
+/// <c>PastStatus</c> (2026-09-26, isteğe bağlı): geçmişi TEK bir nihai duruma süzer
+/// ("Geçmiş dersler = yalnızca tamamlananlar"). Verilmezse sorgu ve yanıt öncekiyle
+/// birebir aynı; kurallar <see cref="DersGecmisi"/>'nde.
+/// </para>
 /// </remarks>
-public sealed record GetMySessionsQuery(Guid UserId, int PastPage = 1, int PastPageSize = 20)
+public sealed record GetMySessionsQuery(
+    Guid UserId, int PastPage = 1, int PastPageSize = 20, SessionStatus? PastStatus = null)
     : IRequest<MySessionsDto>;
+
+/// <summary>
+/// Derslerim'in aktif/geçmiş ayrımı ve geçmiş süzgecinin (<c>?pastStatus=</c>) TEK kaynağı.
+/// </summary>
+/// <remarks>
+/// NEDEN SUNUCUDA (istemci kendi süzse olmaz mıydı?): geçmiş BEŞERLİ sayfalanıyor ve
+/// toplamı (<c>past.totalCount</c>) Completed + Cancelled + Expired'ın toplamı. İstemcide
+/// süzülünce (1) tamamlanan ders SAYISI hiçbir yerden öğrenilemez, (2) her sayfa 0-5
+/// karta düşer ve (3) kart eklemeyen bir sayfadan sonra RN'nin VirtualizedList'i
+/// onEndReached'i bir daha çağırmaz — sonsuz kaydırma takılır. Süzgeç sayım ve sayfayla
+/// AYNI kaynaktan geçtiği için toplam da süzülmüş toplam olur.
+///
+/// Süzülebilen küme geçmişin TAMAMI (aktif durumların tümleyeni), elle yazılmış bir liste
+/// değil: yeni bir nihai durum eklenirse kendiliğinden süzülebilir olur.
+/// </remarks>
+public static class DersGecmisi
+{
+    /// <summary>
+    /// Kullanıcının hâlâ bir şey yapabileceği durumlar. Bu kümenin dışındaki her durum
+    /// nihaidir ve "geçmiş" sayılır — yeni bir SessionStatus eklenirse buraya da bakılmalı.
+    /// </summary>
+    public static readonly SessionStatus[] AktifDurumlar =
+    [
+        SessionStatus.Booked,
+        SessionStatus.AwaitingApproval,
+        SessionStatus.Disputed
+    ];
+
+    /// <summary>Geçmişe düşen (nihai) durumlar: Completed, Cancelled, Expired.</summary>
+    public static readonly SessionStatus[] GecmisDurumlar =
+        Enum.GetValues<SessionStatus>().Except(AktifDurumlar).ToArray();
+
+    /// <summary>"Geçmiş süzgeci yalnızca Completed, Cancelled ya da Expired olabilir."</summary>
+    public static readonly string SuzgecHatasi =
+        $"Geçmiş süzgeci yalnızca {string.Join(", ", GecmisDurumlar[..^1])} ya da {GecmisDurumlar[^1]} olabilir.";
+
+    /// <summary>
+    /// <c>?pastStatus=</c> değerini çözer. Boş ya da yok → <c>null</c> (süzgeç yok).
+    /// </summary>
+    /// <remarks>
+    /// Parametre denetleyicide ENUM DEĞİL DİZGE olarak bağlanıyor ve bu bilinçli: ASP.NET'in
+    /// enum bağlayıcısı tanımsız bir değeri (<c>?pastStatus=99</c>, <c>=foo</c>) model
+    /// durumu hatasına çeviriyor ve [ApiController] onu kendi biçimindeki 400'le
+    /// ("One or more validation errors occurred.") döndürüyor. İstemciler hata kodunu
+    /// ProblemDetails.title'dan okuyor; her geçersiz değer aynı VALIDATION_FAILED'ı almalı.
+    ///
+    /// Yalnızca ADLAR kabul edilir (büyük/küçük harf duyarsız). Sayı ("2") reddedilir:
+    /// <c>Enum.TryParse</c> sayıyı ve "Completed,Cancelled" gibi virgüllü birleşimi de
+    /// kabul ederdi; sözleşme ad, kapı da ad.
+    /// </remarks>
+    public static SessionStatus? SuzgeciCoz(string? deger)
+    {
+        if (string.IsNullOrWhiteSpace(deger))
+        {
+            return null;
+        }
+
+        var ad = deger.Trim();
+        foreach (var durum in GecmisDurumlar)
+        {
+            if (string.Equals(durum.ToString(), ad, StringComparison.OrdinalIgnoreCase))
+            {
+                return durum;
+            }
+        }
+
+        throw new AppException(ErrorCodes.ValidationFailed, SuzgecHatasi);
+    }
+
+    /// <summary>
+    /// Sorguya enum olarak gelen süzgecin geçmiş kümesinde olduğunu sınar. Aktif bir durumla
+    /// (Booked…) süzmek her zaman BOŞ geçmiş döndürürdü — sessiz boş liste yerine 400.
+    /// </summary>
+    public static void SuzgeciDogrula(SessionStatus? durum)
+    {
+        if (durum is { } d && !GecmisDurumlar.Contains(d))
+        {
+            throw new AppException(ErrorCodes.ValidationFailed, SuzgecHatasi);
+        }
+    }
+}
 
 public sealed record MySessionsDto(
     IReadOnlyList<SessionListItemDto> Active,
@@ -82,16 +170,8 @@ public sealed class GetMySessionsHandler : IRequestHandler<GetMySessionsQuery, M
     /// <summary>Aktif listede dönülecek en fazla kayıt. Aşılırsa arayüz bunu SÖYLER.</summary>
     private const int MaxActive = 100;
 
-    /// <summary>
-    /// Kullanıcının hâlâ bir şey yapabileceği durumlar. Bu kümenin dışındaki her durum
-    /// nihaidir ve "geçmiş" sayılır — yeni bir SessionStatus eklenirse buraya da bakılmalı.
-    /// </summary>
-    private static readonly SessionStatus[] AktifDurumlar =
-    [
-        SessionStatus.Booked,
-        SessionStatus.AwaitingApproval,
-        SessionStatus.Disputed
-    ];
+    /// <summary>Tanım <see cref="DersGecmisi.AktifDurumlar"/>'da; süzgeç de aynı kümeye bakıyor.</summary>
+    private static readonly SessionStatus[] AktifDurumlar = DersGecmisi.AktifDurumlar;
 
     private readonly IAppDbContext _db;
     private readonly IClock _clock;
@@ -133,8 +213,17 @@ public sealed class GetMySessionsHandler : IRequestHandler<GetMySessionsQuery, M
         var pastPage = Math.Max(1, request.PastPage);
         var pastPageSize = Math.Clamp(request.PastPageSize, 1, 100);
 
+        DersGecmisi.SuzgeciDogrula(request.PastStatus);
+
         var aktifKaynak = Kaynak(me, aktif: true);
         var gecmisKaynak = Kaynak(me, aktif: false);
+
+        // İsteğe bağlı süzgeç SAYIMDAN ve SAYFADAN ÖNCE: ikisi de aynı kaynağı kullandığı
+        // için totalCount süzülmüş toplam olur. Aktif kısma dokunulmaz.
+        if (request.PastStatus is { } gecmisDurumu)
+        {
+            gecmisKaynak = gecmisKaynak.Where(s => s.Status == gecmisDurumu);
+        }
 
         // Toplam AYRICA sayılır: kesme olup olmadığını arayüze söyleyen tek şey bu.
         var aktifToplam = await aktifKaynak.CountAsync(ct);
