@@ -1,5 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { api } from '../lib/api'
+import { dersSekmesi, eylemBekliyor, rezervasyonBirlesimi } from '../lib/dersDurumu'
 import { useAsync } from '../state/useAsync'
 import { useWallet } from '../state/WalletContext'
 import { AnalyticsEvents, trackEvent } from '../lib/analytics'
@@ -11,7 +13,6 @@ import {
   ArtanIkonu,
   ArtiIkonu,
   KepIkonu,
-  OkAsagiIkonu,
   SaatIkonu,
   TakvimIkonu,
   UyariIkonu,
@@ -88,46 +89,118 @@ const VARSAYILAN_DURUM_STILI = {
 }
 
 /*
-  Sayfa başına 5 ders. Eskiden 20'ydi ve "daha fazla yükle" ile ekleniyordu; 60 dersi olan
-  bir kullanıcıda sayfa üç ekran boyu uzuyordu. Sayfalar artık DEĞİŞİYOR, birikmiyor —
-  liste hep aynı yükseklikte kalıyor ve sayfanın altındaki puan geçmişi hep aynı yerde.
+  ─────────────────────────────────────────────────────────────────────────────
+  BEŞ SEKME (2026-09-26, kullanıcı kararı; adlar kullanıcının, değiştirilmeden).
+
+  2026-08-24'ten bu yana sayfa ekrana sabit İKİ SÜTUNDU (solda yaklaşan, sağda geçmiş +
+  puan geçmişi; her sütun kendi içinde kayıyordu). Gerekçesi "yarın dersim var mı" ile
+  "geçen ay ne yapmıştım" sorularının aynı kaydırma çubuğunu paylaşmamasıydı. Sekmeler o
+  ayrımı daha keskin yapıyor: her soru kendi sekmesinde, yani sabit yükseklik, iç kaydırma
+  ve onların tuzakları (min-h-0, altbilgi payı, dvh hesabı) gereksiz kaldı. Sayfa artık
+  normal kayar; içerik `max-w-3xl` tek sütun (tam genişlikte kart lg'de aşırı yayılıyordu).
+  Karar kaydı: docs/ASAMA-3-FRONTEND.md §3.
+
+  Sekme → içerik:
+    aksiyon     senden iş bekleyen dersler + "İtirazda, karar yönetimde"
+    planlanmis  "Saati geçti, hâlâ açık" + "Yaklaşan"
+    gecmis      YALNIZCA tamamlananlar, sunucu süzgeciyle (?pastStatus=Completed),
+                numaralı sayfa
+    puan        puan defteri (/wallet/statement), birikerek
+    rezerve     iki rolde bütün rezervasyonlar, sonucu ne olursa olsun, birikerek
+  Bir dersin hangi sekmede durduğu lib/dersDurumu.js'te (mobille BAYT BAYT aynı dosya):
+  iki istemci aynı dersi aynı sekmede, aynı sayaçla gösteriyor.
+
+  AYNI SAYFADA İKİ SAYFALAMA DESENİ, BİLİNÇLİ: Geçmiş dersler NUMARALI (sayfa değişir,
+  birikmez — web kararı; süzgeçle sayfa sınırları kesin), Puan ve Rezerve BİRİKİR. Rezerve
+  numaralanamaz: tam gelen aktif liste sayfalı geçmişin arasına serpiştiği için n. sayfanın
+  sınırı önceki sayfalar yüklenmeden bilinemez (bkz. rezervasyonBirlesimi).
+
+  SEKME ADRESTE TUTULUR (?sekme=, replace ile — geri tuşu sekme sekme gezmesin). Web'de
+  adres görünür: yenileme ve paylaşılan bağlantı sekmeyi korumalı. Mobil ise aynı
+  parametreyi bir KOMUT olarak okuyup adresten siliyor; bilinçli fark.
+  ─────────────────────────────────────────────────────────────────────────────
 */
-const PAST_PAGE_SIZE = 5
+const SEKMELER = [
+  { anahtar: 'aksiyon', ad: 'Senden aksiyon bekleyenler' },
+  { anahtar: 'planlanmis', ad: 'Planlanmış' },
+  { anahtar: 'gecmis', ad: 'Geçmiş dersler' },
+  { anahtar: 'puan', ad: 'Puan geçmişi' },
+  { anahtar: 'rezerve', ad: 'Rezerve geçmişi' },
+]
+const SEKME_ANAHTARLARI = new Set(SEKMELER.map((s) => s.anahtar))
+
+/*
+  Geçmiş dersler sayfası 5 kart: numaralı sayfa, liste her sayfada aynı boyda kalsın
+  (ders kartı büyük; 20'lik sayfa üç ekran boyu uzuyordu).
+  Rezerve satırı kompakt bir defter satırı, o yüzden "daha eski" başına 10. İlk sayfası
+  sayfa açılışındaki TEK istekle geliyor (aktif liste zaten o yanıtta), ayrı istek yok.
+*/
+const GECMIS_SAYFA_BOYU = 5
+const REZERVE_SAYFA_BOYU = 10
+const HISTORY_PAGE_SIZE = 20
+
+const GECMIS_BOS = { sayfa: null, yukleniyor: false, hata: null }
 
 export default function Sessions() {
-  const sessions = useAsync(() => api.mySessions(1, PAST_PAGE_SIZE), [])
+  const sessions = useAsync(() => api.mySessions(1, REZERVE_SAYFA_BOYU), [])
   const matches = useAsync(() => api.myMatches(), [])
-  const { refreshWallet } = useWallet()
+  const { wallet, refreshWallet } = useWallet()
   const [notice, setNotice] = useState(null)
   const [bookOpen, setBookOpen] = useState(false)
   const [dialog, setDialog] = useState(null) // { type: 'complete'|'approve'|'report'|'cancel', session }
 
   /*
-    Geçmişin GÖRÜNEN sayfası. null iken sessions.data'daki ilk sayfa gösterilir; kullanıcı
-    bir sayfaya tıkladığında burası dolar ve onu GEÇERSİZ KILAR (eklemez).
-
-    Ayrı state olmasının sebebi: sessions.reload() tüm ekranı tazeliyor ve geçmiş sayfası
-    da 1'e dönmeli — ders onaylandığında o ders aktiften geçmişin ilk sayfasına düşer.
-    Tek kaynak kullanılsaydı ya reload sayfayı sıfırlamaz ya da sayfa değiştirmek tüm
-    ekranı spinner'a düşürürdü.
-  */
-  const [pastView, setPastView] = useState(null)
-  const [pastLoading, setPastLoading] = useState(false)
-  const [pastError, setPastError] = useState(null)
-
-  /*
     Time-Lock ve otomatik onay geri sayımları canlı aksın diye periyodik yeniden çizim.
 
-    `tick` ARTIK OKUNUYOR (eskiden `const [, setTick]` ile atılıyordu) çünkü aşağıdaki
-    gruplama saate bakıyor: yalnızca yeniden render yetmez, useMemo'nun bağımlılığına
-    girmezse önbellekteki eski gruplama döner ve saati dolan ders ekranda "Yaklaşan"
-    olarak asılı kalır. Sayfa açık dururken de doğru tarafa geçmesi bu bağımlılıkla oluyor.
+    `tick` OKUNUYOR çünkü aşağıdaki gruplama saate bakıyor: yalnızca yeniden render
+    yetmez, useMemo'nun bağımlılığına girmezse önbellekteki eski gruplama döner ve saati
+    dolan ders ekranda "Yaklaşan" olarak asılı kalır. Sayfa açık dururken de doğru tarafa
+    geçmesi (eğitmenin bitişi geçen dersi aksiyon sekmesine geçer) bu bağımlılıkla oluyor.
   */
   const [tick, setTick] = useState(0)
   useEffect(() => {
     const id = setInterval(() => setTick((t) => t + 1), 20000)
     return () => clearInterval(id)
   }, [])
+
+  // ── SEKME ────────────────────────────────────────────────────────────────
+  const [adres, setAdres] = useSearchParams()
+  const adrestekiSekme = adres.get('sekme')
+
+  /*
+    VARSAYILAN SEKME mobille aynı kural: adresteki sekme > (ilk veride) senden iş bekleyen
+    ders varsa "aksiyon", yoksa "planlanmis". İlk veride BİR KEZ karar verilir ve sabit
+    kalır: son işi bitiren kullanıcı sekmesinden atılmasın. İlk yanıta kadar hiçbir sekme
+    seçili değil (yanlış sekmeyi bir an gösterip sıçramak yerine).
+
+    Render sırasında state yazımı bilinçli (React'in "önceki render'dan türeyen state"
+    kalıbı): efektte yazılsaydı boyanmış bir kare sekmesiz çizilirdi.
+  */
+  const [ilkSekme, setIlkSekme] = useState(null)
+  if (ilkSekme === null && sessions.data) {
+    const simdi = Date.now()
+    setIlkSekme(sessions.data.active.some((s) => eylemBekliyor(s, simdi)) ? 'aksiyon' : 'planlanmis')
+  }
+
+  // Bilinmeyen değer (eski bağlantı, elle yazım) aksiyon sekmesini açar — mobille aynı.
+  const sekme = adrestekiSekme
+    ? SEKME_ANAHTARLARI.has(adrestekiSekme)
+      ? adrestekiSekme
+      : 'aksiyon'
+    : ilkSekme
+
+  const sekmeSec = useCallback(
+    (yeni) =>
+      setAdres(
+        (onceki) => {
+          const p = new URLSearchParams(onceki)
+          p.set('sekme', yeni)
+          return p
+        },
+        { replace: true },
+      ),
+    [setAdres],
+  )
 
   const groups = useMemo(() => {
     /*
@@ -141,46 +214,121 @@ export default function Sessions() {
 
       Ama arayüzde "Yaklaşan" kelimesi bir SÖZ veriyor: bu ders henüz olmadı. Ölçüldü —
       bugün 15:10'da, sabah 08:10'da bitmiş bir ders hâlâ "Yaklaşan dersler" listesinde
-      duruyordu (bitişinin üzerinden 367 dakika geçmişti). Kullanıcının gördüğü şey
-      yanlıştı.
+      duruyordu. Planlanmış sekmesi bu yüzden ikiye ayrılıyor: "Saati geçti, hâlâ açık"
+      ve "Yaklaşan". KIYAS BİTİŞ SAATİYLE, başlangıçla değil: 60 dakikalık bir ders
+      başladı diye geçmiş olmuyor.
 
-      Ayrım artık ÜÇ yönlü:
-        action     → senden bir şey bekliyor (tamamla / onayla / itirazlı)
-        upcoming   → saati HENÜZ GELMEDİ
-        gecmisAcik → saati GEÇTİ ama kayıt hâlâ açık
-
-      Üçüncü grup "past" ile birleştirilmedi ve bu bilinçli: `past` sunucudan SAYFALI
-      geliyor, araya istemci tarafında satır sokmak sayfa sayılarını yalanlardı. Bunun
-      yerine sağ sütunun BAŞINA, kendi başlığıyla sabitleniyor — böylece hem "Yaklaşan"
-      listesini kirletmiyor hem de sayfalama içinde kaybolmuyor. Durum rozeti hâlâ
-      "Rezerve" diyor, yani kaydın kapanmadığı görünmeye devam ediyor.
-
-      KIYAS BİTİŞ SAATİYLE, başlangıçla değil: 60 dakikalık bir ders başladı diye geçmiş
-      olmuyor. Sunucu `scheduledEndUtc` alanını zaten gönderiyor (ISO + Z), yani yerel
-      saat dilimine göre kayma riski yok — `new Date()` doğrudan çözümlüyor.
+      Hangi dersin hangi sekmede durduğu dersDurumu.js'ten (dersSekmesi). 2026-09-26'ya
+      kadar burada kendi tanımı vardı (`canComplete || canApprove || Disputed`) ve mobilden
+      FARKLIYDI: itiraz sayaca giriyor, eğitmenin bitişi geçmiş Booked dersi girmiyordu.
+      Artık itiraz sayaca girmez (basılacak düğmesi yok, karar yönetimde) ama aksiyon
+      sekmesinde kendi başlığıyla durur; bitişi geçen Booked ders, sunucu bayrağı henüz
+      güncellenmemiş olsa da aksiyona geçer (kartın iyimser completeReady'siyle aynı an).
       ─────────────────────────────────────────────────────────────────────────
     */
     const active = sessions.data?.active ?? []
     const simdi = Date.now()
-
-    const aksiyonBekliyor = (s) => s.canComplete || s.canApprove || s.status === 'Disputed'
     const saatiGecti = (s) => new Date(s.scheduledEndUtc).getTime() <= simdi
+    const planli = active.filter((s) => dersSekmesi(s, simdi) === 'planlanmis')
 
     return {
-      action: active.filter(aksiyonBekliyor),
-      upcoming: active.filter((s) => !aksiyonBekliyor(s) && !saatiGecti(s)),
-      gecmisAcik: active.filter((s) => !aksiyonBekliyor(s) && saatiGecti(s)),
-      past: (pastView ?? sessions.data?.past)?.items ?? [],
+      action: active.filter((s) => eylemBekliyor(s, simdi)),
+      itirazda: active.filter((s) => s.status === 'Disputed'),
+      upcoming: planli.filter((s) => !saatiGecti(s)),
+      gecmisAcik: planli.filter(saatiGecti),
     }
-    // tick: 20 saniyede bir yeniden hesapla — saat ilerledikçe ders kendiliğinden
-    // "Yaklaşan"dan "saati geçmiş"e düşsün, sayfa yenilenmesini beklemesin.
-  }, [sessions.data, pastView, tick])
+    // tick: 20 saniyede bir yeniden hesapla — saat ilerledikçe ders kendiliğinden doğru
+    // gruba geçsin, sayfa yenilenmesini beklemesin.
+  }, [sessions.data, tick])
 
-  const pastSayfa = pastView ?? sessions.data?.past
-  const pastTotal = pastSayfa?.totalCount ?? 0
-  const pastPage = pastSayfa?.page ?? 1
-  const pastTotalPages = Math.ceil(pastTotal / PAST_PAGE_SIZE)
-  const activeTruncated = (sessions.data?.activeTotal ?? 0) > (sessions.data?.active?.length ?? 0)
+  // ── GEÇMİŞ DERSLER: yalnızca Completed, numaralı sayfa, ilk açılışta yüklenir ──
+  /*
+    Ayrı istek (?pastStatus=Completed): sayı ve sayfa sınırları ancak sunucu süzerse
+    doğru. İstemci süzmesiyle 5'lik sayfadan 0-5 kart çıkar ve sekmedeki sayı iptal /
+    süresi dolmuş dersleri de sayardı.
+
+    NESİL SAYACI: refresh() geçmişi 1. sayfaya döndürürken uçuştaki eski bir sayfa isteği
+    sonradan dönüp yeni durumu EZMESİN diye. Uçuş kilidi ref'te: `disabled` ancak bir
+    sonraki render'da DOM'a yansır, arka arkaya iki tıklama araya render girmeden gelebilir
+    ve yavaş dönen istek kullanıcıyı tıklamadığı sayfaya götürürdü.
+  */
+  const [gecmis, setGecmis] = useState(GECMIS_BOS)
+  const gecmisNesli = useRef(0)
+  const gecmisUcuyor = useRef(false)
+
+  const gecmisSayfasi = useCallback(async (hedef) => {
+    if (gecmisUcuyor.current) return
+    gecmisUcuyor.current = true
+    const nesil = gecmisNesli.current
+    // Hata AYRI tutulur ve görünen sayfa silinmez: sayfa yükleme hatası, zaten görünen
+    // listeyi götürmemeli.
+    setGecmis((g) => ({ ...g, yukleniyor: true, hata: null }))
+    try {
+      const data = await api.mySessions(hedef, GECMIS_SAYFA_BOYU, 'Completed')
+      if (nesil === gecmisNesli.current) setGecmis({ sayfa: data.past, yukleniyor: false, hata: null })
+    } catch (err) {
+      if (nesil === gecmisNesli.current) setGecmis((g) => ({ ...g, yukleniyor: false, hata: err }))
+    } finally {
+      if (nesil === gecmisNesli.current) gecmisUcuyor.current = false
+    }
+  }, [])
+
+  useEffect(() => {
+    if (sekme === 'gecmis' && !gecmis.sayfa && !gecmis.yukleniyor && !gecmis.hata) gecmisSayfasi(1)
+  }, [sekme, gecmis, gecmisSayfasi])
+
+  // ── PUAN GEÇMİŞİ: ilk açılışta yüklenir; satırlar sekme değişince KAYBOLMAZ ──
+  const puan = usePuanDefteri()
+  const { yukle: puanYukle } = puan
+  useEffect(() => {
+    if (sekme === 'puan' && puan.sayfa === 0 && !puan.yukleniyor && !puan.hata) puanYukle(1)
+  }, [sekme, puan.sayfa, puan.yukleniyor, puan.hata, puanYukle])
+
+  // ── REZERVE GEÇMİŞİ: aktif + süzülmemiş geçmiş, ders tarihine göre, birikerek ──
+  /*
+    İlk geçmiş sayfası açılış isteğinden geliyor; "daha eski" ile gelen sayfalar
+    `rezerveEk`te birikiyor ve HANGİ YANITA eklendiklerini (`kaynak`) taşıyor. Ders listesi
+    yeniden çekilince (refresh) kaynak değişir ve birikinti kendiliğinden düşer: eski
+    ofsetler yeni listede geçersiz, üstüne eklemek kayıtları çiftler ya da atlar.
+  */
+  const [rezerveEk, setRezerveEk] = useState(null) // { kaynak, items, past }
+  const [rezerveYukleniyor, setRezerveYukleniyor] = useState(false)
+  const [rezerveHata, setRezerveHata] = useState(null)
+  const rezerveUcuyor = useRef(false)
+
+  const rezerve = useMemo(() => {
+    const data = sessions.data
+    if (!data) return { liste: [], toplam: 0, sonGecmis: null }
+    const ek = rezerveEk?.kaynak === data ? rezerveEk : null
+    const sonGecmis = ek?.past ?? data.past
+    const birikinti = ek ? [...data.past.items, ...ek.items] : data.past.items
+    return {
+      liste: rezervasyonBirlesimi(data.active, birikinti, !!sonGecmis.hasNextPage),
+      toplam: data.activeTotal + sonGecmis.totalCount,
+      sonGecmis,
+      ek,
+    }
+  }, [sessions.data, rezerveEk])
+
+  async function dahaEskiRezervasyonlar() {
+    const { sonGecmis, ek } = rezerve
+    if (rezerveUcuyor.current || !sonGecmis?.hasNextPage) return
+    rezerveUcuyor.current = true
+    const kaynak = sessions.data
+    setRezerveYukleniyor(true)
+    setRezerveHata(null)
+    try {
+      const data = await api.mySessions(sonGecmis.page + 1, REZERVE_SAYFA_BOYU)
+      // Yol üstünde liste yeniden çekildiyse bu kayıt eski kaynağa bağlı kalır ve
+      // kendiliğinden yok sayılır (yukarıdaki `kaynak` karşılaştırması).
+      setRezerveEk({ kaynak, items: [...(ek?.items ?? []), ...data.past.items], past: data.past })
+    } catch (err) {
+      setRezerveHata(err)
+    } finally {
+      rezerveUcuyor.current = false
+      setRezerveYukleniyor(false)
+    }
+  }
 
   function refresh(message) {
     setDialog(null)
@@ -188,218 +336,132 @@ export default function Sessions() {
     if (message) setNotice(message)
 
     // Geçmiş 1. sayfaya döner: onaylanan ders aktiften çıkıp geçmişin BAŞINA girer,
-    // kullanıcı 4. sayfada kalsaydı az önce onayladığı dersi göremezdi.
-    setPastView(null)
-    setPastError(null)
+    // kullanıcı 4. sayfada kalsaydı az önce onayladığı dersi göremezdi. Sekme açık değilse
+    // bir sonraki açılışta yeniden çekilir.
+    gecmisNesli.current += 1
+    gecmisUcuyor.current = false
+    setGecmis(GECMIS_BOS)
+    // Puan defteri de bayatlar (karşı tarafın onayı, otomatik onay); aynı kural.
+    puan.sifirla()
+    // Rezerve birikintisi ders listesiyle birlikte düşüyor (kaynak değişiyor).
+    setRezerveHata(null)
     sessions.reload()
     // Onay puan basar; profildeki puan sayacı ve başlıktaki seviye rozeti aynı cüzdan
     // ucundan besleniyor, o yüzden tazeleniyor.
     refreshWallet()
   }
 
-  async function sayfayaGit(hedef) {
-    if (hedef < 1 || hedef > pastTotalPages || hedef === pastPage) return
-    // Sayfalama düğmeleri `disabled={pastLoading}` alıyor ama bu tek başına yetmez:
-    // disabled ancak bir sonraki render'da DOM'a yansır, arka arkaya iki tıklama araya
-    // render girmeden gelebilir. İkinci istek birincinin yanıtını ezerdi (yavaş olan
-    // sonra döner) ve kullanıcı tıklamadığı sayfada bulurdu kendini.
-    if (pastLoading) return
-    setPastLoading(true)
-    setPastError(null)
-    try {
-      const data = await api.mySessions(hedef, PAST_PAGE_SIZE)
-      setPastView(data.past)
-    } catch (err) {
-      // Hata AYRI tutulur: sayfa yükleme hatası, zaten görünen listeyi silmemeli.
-      setPastError(err)
-    } finally {
-      setPastLoading(false)
-    }
+  function gecmisSayfayaGit(hedef) {
+    const sayfa = gecmis.sayfa
+    const sayfaSayisi = Math.ceil((sayfa?.totalCount ?? 0) / GECMIS_SAYFA_BOYU)
+    if (hedef < 1 || hedef > sayfaSayisi || hedef === (sayfa?.page ?? 1)) return
+    gecmisSayfasi(hedef)
   }
 
-  const hicDersYok =
-    groups.action.length + groups.upcoming.length + groups.gecmisAcik.length + groups.past.length === 0
+  const kart = (s, past = false) => (
+    <SessionCard key={s.sessionId} session={s} onAction={setDialog} past={past} />
+  )
+  const rezerveEt = () => setBookOpen(true)
+
+  // Aktif listeye dayanan sekmeler ilk yüklemede ve refresh'te spinner'a düşer; ders
+  // listesi hiç gelmediyse hata kutusu. Gelmiş listenin tazelemesi düşerse eski liste
+  // hata kutusunun altında kalır (useAsync veriyi tutuyor).
+  const aktifeBagli = (icerik) =>
+    sessions.loading ? (
+      <Loading />
+    ) : (
+      <>
+        <ErrorBox error={sessions.error} onRetry={sessions.reload} />
+        {sessions.data && icerik()}
+      </>
+    )
+
+  let panel = null
+  if (sekme === 'aksiyon') {
+    panel = aktifeBagli(() => (
+      <AksiyonPaneli
+        groups={groups}
+        kesme={<KesmeUyarisi data={sessions.data} />}
+        kart={kart}
+        onPlanlanmis={() => sekmeSec('planlanmis')}
+      />
+    ))
+  } else if (sekme === 'planlanmis') {
+    panel = aktifeBagli(() => (
+      <PlanlanmisPaneli
+        groups={groups}
+        kesme={<KesmeUyarisi data={sessions.data} />}
+        kart={kart}
+        onRezerve={rezerveEt}
+      />
+    ))
+  } else if (sekme === 'gecmis') {
+    panel = (
+      <GecmisPaneli
+        durum={gecmis}
+        kart={kart}
+        onSayfa={gecmisSayfayaGit}
+        onTekrar={() => gecmisSayfasi(gecmis.sayfa?.page ?? 1)}
+      />
+    )
+  } else if (sekme === 'puan') {
+    panel = <PuanPaneli defter={puan} toplamPuan={wallet?.totalEarnedCredits} />
+  } else if (sekme === 'rezerve') {
+    panel = aktifeBagli(() => (
+      <RezervePaneli
+        rezerve={rezerve}
+        kesme={<KesmeUyarisi data={sessions.data} />}
+        yukleniyor={rezerveYukleniyor}
+        hata={rezerveHata}
+        onDaha={dahaEskiRezervasyonlar}
+        onRezerve={rezerveEt}
+      />
+    ))
+  }
 
   return (
-    /*
-      ─────────────────────────────────────────────────────────────────────────
-      EKRANA SABİT İKİ SÜTUN (2026-08-24).
-
-      Eski düzen üç bölümü alt alta yığıyordu: aksiyon bekleyenler, yaklaşanlar, geçmiş.
-      Otuz dersi olan bir kullanıcıda sayfa dört ekran boyu uzuyor ve "yarın dersim var
-      mı" sorusu ile "geçen ay ne yapmıştım" sorusu aynı kaydırma çubuğunu paylaşıyordu —
-      oysa bunlar birbirinden bağımsız iki iş.
-
-      Artık lg üstünde iki sütun: SOLDA yaklaşan, SAĞDA geçmiş. Sayfanın kendisi
-      kaymıyor; her sütun KENDİ İÇİNDE kayıyor. Geçmişi gezerken yaklaşan dersler
-      ekranda kalıyor.
-
-      lg ALTINDA sütun yok ve bu bilinçli: dar ekranda yan yana iki kaydırma alanı
-      birbirini yiyor, parmak hangisini sürüklediğini şaşırıyor. Orada normal akış
-      sürüyor (sayfa kayar, bölümler alt alta) — aynı içerik, ekrana uygun düzen.
-
-      Yükseklik: 100dvh − 10.5rem. Üç parça: 4rem sabit üst bar + 3rem <main> dolgusu
-      (py-6) + 3.5rem altbilgi (çerez tercihleri / turu yeniden başlat — Layout.jsx:280).
-      Altbilgi ilk hesapta ATLANMIŞTI ve sayfa tam 56px kayıyordu: iki sütun ekrana
-      sığıyor ama altbilgi taşıyordu, yani "sayfa kaymasın" kuralı sessizce bozuluyordu.
-      Tarayıcıda ölçüldü.
-      vh DEĞİL dvh: mobil adres çubuğu vh'ye dahil değil ve alt kenar kırpılırdı.
-      ─────────────────────────────────────────────────────────────────────────
-    */
-    <div className="flex flex-col gap-4 lg:h-[calc(100dvh-10.5rem)] lg:min-h-[520px] lg:overflow-hidden">
+    <div className="max-w-3xl space-y-5">
       {/*
-        SAYFA BAŞLIĞI. items-end (items-start değil): düğme, açıklama satırının değil
-        BAŞLIĞIN ağırlık merkezine hizalanınca üst şerit tek bir yatay hat olarak
-        okunuyor — başlık ile düğme arasında kayan bir basamak kalmıyor.
+        SAYFA BAŞLIĞI. Eski açıklama cümlesi ("Ders almak ücretsizdir…") Puan geçmişi
+        sekmesinin girişine taşındı (mobille aynı): puanın nereden geldiğini anlatan cümle
+        puan defterinin başında okunuyor, her sekmenin üstünde tekrar etmiyor.
       */}
-      <div className="flex shrink-0 flex-wrap items-end justify-between gap-x-4 gap-y-3">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Derslerim</h1>
-          <p className="mt-1.5 max-w-prose text-sm text-slate-600">
-            Ders almak ücretsizdir. Ders onaylandığında anlatan tarafa puan yazılır.
-          </p>
-        </div>
-        <Button onClick={() => setBookOpen(true)}>
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+        <h1 className="text-2xl font-bold tracking-tight text-slate-900">Derslerim</h1>
+        <Button onClick={rezerveEt}>
           <ArtiIkonu className="h-4 w-4" />
           Ders rezerve et
         </Button>
       </div>
 
       {notice && (
-        <div className="shrink-0">
-          <Notice tone="success" onDismiss={() => setNotice(null)}>
-            {notice}
-          </Notice>
-        </div>
+        <Notice tone="success" onDismiss={() => setNotice(null)}>
+          {notice}
+        </Notice>
       )}
 
-      <div className="shrink-0 empty:hidden">
-        <ErrorBox error={sessions.error} onRetry={sessions.reload} />
-      </div>
+      <SekmeCubugu secili={sekme} onSec={sekmeSec} aksiyonSayisi={groups.action.length} />
 
-      {sessions.loading ? (
-        <Loading />
-      ) : hicDersYok ? (
-        <EmptyState
-          title="Henüz dersin yok"
-          description="Bir arkadaşın varsa hemen ders saati belirleyebilirsin."
-          action={<Button onClick={() => setBookOpen(true)}>Ders rezerve et</Button>}
-        />
-      ) : (
-        <div className="grid gap-4 lg:min-h-0 lg:flex-1 lg:grid-cols-2">
-          {/* ── SOL: YAKLAŞAN ─────────────────────────────────────────────── */}
-          <Sutun
-            baslik="Yaklaşan dersler"
-            sayi={groups.action.length + groups.upcoming.length}
-            vurgulu={groups.action.length > 0}
-          >
-            {/* Kesme SESSİZ olmaz: kullanıcı listenin tamamını görmediğini bilmeli. */}
-            {activeTruncated && (
-              <Notice tone="warning">
-                {sessions.data.activeTotal} aktif dersinden ilk {sessions.data.active.length}{' '}
-                tanesi gösteriliyor. Listeyi kısaltmak için tamamlanan dersleri onayla.
-              </Notice>
-            )}
-
-            {/*
-              AKSİYON BEKLEYENLER EN ÜSTTE ve ayrı bir başlık altında. Bunlar da aktif
-              ders ama kullanıcıdan bir şey bekliyorlar; yaklaşanların arasına
-              karıştırmak "bugün ne yapmam gerek" sorusunu görünmez yapardı.
-            */}
-            {groups.action.length > 0 && (
-              <>
-                <AltBaslik tone="amber" sayi={groups.action.length}>
-                  Senden aksiyon bekleyenler
-                </AltBaslik>
-                {groups.action.map((s) => (
-                  <SessionCard key={s.sessionId} session={s} onAction={setDialog} />
-                ))}
-              </>
-            )}
-
-            {groups.upcoming.length > 0 && (
-              <>
-                {groups.action.length > 0 && (
-                  <AltBaslik sayi={groups.upcoming.length}>Planlanmış</AltBaslik>
-                )}
-                {groups.upcoming.map((s) => (
-                  <SessionCard key={s.sessionId} session={s} onAction={setDialog} />
-                ))}
-              </>
-            )}
-
-            {groups.action.length + groups.upcoming.length === 0 && (
-              <BosSutun
-                baslik="Yaklaşan ders yok"
-                metin="Arkadaşlarından birine ders saati belirleyerek başla."
-              />
-            )}
-          </Sutun>
-
-          {/* ── SAĞ: GEÇMİŞ ───────────────────────────────────────────────── */}
-          <Sutun
-            baslik="Geçmiş dersler"
-            sayi={pastTotal + groups.gecmisAcik.length}
-            altBilgi={
-              pastTotalPages > 1 ? (
-                <Pagination
-                  page={pastPage}
-                  totalPages={pastTotalPages}
-                  onChange={sayfayaGit}
-                  disabled={pastLoading}
-                />
-              ) : null
-            }
-          >
-            {/*
-              SAATİ GEÇMİŞ AMA AÇIK DERSLER EN ÜSTTE ve ayrı başlıkla. Sayfalı geçmişin
-              İÇİNE karıştırılmadılar: `past` sunucudan sayfalı geliyor, araya istemci
-              tarafında satır sokmak sayfa sayılarını yalanlardı. Üstte sabit durunca hem
-              sayfalamadan etkilenmiyorlar hem de kullanıcı "bu ders oldu mu, ne oldu?"
-              sorusunu ilk bakışta görüyor.
-            */}
-            {groups.gecmisAcik.length > 0 && (
-              <>
-                <AltBaslik tone="amber" sayi={groups.gecmisAcik.length}>
-                  Saati geçti, hâlâ açık
-                </AltBaslik>
-                {groups.gecmisAcik.map((s) => (
-                  <SessionCard key={s.sessionId} session={s} onAction={setDialog} />
-                ))}
-              </>
-            )}
-
-            {groups.past.length > 0 ? (
-              <>
-                {groups.gecmisAcik.length > 0 && (
-                  <AltBaslik sayi={pastTotal}>Tamamlananlar</AltBaslik>
-                )}
-                {groups.past.map((s) => (
-                  <SessionCard key={s.sessionId} session={s} onAction={setDialog} past />
-                ))}
-              </>
-            ) : (
-              groups.gecmisAcik.length === 0 && (
-                <BosSutun
-                  baslik="Geçmiş ders yok"
-                  metin="Tamamlanan dersler onaylandıktan sonra burada birikir."
-                />
-              )
-            )}
-
-            <ErrorBox error={pastError} onRetry={() => sayfayaGit(pastPage)} />
-
-            {/*
-              PUAN GEÇMİŞİ SAĞ SÜTUNUN İÇİNDE.
-
-              Eskiden iki listenin ALTINDA, sayfanın devamındaydı. Sayfa artık kaymadığı
-              için "altında" diye bir yer kalmadı; defteri sağ sütuna almak ayrıca doğru
-              yer: her puan hareketinin kaynağı tamamlanmış bir derstir, yani tam olarak
-              bu sütunda duran şey. Ayrı bir sekme aynı olayı iki yere bölerdi.
-            */}
-            <PointHistory />
-          </Sutun>
+      {sekme ? (
+        /*
+          Yalnızca etkin panel kurulur: Geçmiş ve Puan ilk açılışta yüklenir, açılmayan
+          sekmenin maliyeti yok. tabIndex=0: panelin ilk öğesi odaklanabilir değil
+          (başlık ya da metin), klavye kullanıcısı sekmeden panele Tab ile geçebilmeli.
+        */
+        <div
+          role="tabpanel"
+          id={`panel-${sekme}`}
+          aria-labelledby={`sekme-${sekme}`}
+          tabIndex={0}
+          className="space-y-4 rounded-2xl focus-visible:outline focus-visible:outline-2
+                     focus-visible:outline-offset-4 focus-visible:outline-brand-500"
+        >
+          {panel}
         </div>
+      ) : sessions.loading ? (
+        <Loading />
+      ) : (
+        <ErrorBox error={sessions.error} onRetry={sessions.reload} />
       )}
 
       {/*
@@ -411,7 +473,7 @@ export default function Sessions() {
         <BookModal
           matches={matches.data?.active ?? []}
           onClose={() => setBookOpen(false)}
-          onBooked={(code, mintAmount) =>
+          onBooked={(code, mintAmount) => {
             refresh(
               // Öğrenci hiçbir şey ödemiyor; gösterilen sayı EĞİTMENİN kazanacağı puan
               // ve SUNUCUDAN geliyor. (Modalin özet şeridi aynı sayının yalnızca bir
@@ -420,7 +482,9 @@ export default function Sessions() {
               `Ders rezerve edildi (eğitmen ${mintAmount} puan kazanacak). ` +
                 `Doğrulama kodun: ${code} — ders ekran görüntüsünde görünmeli.`,
             )
-          }
+            // Yeni ders Planlanmış'ta: kullanıcı az önce kurduğu dersi görsün.
+            sekmeSec('planlanmis')
+          }}
         />
       )}
 
@@ -429,7 +493,12 @@ export default function Sessions() {
           key={dialog.session.sessionId}
           session={dialog.session}
           onClose={() => setDialog(null)}
-          onDone={() => refresh('Kanıt yüklendi. Ders karşı tarafın onayına gönderildi.')}
+          onDone={() =>
+            refresh(
+              'Kanıt yüklendi. Ders karşı tarafın onayına gönderildi; ' +
+                'Planlanmış sekmesinden takip edebilirsin.',
+            )
+          }
         />
       )}
 
@@ -480,127 +549,154 @@ export default function Sessions() {
           onDone={() =>
             refresh(
               'İtirazın yönetime iletildi. Karar verilene kadar puan yazılmayacak; ' +
-                'sonucu bu ekrandan takip edebilirsin.',
+                'sonucu bu sekmedeki İtirazda bölümünden takip edebilirsin.',
             )
           }
         />
       )}
-
-      
 
       {dialog?.type === 'cancel' && (
         <CancelModal
           key={dialog.session.sessionId}
           session={dialog.session}
           onClose={() => setDialog(null)}
-          onDone={() => refresh('Ders iptal edildi.')}
+          onDone={() => refresh('Ders iptal edildi. Kaydı Rezerve geçmişi sekmesinde duruyor.')}
         />
       )}
     </div>
   )
 }
 
-
 /*
-  SÜTUN KABUĞU — başlık sabit, gövde kayar.
+  ── SEKME ÇUBUĞU ─────────────────────────────────────────────────────────────
+  Hap dizisi, Keşfet'teki gri ray DEĞİL: beş sekme, en uzunu ("Senden aksiyon
+  bekleyenler") tek başına dar ekranın yarısı. Ray içinde beşi ya taşar ya ezilirdi; ayrı
+  haplar lg altında yatay kayar, lg'de sarar. Mavi aile (seçili dolu brand-600, seçili
+  olmayan brand-50 + halka) mobildeki hap çubuğuyla aynı dil.
 
-  ZEMİN BİLEREK BEYAZ DEĞİL. Sayfa zemini slate-50, kartlar cam (beyaza yakın); ikisinin
-  arasına hiçbir şey konmadığında ekran "beyazımsı bir alanda yüzen beyaz kartlar" gibi
-  duruyordu — sınırların nerede olduğu belli değildi. Sütun gövdesi bir ton daha koyu
-  (slate-100/60), böylece cam kartlar ondan AYRILIYOR ve sütunun nerede bitip nerede
-  başladığı görünüyor. Başlık şeridi beyaz kalıyor: kayan gövdenin üstünde sabit duran
-  bir yüzey, gövdeden farklı olmalı ki "bu satır kaymıyor" anlaşılsın.
+  KLAVYE: roving tabindex (Tab sekme çubuğuna TEK durakla girer), ←/→ döngüsel, Home/End
+  uçlara. Ok tuşu seçimi de değiştirir (otomatik etkinleştirme): paneller hemen çiziliyor,
+  Geçmiş ve Puan'ın ilk yüklemesi spinner'la geliyor, beklenecek bir şey yok.
 
-  BAŞLIK BÜYÜDÜ (text-sm → text-base) ve slate-900'a çıktı. Eski hâlde sütun başlığı,
-  içindeki kartların başlığıyla (h3, text-base) aynı puntodaydı ve ondan daha soluktu —
-  yani hiyerarşide ALTINDA görünüyordu. Bir bölüm başlığı, kapsadığı şeyden zayıf
-  olamaz; sayfanın "aşırı karışık" okunmasının sebeplerinden biri buydu.
+  SEÇİLİ HAP GÖRÜNÜR TUTULUR: sekme programatik değiştiğinde (rezervasyondan sonra
+  Planlanmış, boş aksiyondan "Planlanmış derslere bak", adresteki ?sekme=rezerve) dar
+  ekranda hap çubuğun dışında kalabiliyordu. `scrollIntoView` KULLANILMADI: dikey ekseni
+  de kaydırıyor ve çubuk ekranın üstünde değilken sayfayı yukarı zıplatırdı; burada
+  yalnızca çubuğun kendi yatay kaydırması ayarlanıyor.
 
-  min-h-0 ŞART: flex çocuğunun varsayılan min-height'ı `auto`, yani içerik kadar. Onu
-  sıfırlamadan `overflow-y-auto` hiçbir şey yapmaz — sütun içeriği kadar uzar ve
-  kaydırma sayfaya taşar. Bu, ekrana sabitlenen her düzenin ilk tuzağı.
+  Çubuk `-mx-4 px-4` ile ekran kenarına kadar uzanır: kayan haplar kesik görünür, "daha
+  var" ipucu bu. sm'de `-mx-1 px-1`: odak halkası (2px + 2px pay) kaydırma kabının
+  kenarında kırpılmasın.
 */
-function Sutun({ baslik, sayi, children, altBilgi = null, vurgulu = false }) {
+function SekmeCubugu({ secili, onSec, aksiyonSayisi }) {
+  const kapRef = useRef(null)
+  const haplar = useRef({})
+
+  useEffect(() => {
+    const kap = kapRef.current
+    const hap = secili ? haplar.current[secili] : null
+    if (!kap || !hap || kap.scrollWidth <= kap.clientWidth) return
+    const pay = 16
+    const sol = hap.offsetLeft
+    const sag = sol + hap.offsetWidth
+    if (sol - pay < kap.scrollLeft) kap.scrollLeft = Math.max(0, sol - pay)
+    else if (sag + pay > kap.scrollLeft + kap.clientWidth) kap.scrollLeft = sag + pay - kap.clientWidth
+    // aksiyonSayisi: sayaç rozeti ilk veriyle gelince aksiyon hapı genişliyor ve arkasındaki
+    // haplar sağa kayıyor. Yalnızca seçime bağlı kalsaydı adresten açılan "Rezerve geçmişi"
+    // hapı, rozet geldikten sonra 32px kesik kalıyordu (375px'te ölçüldü).
+  }, [secili, aksiyonSayisi])
+
+  function tus(e, i) {
+    const n = SEKMELER.length
+    let hedef = null
+    if (e.key === 'ArrowRight') hedef = (i + 1) % n
+    else if (e.key === 'ArrowLeft') hedef = (i - 1 + n) % n
+    else if (e.key === 'Home') hedef = 0
+    else if (e.key === 'End') hedef = n - 1
+    if (hedef === null) return
+    e.preventDefault()
+    const anahtar = SEKMELER[hedef].anahtar
+    onSec(anahtar)
+    haplar.current[anahtar]?.focus()
+  }
+
   return (
-    <section className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-slate-200/70 bg-slate-100/60">
-      <header className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200/70 bg-white px-5 py-3.5">
-        {/*
-          uppercase KALKTI: sütun başlığı bir kez okunan bir yer etiketi, sürekli okunan
-          içerik değil. Büyük harf + harf aralığı onu bağıran bir şeride çeviriyordu ve
-          alt gruplama başlıklarıyla (AltBaslik) aynı dili konuşuyordu — iki seviye
-          birbirinden ayırt edilemiyordu. Normal yazım görsel ağırlığı kartlara bırakıyor;
-          mikro etiket dili artık yalnızca AltBaslik'ta.
-        */}
-        <h2 className="truncate text-base font-semibold tracking-tight text-slate-900">{baslik}</h2>
-        {/*
-          Sayaç ROZETİ — ui.jsx'teki Badge'in ta kendisi, elle yazılmış bir pil değil.
-          Eskiden burada kendi sınıflarıyla kurulmuş bir <span> vardı ve rozet dili
-          sayfada iki yerde ayrı ayrı tanımlanıyordu; Badge tonları değişse bu sayaç
-          geride kalırdı. tabular-nums ek olarak veriliyor: sayaç 9'dan 10'a çıkarken
-          rozetin genişliği zıplamasın.
-
-          Aksiyon bekleyen ders varsa sol sütunun sayacı amber'a dönüyor: kullanıcı
-          sütunun içine bakmadan da "burada iş var" bilgisini alıyor. Renk tek sinyal
-          değil — aksiyon grubunun kendi başlığı da listede duruyor.
-        */}
-        <Badge tone={vurgulu ? 'warning' : 'neutral'} className="shrink-0 font-semibold tabular-nums">
-          {sayi}
-        </Badge>
-      </header>
-
-      {/*
-        kaydirma-ince (index.css): gövde kendi içinde kayıyor ve tarayıcının varsayılan
-        kalın çubuğu sütun kenarında koca gri bir blok bırakıyordu — ince, yarı saydam
-        çubuk kaydırılabilirliği söylemeye yetiyor.
-
-        p-4 → p-4 sm:p-5 ve space-y-3 → space-y-4 (kartlar arası 16px). Kartların iç
-        dolgusu p-5'e çıktığı için sütun dolgusunun da nefes alması gerekiyordu; 16px
-        dolgunun içinde 20px dolgulu kartlar, kart kenarını sütun kenarından daha dar
-        gösteriyor ve "sıkışık" hissini üretiyordu.
-
-        DİKKAT — flex-col + gap DENENMEMELİ: bu kutu aynı zamanda `overflow-y-auto` ve
-        kendisi de bir flex çocuğu. İçini flex yapmak kartları flex öğesine çevirir ve
-        sütun dolduğunda tarayıcı onları sıkıştırmayı deneyebilir. space-y sadece margin
-        koyuyor, kutu modeline hiç dokunmuyor — kaydırma davranışı tartışmasız kalıyor.
-      */}
-      <div className="kaydirma-ince min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain p-4 sm:p-5">
-        {children}
-      </div>
-
-      {altBilgi && (
-        <div className="shrink-0 border-t border-slate-200/70 bg-white px-4 py-2.5">{altBilgi}</div>
-      )}
-    </section>
+    <div
+      ref={kapRef}
+      role="tablist"
+      aria-label="Derslerim bölümleri"
+      className="kaydirma-ince relative -mx-4 flex gap-2 overflow-x-auto px-4 py-1 sm:-mx-1 sm:px-1
+                 lg:flex-wrap lg:overflow-visible"
+    >
+      {SEKMELER.map(({ anahtar, ad }, i) => {
+        const bu = secili === anahtar
+        // Hiçbir sekme seçili değilken (ilk yanıt gelmeden) Tab ilk hapa inebilmeli.
+        const durak = secili ? bu : i === 0
+        const sayac = anahtar === 'aksiyon' && aksiyonSayisi > 0 ? aksiyonSayisi : 0
+        return (
+          <button
+            key={anahtar}
+            ref={(el) => {
+              haplar.current[anahtar] = el
+            }}
+            type="button"
+            role="tab"
+            id={`sekme-${anahtar}`}
+            aria-selected={bu}
+            aria-controls={bu ? `panel-${anahtar}` : undefined}
+            // Sayı rozeti görsel; ekran okuyucu sayıyı cümleyle duyar.
+            aria-label={sayac ? `${ad}, ${sayac} ders` : undefined}
+            tabIndex={durak ? 0 : -1}
+            onClick={() => onSec(anahtar)}
+            onKeyDown={(e) => tus(e, i)}
+            className={`inline-flex min-h-11 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-4
+                        text-sm font-medium transition lg:min-h-9 focus-visible:outline focus-visible:outline-2
+                        focus-visible:outline-offset-2 focus-visible:outline-brand-500 ${
+                          bu
+                            ? 'bg-brand-600 text-white shadow-sm hover:bg-brand-700'
+                            : 'bg-brand-50 text-brand-800 ring-1 ring-inset ring-brand-200 hover:bg-brand-100'
+                        }`}
+          >
+            {ad}
+            {/*
+              Web'in "burada iş var" dili: amber Badge (eski sol sütunun vurgulu sayacı).
+              Mobildeki rose SayacRozeti buraya taşınmadı; web'de rose hata ve iptal dili.
+            */}
+            {sayac > 0 && (
+              <Badge tone="warning" className="font-semibold tabular-nums">
+                {sayac}
+              </Badge>
+            )}
+          </button>
+        )
+      })}
+    </div>
   )
 }
 
 /**
- * Sütun içindeki gruplama başlığı — etiket + sayaç.
+ * Panel içindeki gruplama başlığı — etiket + sayaç.
  *
- * Sütun başlığı normal yazımda ve slate-900'da; mikro etiket dili (küçük punto + büyük
- * harf) yalnızca burada kaldı, yani göz "sütun mu, grup mu" ayrımını yazım biçiminden
- * yapıyor.
+ * Mikro etiket dili (küçük punto + büyük harf) yalnızca burada; web'de `uppercase` doğru
+ * (lang="tr", "i" → "İ"). Mobil aynı başlığı UstEtiket ile yazıyor.
  *
- * SAYI ARTIK METNİN İÇİNDE DEĞİL, AYRI ROZETTE. Eskiden çağıran taraf başlığa
- * "Planlanmış (3)" diye elle parantez ekliyordu: parantezli sayı etiketin bir parçası gibi
- * okunuyor, sütun başlığındaki rozetle de aynı dili konuşmuyordu. Sayı ayrılınca sayfadaki
- * her sayaç aynı biçimde görünüyor — sütun başlığında da, grup başlığında da rozet.
- *
- * Yanındaki ince çizgi (flex-1 + border-t) grubu görsel olarak da açıyor: etiketten sonra
- * devam eden hat, altındaki kartların bu başlığa ait olduğunu söylüyor.
+ * SAYI AYRI ROZETTE, metnin içinde değil: parantezli sayı ("Planlanmış (3)") etiketin bir
+ * parçası gibi okunuyordu. Yanındaki ince çizgi (flex-1 + h-px) grubu görsel olarak da
+ * açıyor: etiketten sonra devam eden hat, altındaki kartların bu başlığa ait olduğunu
+ * söylüyor.
  */
 function AltBaslik({ children, sayi, tone = 'slate' }) {
   const amber = tone === 'amber'
 
   return (
     <div className="flex items-center gap-2.5 pt-1">
-      <p
+      <h2
         className={`shrink-0 text-xs font-semibold uppercase tracking-wider ${
           amber ? 'text-amber-700' : 'text-slate-600'
         }`}
       >
         {children}
-      </p>
+      </h2>
       {sayi !== undefined && (
         <Badge tone={amber ? 'warning' : 'neutral'} className="shrink-0 font-semibold tabular-nums">
           {sayi}
@@ -612,153 +708,368 @@ function AltBaslik({ children, sayi, tone = 'slate' }) {
 }
 
 /**
- * Sütun boşken görünen kısa metin.
+ * Sekme boşken görünen kutu.
  *
- * ui.jsx'teki EmptyState KULLANILMADI: o, sayfanın tamamı boşken çıkan büyük bir blok
- * (başlık + açıklama + eylem düğmesi) ve bir sütunun içinde orantısız duruyor. Burada
- * boşluk bir hata değil, normal bir durum — o kadar yer kaplamamalı.
- *
- * Metin tonları slate-600'ün altına İNMİYOR: kutu yarı saydam bir zeminin (bg-white/60)
- * üstünde duruyor ve altından sütunun slate-100'ü geçiyor; slate-500 bu bileşimde AA'ya
- * dayanmıyordu. Ayrım artık renkten değil ağırlıktan geliyor (font-medium / normal).
+ * ui.jsx'teki EmptyState KULLANILMADI: açıklaması slate-500 ve bu kutu yarı saydam
+ * zeminde (bg-white/60) duruyor; altından sayfa zemini geçerken slate-500 AA'ya
+ * dayanmıyordu. Ayrım renkten değil ağırlıktan (font-semibold / normal).
  */
-function BosSutun({ baslik, metin }) {
+function BosPanel({ baslik, metin, eylem = null }) {
   return (
     <div className="rounded-2xl border border-dashed border-slate-300 bg-white/60 px-5 py-10 text-center">
       <p className="text-sm font-semibold text-slate-700">{baslik}</p>
-      <p className="mx-auto mt-1.5 max-w-xs text-sm text-slate-600">{metin}</p>
+      <p className="mx-auto mt-1.5 max-w-sm text-sm text-slate-600">{metin}</p>
+      {eylem && <div className="mt-4 flex justify-center">{eylem}</div>}
     </div>
   )
 }
 
-const HISTORY_PAGE_SIZE = 20
-
 /**
- * Puan geçmişi (eski Cüzdan ekranının defteri).
- *
- * AÇILINCA YÜKLENİR. Derslerim zaten iki istek atıyor; defter kullanıcıların çoğunun her
- * ziyarette bakmadığı bir kayıt. Kapalı dururken sıfır maliyeti var, açıldığında tek
- * sayfa geliyor.
+ * Aktif liste 100'de kesilir (GetMySessions MaxActive). Kesme SESSİZ olmaz: kullanıcı
+ * listenin tamamını görmediğini bilmeli. Aktif listeye dayanan her sekmede (aksiyon,
+ * planlanmış, rezerve) gösterilir.
  */
-function PointHistory() {
-  const [open, setOpen] = useState(false)
-  const [rows, setRows] = useState([])
-  const [total, setTotal] = useState(0)
-  const [page, setPage] = useState(0)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState(null)
+function KesmeUyarisi({ data }) {
+  if (!data || data.activeTotal <= data.active.length) return null
+  return (
+    <Notice tone="warning">
+      {data.activeTotal} aktif dersinden ilk {data.active.length} tanesi gösteriliyor. Listeyi
+      kısaltmak için tamamlanan dersleri onayla.
+    </Notice>
+  )
+}
 
-  async function loadPage(next) {
-    // "Daha eski hareketler" ekleyerek çalışıyor: çift tıklama AYNI sayfayı iki kez
-    // eklerdi ve defterde her satır çift görünürdü. Butonun `loading` ile kilitlenmesi
-    // bir sonraki render'a kadar geçerli olmadığı için muhafız burada, fonksiyonun
-    // başında duruyor.
-    if (loading) return
-    setLoading(true)
-    setError(null)
-    try {
-      const result = await api.statement(next, HISTORY_PAGE_SIZE)
-      // Sayfa EKLENİR, değiştirilmez: "daha fazla" akışında önceki satırlar kaybolmamalı.
-      setRows((prev) => (next === 1 ? result.items : [...prev, ...result.items]))
-      setTotal(result.totalCount)
-      setPage(next)
-    } catch (err) {
-      setError(err)
-    } finally {
-      setLoading(false)
-    }
-  }
+function AksiyonPaneli({ groups, kesme, kart, onPlanlanmis }) {
+  const planliVar = groups.upcoming.length + groups.gecmisAcik.length > 0
 
-  function toggle() {
-    const next = !open
-    setOpen(next)
-    if (next && page === 0) loadPage(1)
+  if (groups.action.length === 0 && groups.itirazda.length === 0) {
+    return (
+      <>
+        {kesme}
+        <BosPanel
+          baslik="Şu an senden beklenen bir iş yok"
+          metin="Kanıt yüklemen ya da onay vermen gereken dersler burada görünür."
+          eylem={
+            planliVar ? (
+              <Button variant="secondary" onClick={onPlanlanmis}>
+                Planlanmış derslere bak
+              </Button>
+            ) : null
+          }
+        />
+      </>
+    )
   }
 
   return (
-    <section>
-      {/*
-        CamKart yüzeyinin sınıf kopyası: defterin kapağı da sütundaki ders kartlarıyla aynı
-        ailede dursun — ders kartları cama geçtiğinde bu kapak beyaz kalsaydı sayfadaki tek
-        "başka türlü" kutu olurdu. CamKart bileşeni KULLANILAMADI çünkü bu bir <button>:
-        div'in içine buton sarmak tıklanabilir alanı daraltır, aria-expanded da yüzeyin
-        kendisinde durmalı.
-
-        px-5 py-4 (eski px-4 py-3): ders kartlarının dolgusu p-5'e çıktı, kapak da aynı
-        ritimde nefes almalı.
-      */}
-      <button
-        type="button"
-        onClick={toggle}
-        aria-expanded={open}
-        className="flex min-h-11 w-full items-center justify-between gap-3 rounded-2xl border border-white/70
-                   bg-white/80 px-5 py-4 text-left shadow-sm shadow-brand-900/5 ring-1 ring-inset ring-white/40
-                   transition hover:bg-white supports-[backdrop-filter]:backdrop-blur-xl"
-      >
-        <span className="min-w-0">
-          <span className="block text-sm font-semibold text-slate-900">Puan geçmişi</span>
-          {/*
-            Açıklama ARTIK ALT SATIRDA (eski ml-2 ile aynı satırdaydı): dar sütunda başlıkla
-            aynı satıra sığmıyor ve "Puan geçmişi Her hareketin hangi…" diye tek cümle gibi
-            okunuyordu. slate-600, cam yüzey üstündeki kontrast alt sınırı.
-          */}
-          <span className="mt-0.5 block text-xs text-slate-600">
-            Her hareketin hangi dersten geldiği
-          </span>
-        </span>
-        {/*
-          Üçgen KARAKTERLERİ (▲ / ▼) çıktı, tek bir ok İKONU girdi. O karakterler yazı
-          tipinden geliyordu: yazı tipi değişince boyu ve ağırlığı değişiyor, satırın
-          rengini ancak tesadüfen alıyor ve bazı Windows yazı tiplerinde kutu olarak
-          çiziliyordu. Tek çizim + rotate-180 hem durum değişimini animasyonla anlatıyor
-          hem de "açık" ile "kapalı" arasında geometri farkı bırakmıyor.
-        */}
-        <OkAsagiIkonu
-          className={`h-5 w-5 shrink-0 text-slate-500 transition-transform duration-200 ${
-            open ? 'rotate-180' : ''
-          }`}
-        />
-      </button>
-
-      {open && (
-        <div className="mt-3">
-          <ErrorBox error={error} onRetry={() => loadPage(page || 1)} />
-
-          {loading && rows.length === 0 ? (
-            <Loading />
-          ) : rows.length === 0 && !error ? (
-            <CamKart>
-              <p className="text-sm text-slate-600">
-                Henüz puan hareketin yok. Bir ders anlatıp onaylandığında ilk kaydın burada belirir.
-              </p>
-            </CamKart>
-          ) : (
-            /*
-              TEK kart, İNCE AYRAÇLAR. Eskiden her hareket kendi kenarlıklı kutusundaydı ve
-              yirmi satırlık defter yirmi küçük karta bölünüyordu — oysa defter tek bir
-              belgedir, kart koleksiyonu değil. divide-y satırları ayırıyor, kart kenarı
-              belgeyi sarıyor; "daha eski" düğmesi de belgenin altbilgisi gibi içeride
-              duruyor ki defter uzadıkça düğme ondan kopup boşlukta yüzmesin.
-            */
-            <CamKart className="overflow-hidden !p-0">
-              <div className="divide-y divide-slate-200/70">
-                {rows.map((row, i) => (
-                  <HistoryRow key={`${row.createdAtUtc}-${i}`} row={row} />
-                ))}
-              </div>
-
-              {rows.length < total && (
-                <div className="flex justify-center border-t border-slate-200/70 px-5 py-3.5">
-                  <Button variant="secondary" loading={loading} onClick={() => loadPage(page + 1)}>
-                    Daha eski hareketler ({rows.length}/{total})
-                  </Button>
-                </div>
-              )}
-            </CamKart>
-          )}
-        </div>
+    <>
+      {kesme}
+      {groups.action.length > 0 ? (
+        groups.action.map((s) => kart(s))
+      ) : (
+        <p className="text-sm text-slate-600">Şu an senden beklenen bir iş yok.</p>
       )}
-    </section>
+
+      {/*
+        İTİRAZDAKİLER ayrı başlıkta ve SAYACA GİRMEZ: karar yönetimde, kullanıcının
+        basabileceği düğme yok (dersDurumu.js). Yine de bu sekmede: açılmış itiraz
+        kullanıcının gündeminde, "Planlanmış" bir ders değil.
+      */}
+      {groups.itirazda.length > 0 && (
+        <>
+          <AltBaslik sayi={groups.itirazda.length}>İtirazda, karar yönetimde</AltBaslik>
+          {groups.itirazda.map((s) => kart(s))}
+        </>
+      )}
+    </>
+  )
+}
+
+function PlanlanmisPaneli({ groups, kesme, kart, onRezerve }) {
+  if (groups.upcoming.length + groups.gecmisAcik.length === 0) {
+    return (
+      <>
+        {kesme}
+        <BosPanel
+          baslik="Planlanmış dersin yok"
+          metin="Bir arkadaşınla ders saati belirleyerek başla."
+          eylem={<Button onClick={onRezerve}>Ders rezerve et</Button>}
+        />
+      </>
+    )
+  }
+
+  return (
+    <>
+      {kesme}
+      {/*
+        SAATİ GEÇMİŞ AMA AÇIK DERSLER ÜSTTE, amber başlıkla: "bu ders oldu mu, ne oldu?"
+        sorusu ilk bakışta görünsün. Durum rozeti hâlâ "Rezerve" diyor, yani kaydın
+        kapanmadığı görünmeye devam ediyor.
+      */}
+      {groups.gecmisAcik.length > 0 && (
+        <>
+          <AltBaslik tone="amber" sayi={groups.gecmisAcik.length}>
+            Saati geçti, hâlâ açık
+          </AltBaslik>
+          {groups.gecmisAcik.map((s) => kart(s))}
+        </>
+      )}
+
+      {groups.upcoming.length > 0 && (
+        <>
+          <AltBaslik sayi={groups.upcoming.length}>Yaklaşan</AltBaslik>
+          {groups.upcoming.map((s) => kart(s))}
+        </>
+      )}
+    </>
+  )
+}
+
+function GecmisPaneli({ durum, kart, onSayfa, onTekrar }) {
+  const sayfa = durum.sayfa
+  const basRef = useRef(null)
+  const oncekiNo = useRef(null)
+
+  /*
+    SAYFA DEĞİŞİNCE LİSTENİN BAŞINA. Numaralı düğmeler listenin ALTINDA; iki sütunlu eski
+    düzende liste kendi kutusunda kaydığı için sorun yoktu, sayfa artık bütün olarak
+    kaydığından 2'ye basan kullanıcı yeni sayfanın SONUNDA kalıyordu (800px'te görüldü).
+    Yalnızca kullanıcı sayfa değiştirince (ilk yükleme ve refresh değil) ve başlık yapışkan
+    üst çubuğun (4rem) altında kaldıysa kaydırılır; scroll-mt-20 çubuğun payı.
+  */
+  const no = sayfa?.page ?? null
+  useEffect(() => {
+    const el = basRef.current
+    if (no && oncekiNo.current && no !== oncekiNo.current && el && el.getBoundingClientRect().top < 64) {
+      el.scrollIntoView({ block: 'start' })
+    }
+    oncekiNo.current = no
+  }, [no])
+
+  if (!sayfa) return durum.hata ? <ErrorBox error={durum.hata} onRetry={onTekrar} /> : <Loading />
+
+  /*
+    İstemci de süzer: sunucu parametreyi tanımıyorsa (pastStatus'tan önceki sürüm) yok
+    sayar ve iptal / süresi dolmuş dersleri de döndürür. O durumda sayı ve sayfa sınırları
+    süzülmemiş kümeye ait, yani YANLIŞ: sayı gösterilmez. Sunucu önce dağıtılır; bu yalnızca
+    geçiş anının güvencesi.
+  */
+  const tamamlananlar = sayfa.items.filter((s) => s.status === 'Completed')
+  const suzgecTutmadi = tamamlananlar.length !== sayfa.items.length
+  const sayfaSayisi = Math.ceil(sayfa.totalCount / GECMIS_SAYFA_BOYU)
+
+  if (sayfa.totalCount === 0) {
+    return (
+      <BosPanel
+        baslik="Henüz tamamlanan dersin yok"
+        metin="Onaylanan dersler burada birikir. İptal edilen ya da süresi dolan dersler Rezerve geçmişi sekmesinde."
+      />
+    )
+  }
+
+  return (
+    <>
+      <div ref={basRef} className="scroll-mt-20">
+        <AltBaslik sayi={suzgecTutmadi ? undefined : sayfa.totalCount}>Tamamlanan dersler</AltBaslik>
+      </div>
+      {tamamlananlar.map((s) => kart(s, true))}
+      <ErrorBox error={durum.hata} onRetry={onTekrar} />
+      <Pagination page={sayfa.page} totalPages={sayfaSayisi} onChange={onSayfa} disabled={durum.yukleniyor} />
+    </>
+  )
+}
+
+/**
+ * Puan defteri (eski Cüzdan ekranının defteri) — durum Sessions'ta tutulur.
+ *
+ * Eskiden katlanır bir bölümdü ve kendi state'ini taşıyordu; artık kendi sekmesi var ve
+ * yalnızca etkin panel kuruluyor. State bileşende kalsaydı her sekme değişiminde
+ * yüklenen sayfalar silinir, dönüşte baştan istenirdi.
+ */
+function usePuanDefteri() {
+  const [durum, setDurum] = useState({ satirlar: [], toplam: 0, sayfa: 0, yukleniyor: false, hata: null })
+  const ucuyor = useRef(false)
+  const nesil = useRef(0)
+
+  const yukle = useCallback(async (hedef) => {
+    // "Daha eski hareketler" ekleyerek çalışıyor: çift tıklama AYNI sayfayı iki kez
+    // eklerdi ve defterde her satır çift görünürdü. Düğmenin `loading` kilidi bir
+    // sonraki render'a kadar geçerli olmadığı için muhafız burada, ref'te.
+    if (ucuyor.current) return
+    ucuyor.current = true
+    const bu = nesil.current
+    setDurum((d) => ({ ...d, yukleniyor: true, hata: null }))
+    try {
+      const sonuc = await api.statement(hedef, HISTORY_PAGE_SIZE)
+      if (bu !== nesil.current) return
+      // Sayfa EKLENİR, değiştirilmez: "daha eski" akışında önceki satırlar kaybolmamalı.
+      setDurum((d) => ({
+        satirlar: hedef === 1 ? sonuc.items : [...d.satirlar, ...sonuc.items],
+        toplam: sonuc.totalCount,
+        sayfa: hedef,
+        yukleniyor: false,
+        hata: null,
+      }))
+    } catch (err) {
+      if (bu === nesil.current) setDurum((d) => ({ ...d, yukleniyor: false, hata: err }))
+    } finally {
+      if (bu === nesil.current) ucuyor.current = false
+    }
+  }, [])
+
+  const sifirla = useCallback(() => {
+    nesil.current += 1
+    ucuyor.current = false
+    setDurum({ satirlar: [], toplam: 0, sayfa: 0, yukleniyor: false, hata: null })
+  }, [])
+
+  return { ...durum, yukle, sifirla }
+}
+
+function PuanPaneli({ defter, toplamPuan }) {
+  const { satirlar, toplam, sayfa, yukleniyor, hata, yukle } = defter
+
+  return (
+    <>
+      <p className="max-w-prose text-sm text-slate-600">
+        Ders almak ücretsizdir. Ders onaylandığında anlatan tarafa puan yazılır; her hareketin
+        hangi dersten geldiği burada.
+      </p>
+      {/* Cüzdan bağlamından, ek istek yok (başlıktaki seviye rozetiyle aynı sayı). */}
+      {Number.isInteger(toplamPuan) && (
+        <p className="text-sm text-slate-700">
+          Toplam puanın: <strong className="font-semibold tabular-nums text-slate-900">{toplamPuan}</strong>
+        </p>
+      )}
+
+      <ErrorBox error={hata} onRetry={() => yukle(sayfa + 1)} />
+
+      {sayfa === 0 ? (
+        !hata && <Loading />
+      ) : satirlar.length === 0 ? (
+        <CamKart>
+          <p className="text-sm text-slate-600">
+            Henüz puan hareketin yok. Bir ders anlatıp onaylandığında ilk kaydın burada belirir.
+          </p>
+        </CamKart>
+      ) : (
+        /*
+          TEK kart, İNCE AYRAÇLAR: defter tek bir belgedir, kart koleksiyonu değil.
+          divide-y satırları ayırıyor, kart kenarı belgeyi sarıyor; "daha eski" düğmesi de
+          belgenin altbilgisi gibi içeride duruyor ki defter uzadıkça düğme ondan kopmasın.
+        */
+        <CamKart className="overflow-hidden !p-0">
+          <div className="divide-y divide-slate-200/70">
+            {satirlar.map((row, i) => (
+              <HistoryRow key={`${row.createdAtUtc}-${i}`} row={row} />
+            ))}
+          </div>
+
+          {satirlar.length < toplam && (
+            <div className="flex justify-center border-t border-slate-200/70 px-5 py-3.5">
+              <Button variant="secondary" loading={yukleniyor} onClick={() => yukle(sayfa + 1)}>
+                Daha eski hareketler ({satirlar.length}/{toplam})
+              </Button>
+            </div>
+          )}
+        </CamKart>
+      )}
+    </>
+  )
+}
+
+function RezervePaneli({ rezerve, kesme, yukleniyor, hata, onDaha, onRezerve }) {
+  const { liste, toplam, sonGecmis } = rezerve
+  const dahaVar = !!sonGecmis?.hasNextPage
+
+  return (
+    <>
+      <p className="max-w-prose text-sm text-slate-600">
+        Rezerve ettiğin ve sana rezerve edilen bütün dersler, sonucuyla birlikte.
+      </p>
+      {kesme}
+
+      {liste.length === 0 ? (
+        <BosPanel
+          baslik="Henüz rezervasyon yok"
+          metin="Rezerve ettiğin ya da sana rezerve edilen her ders, sonucu ne olursa olsun burada listelenir."
+          eylem={<Button onClick={onRezerve}>Ders rezerve et</Button>}
+        />
+      ) : (
+        <>
+          <AltBaslik sayi={toplam}>Tüm rezervasyonlar</AltBaslik>
+          {/* Defter dili (Puan geçmişiyle aynı): tek kart, satırlar divide-y. */}
+          <CamKart className="overflow-hidden !p-0">
+            <ul className="divide-y divide-slate-200/70">
+              {liste.map((s) => (
+                <li key={s.sessionId}>
+                  <RezervasyonSatiri session={s} />
+                </li>
+              ))}
+            </ul>
+
+            {/*
+              Düğme `dahaVar`a bağlı, x < y'ye değil: aktif liste 100'de kesildiyse x
+              sona gelindiğinde de y'den küçük kalır ve düğme boşa basılırdı (kesme
+              uyarısı zaten yukarıda).
+            */}
+            {dahaVar && (
+              <div className="flex justify-center border-t border-slate-200/70 px-5 py-3.5">
+                <Button variant="secondary" loading={yukleniyor} onClick={onDaha}>
+                  Daha eski rezervasyonlar ({liste.length}/{toplam})
+                </Button>
+              </div>
+            )}
+          </CamKart>
+          <ErrorBox error={hata} onRetry={onDaha} />
+        </>
+      )}
+    </>
+  )
+}
+
+/*
+  REZERVASYON SATIRI — kayıt, eylem değil. Düğme taşımaz: bir dersin yapılacak işi
+  aksiyon ve planlanmış sekmelerindeki kartta. Burada "ne oldu" okunur: konu, kişi ve
+  rol, süre ve puan, sonuç (durum rozeti, ders kartıyla aynı tonlar) ve ders tarihi.
+
+  Ad profile gider (PersonLink, "ad görünen her yerde profile gidilir"). lg altında
+  bağlantı 44px dokunma hedefi: `-my-3.5 py-3.5` görünümü değiştirmeden yüksekliği
+  büyütüyor (Topluluk kartındaki ad bağlantısının kalıbı; orada text-sm'in 20px satırına
+  -my-3 yetiyor, burada text-xs'in 16px satırı 14px pay istiyor — 375px'te 44 ölçüldü).
+*/
+function RezervasyonSatiri({ session }) {
+  const stil = DURUM_STILI[session.status] ?? VARSAYILAN_DURUM_STILI
+
+  return (
+    <div className="flex items-start justify-between gap-3 px-5 py-3.5">
+      <div className="min-w-0 space-y-0.5">
+        <p className="truncate text-sm font-medium text-slate-900">{session.topicName}</p>
+        <div className="flex min-w-0 items-center gap-1.5 text-xs text-slate-600">
+          <PersonLink
+            userId={session.otherUserId}
+            className="-my-3.5 min-w-0 truncate py-3.5 font-medium text-slate-700 hover:text-brand-700 lg:my-0 lg:py-0"
+          >
+            {session.otherDisplayName}
+          </PersonLink>
+          <Ayrac />
+          <span className="shrink-0">{session.iAmTutor ? 'Anlatıyorum' : 'Alıyorum'}</span>
+        </div>
+        <p className="flex items-center gap-1.5 text-xs tabular-nums text-slate-600">
+          <span>{session.durationMinutes} dk</span>
+          <Ayrac />
+          <span>{session.mintAmount} puan</span>
+        </p>
+      </div>
+
+      <div className="flex shrink-0 flex-col items-end gap-1.5 text-right">
+        <Badge tone={stil.rozet}>{SESSION_STATUS_LABELS[session.status] ?? session.status}</Badge>
+        <time dateTime={session.scheduledStartUtc} className="text-xs tabular-nums text-slate-600">
+          {formatDateTime(session.scheduledStartUtc)}
+        </time>
+      </div>
+    </div>
   )
 }
 
