@@ -76,10 +76,12 @@ import { ISLETMECI, ISLETMECI_ADRESI, ISLETMECI_ALAN_ADI, MARKA } from '../lib/k
     • Silme noktaları        → Logout, RefreshTokenService.TumOturumlariDusurAsync (her
                                yerden çıkış, parola sıfırlama, rol değişimi, hırsızlık
                                tespiti), DeleteAccount, BanUser, makbuzdaki
-                               DeviceNotRegistered, mobilde çevrimdışı çıkıştan sonra forget
-    • Süreler                → CleanupNotifications.cs (defter 30 gün, kısma kaydı 1 gün),
-                               CheckPushReceipts.cs (makbuz en geç 24 saat), RefreshToken
-                               ömrü (60 gün — çevrimdışı çıkış sınırı)
+                               DeviceNotRegistered, mobilde çevrimdışı çıkıştan sonra forget,
+                               günlük temizlik (CleanupNotifications: oturum bağı kopmuş cihaz)
+    • Süreler                → CleanupNotifications.cs (defter 30 gün, kısma kaydı 1 gün,
+                               oturumu kapanmış cihaz 5 gün + günde bir temizlik = §5'teki
+                               "en geç 7 gün"), CheckPushReceipts.cs (makbuz en geç 24 saat),
+                               RefreshToken ömrü (60 gün — çevrimdışı çıkış sınırı)
 
   Mobil metinle (mobil depo app/gizlilik.jsx) AYNI OLGULARI söylemeli: taşıyıcılar,
   süreler, silme noktaları, adın hangi bildirimde geçtiği. İfade platforma göre
@@ -276,9 +278,13 @@ export default function Gizlilik() {
             <strong>Mesajlar:</strong> konuşma silinene kadar.
           </li>
           {/* Süreler ve silme noktaları sunucudan: PushDevice.cs başındaki liste, RefreshToken
-              ömrü (60 gün), CleanupNotifications (30 gün / 1 gün), CheckPushReceipts (24 sa).
-              Son cümledeki sınır BİLEREK yazılı — "çıkınca hemen biter" demek yanlış beyan
-              olurdu. Mobil metindeki §5 ile aynı olguları söylemeli. */}
+              ömrü (60 gün), CleanupNotifications (30 gün / 1 gün; oturum bağı kopmuş cihaz
+              BaglantisizCihazSaklama 5 gün + günde bir temizlik ≤ 7 gün), CheckPushReceipts
+              (24 sa). "60 gün" sınırı BİLEREK yazılı — "çıkınca hemen biter" demek yanlış beyan
+              olurdu. Son cümle 2026-09-25'te eklendi: önceki metin uygulamayı kaldıranın
+              kaydını "bir sonraki bildirim denemesinde" silinir diye bitiriyordu, ama deneme
+              hiç olmazsa satır süresiz kalıyordu (sunucuda bu yolu kapatan temizlik yoktu).
+              Mobil metindeki §5 ile aynı olguları söylemeli. */}
           <li>
             <strong>Bildirim kaydı (mobil uygulama, telefonunun bildirim adresi):</strong> o
             telefonda çıkış yapana kadar. Çıkış yaptığında, “her yerden çıkış” yaptığında ya
@@ -289,7 +295,9 @@ export default function Gizlilik() {
             yokken çıkış yaptıysan sunucu çıkışını o an öğrenemez: kayıt, uygulamayı bir
             sonraki açışında silinir; uygulamayı bir daha hiç açmazsan, o telefondaki
             oturumunun süresi dolana kadar (en fazla 60 gün) o telefona bildirim gelmeye
-            devam edebilir.
+            devam edebilir. Bu yollardan hiçbiri işlemese de kayıt süresiz kalmaz: o
+            telefondaki oturum kapandıktan ya da süresi dolduktan (uygulamayı son
+            kullanmandan en fazla 60 gün sonra) en geç 7 gün sonra silinir.
           </li>
           <li>
             <strong>Bildirim tercihlerin:</strong> hesabın açık olduğu sürece.
@@ -386,8 +394,9 @@ export default function Gizlilik() {
             Bildirim adresini alırken uygulama Expo’ya ayrıca bildirim bileşeninin rastgele
             kurulum numarasını gönderir. Mesajlarının içeriği bildirimlere{' '}
             <strong>hiçbir zaman</strong> girmez; kişi adı yalnızca yeni mesaj ve kabul
-            edilen istek bildiriminde, arkadaşının görünen adı olarak geçer. İstek ve ders
-            bildirimlerinde kimsenin adı geçmez; dersin ya da isteğin konusu geçebilir.
+            edilen istek bildiriminde, arkadaşının görünen adı olarak geçer. Diğer istek
+            ve ders bildirimlerinde kimsenin adı geçmez; dersin ya da isteğin konusu
+            geçebilir.
             E-posta adresin ve cihaz kimliği özetin bu hizmetlere gönderilmez.
           </li>
         </Maddeler>
