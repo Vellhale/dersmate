@@ -365,6 +365,10 @@ function HesabiSilModali({ open, onClose, onDeleted }) {
             <li>Biyografin, üniversite ve bölüm bilgin</li>
             <li>Açtığın ders ilanları</li>
             <li>Veri tercihlerin ve cihaz kaydın</li>
+            {/* Sunucu hesap silmede bildirim defterini, bildirim tercihlerini ve push cihaz
+                kayıtlarını siliyor (DeleteAccount). Web'de push yok ama kayıtlar web
+                kullanıcısı için de tutuluyor; mobil profil/index.jsx ile aynı madde. */}
+            <li>Bildirim kayıtların, bildirim ayarların ve bildirim alan cihazların</li>
           </ul>
         </div>
 
