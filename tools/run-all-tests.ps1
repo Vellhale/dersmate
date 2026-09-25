@@ -94,6 +94,10 @@ try {
     # engelin arkadaş sayısından/listesinden/ortak listeden elenmesini sınıyor ve
     # engelleme paketi kırmızıysa buradaki kırmızının nedeni de orada aranmalı.
     Betik 'Profil arkadaş bölümü' 'e2e-arkadaslar.ps1'
+
+    # Topluluk akışının ilk yorum önizlemesi de engeli uyguluyor (çift yönlü, bakana
+    # özgü); engelleme paketinden sonra, aynı gerekçeyle.
+    Betik 'Topluluk ilk yorum önizlemesi' 'e2e-topluluk.ps1'
     Betik 'Yönetim puan düzeltmesi' 'e2e-admin-credits.ps1'
     Betik 'Arka plan işleri' 'e2e-jobs.ps1'
 

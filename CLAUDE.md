@@ -21,7 +21,7 @@ npm --prefix frontend run dev                     # arayüz :5173
 powershell -File .\tools\start-dev.ps1            # üçünü birden, ayrı konsollarda
 powershell -File .\tools\stop-dev.ps1             # düzgün kapat (Postgres'i ÖLDÜRME)
 powershell -File .\tools\restart-api.ps1          # durdur → derle → başlat
-powershell -File .\tools\run-all-tests.ps1        # birim testleri + 17 e2e paketi, tek özet
+powershell -File .\tools\run-all-tests.ps1        # birim testleri + 18 e2e paketi, tek özet
 ```
 
 ```bash
