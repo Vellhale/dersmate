@@ -3,8 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../state/AuthContext'
 import { Button, Card, ErrorBox, Field } from '../components/ui'
 import { Logo } from '../components/Logo'
-import { CookieSettingsLink } from '../components/CookieBanner'
-import { KunyeSatiri } from '../components/Kunye'
+import { AltBilgi } from '../components/AltBilgi'
 import { brand, ink } from '../lib/brand'
 
 export default function Login() {
@@ -310,31 +309,13 @@ export function AuthShell({ title, subtitle, children }) {
             kazanırsın ve bu puan harcanmaz — birikip seviyeni yükseltir.
           </p>
 
-          {/* Yasal metinler giriş/kayıt/doğrulama/sıfırlama ekranlarının HEPSİNDE
-              görünüyor (dördü de AuthShell kullanıyor). Çerez ayarı zaten buradaydı;
-              yanına eklenmeleri, "rızayı geri almak vermek kadar kolay olmalı"
-              kuralının metin tarafındaki karşılığı. */}
-          <div className="mt-3 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 lg:justify-start">
-            <CookieSettingsLink />
-            <Link to="/kosullar" className="text-xs text-slate-500 underline hover:text-slate-700">
-              Kullanım koşulları
-            </Link>
-            <Link to="/gizlilik" className="text-xs text-slate-500 underline hover:text-slate-700">
-              Gizlilik
-            </Link>
-            {/* Silme sayfası ÇIKIŞ YAPMIŞ kullanıcıya da görünmeli: mağaza kaydındaki
-                adres, hesabına giremeyen birinin de bulabileceği bir yerde olmalı —
-                oturum açmadan ulaşılamayan bir bağlantı o işi görmez. */}
-            <Link to="/hesap-silme" className="text-xs text-slate-500 underline hover:text-slate-700">
-              Hesap silme
-            </Link>
-          </div>
-
-          {/* Künye giriş/kayıt ekranlarında da: hesabı OLMAYAN biri bu ürünü kimin
-              işlettiğini görebilmeli. Kayıt kararı tam burada veriliyor ve "kime
-              kaydoluyorum" sorusunun cevabı, kaydolduktan sonra öğrenilecek bir şey
-              değil. Ortalama: kabuk `lg` altında ortalı, üstündeki metinlerle aynı. */}
-          <KunyeSatiri className="mt-3 text-center lg:text-left" />
+          {/* Alt bilgi giriş/kayıt/doğrulama/sıfırlama ekranlarının HEPSİNDE (dördü de
+              AuthShell kullanıyor): yasal metinler, hesap silme, çerez tercihleri ve
+              künye. Hesap silme ÇIKIŞ YAPMIŞ kullanıcıya da görünmeli (mağaza kaydındaki
+              adres, hesabına giremeyen birinin de bulabileceği yerde olmalı); künye de
+              burada, çünkü "kime kaydoluyorum" sorusunun cevabı kaydolduktan sonra
+              öğrenilecek bir şey değil. Gerekçelerin tamamı AltBilgi.jsx'te. */}
+          <AltBilgi yigin className="mt-6" />
         </div>
       </main>
     </div>

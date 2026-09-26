@@ -241,18 +241,3 @@ function ConsentSettings({ initial, onClose, onSave, allowDismiss }) {
     </div>
   )
 }
-
-/** Tercihi sonradan değiştirmek için sayfa altına konan bağlantı. */
-export function CookieSettingsLink({ className = '' }) {
-  const { openSettings } = useConsent()
-
-  return (
-    <button
-      onClick={openSettings}
-      className={`-my-2 inline-flex min-h-11 items-center py-2 text-xs text-slate-500 underline
-                  hover:text-slate-700 lg:my-0 lg:min-h-0 lg:py-0 ${className}`}
-    >
-      Çerez tercihleri
-    </button>
-  )
-}

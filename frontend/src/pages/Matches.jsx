@@ -75,10 +75,12 @@ export default function Matches() {
       Artık lg üstünde sayfa sabit; yalnızca sekme içeriği kendi panelinde kayar
       (bir sohbet penceresi gibi), başlık ve sekmeler hep görünür kalır.
 
-      Yükseklik: 100dvh − 10.5rem. Üç parça: 4rem sabit üst bar + 3rem <main> dolgusu
-      (py-6) + 3.5rem altbilgi. Bu toplam Sessions.jsx düzeni kurulurken TARAYICIDA
-      ÖLÇÜLDÜ — sayıyı değiştirmeden önce oradaki gerekçeyi oku (altbilgi ilk hesapta
-      atlanmış ve sayfa tam 56px kaymıştı). vh DEĞİL dvh: mobil adres çubuğu vh'ye
+      Yükseklik: 100dvh − 12.25rem. Üç parça: 4rem sabit üst bar + 3rem <main> dolgusu
+      (py-6) + alt bilgi (AltBilgi, lg'de TEK satır: künye solda, bağlantılar sağda) —
+      2026-09-26'da 1024–1440px'te ölçüldü: 81px ≈ 5.06rem; 3px pay bırakıldı. Alt
+      bilgi ilk hesapta atlanmış ve sayfa tam 56px kaymıştı; künye eklenince (2026-09-19)
+      değer yine bayatladı ve sayfa 28px kayıyordu. Alt bilginin yüksekliği değişirse
+      bu sayı da değişir (AltBilgi.jsx'teki not). vh DEĞİL dvh: mobil adres çubuğu vh'ye
       dahil değil ve alt kenar kırpılırdı.
 
       lg ALTINDA kilitleme YOK ve bu bilinçli: dar ekranda iç içe kaydırma alanları
@@ -86,7 +88,7 @@ export default function Matches() {
       sayfa akışı sürüyor — aynı karar Sessions.jsx'te verildi, gerekçesi orada.
       ─────────────────────────────────────────────────────────────────────────
     */
-    <div className="flex flex-col gap-6 lg:h-[calc(100dvh-10.5rem)] lg:min-h-[520px] lg:overflow-hidden">
+    <div className="flex flex-col gap-6 lg:h-[calc(100dvh-12.25rem)] lg:min-h-[520px] lg:overflow-hidden">
       <div className="shrink-0">
         <h1 className="text-2xl font-bold text-slate-900">Arkadaşlar</h1>
         <p className="mt-1 text-sm text-slate-600">

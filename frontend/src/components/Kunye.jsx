@@ -14,7 +14,7 @@ import {
 /**
  * KÜNYE — iki boy, tek kaynak.
  *
- *   • <KunyeSatiri />  → altbilgilerdeki tek satır ("© 2026 dersmate · Bir Corventech…")
+ *   • <KunyeSatiri />  → alt bilgideki tek satır ("© 2026 dersmate · Bir Corventech…")
  *   • <KunyeBlogu />   → yasal metinlerin altındaki kimlik bloğu
  *
  * İkisi de lib/kunye.js'ten besleniyor; oradaki not neden bu bilginin ürünün içinde
@@ -22,7 +22,9 @@ import {
  */
 
 /**
- * Tek satırlık künye. Altbilgilerde (Layout + AuthShell) kullanılır.
+ * Tek satırlık künye. Yalnızca AltBilgi çiziyor (Layout ve AuthShell alt bilgisi);
+ * sayfalar kendi künye satırını eklemez — Hakkımızda'da Corventech bu yüzden bir kez
+ * görünüyor.
  *
  * ⚠️ DIŞ BAĞLANTI: `rel="noopener noreferrer"` ŞART. `target="_blank"` ile açılan
  * sayfa, bunlar olmadan `window.opener` üzerinden bu sekmeyi başka bir adrese
@@ -35,7 +37,7 @@ export function KunyeSatiri({ className = '' }) {
     <p className={`text-xs leading-relaxed text-slate-500 ${className}`}>
       © {TELIF_YILI} {MARKA} · Bir{' '}
       {/* Dokunma hedefi: CLAUDE.md'ye göre 44px sınırı `lg`, `sm` değil — tablet de
-          parmakla kullanılıyor. Aynı kalıp CookieSettingsLink'te de var. */}
+          parmakla kullanılıyor. Aynı kalıp AltBilgi.jsx → ALT_BAGLANTI'da da var. */}
       <a
         href={ISLETMECI_ADRESI}
         target="_blank"

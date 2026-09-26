@@ -26,7 +26,7 @@ import { Button } from './ui'
 const RESTART_EVENT = 'peerlearn:restart-tour'
 
 /**
- * Rehberi 1. adımdan yeniden başlatır (profilin ayarlar menüsü ve alt bilgideki bağlantı).
+ * Rehberi 1. adımdan yeniden başlatır (profilin ayarlar menüsü ve AltBilgi'deki düğme).
  * Olayı dinleyen ProductTour Layout'ta; çağıran taraf rehberin nerede kurulduğunu bilmek
  * zorunda kalmasın diye tek dışa açık giriş bu.
  */
@@ -325,20 +325,6 @@ export function ProductTour() {
         onNeverShow={() => finish({ suppressed: true })}
       />
     </div>
-  )
-}
-
-/** Sayfa altındaki "Rehberi tekrar izle" bağlantısı. Profilin ayarlar menüsü aynı işi
-    rehberiYenidenBaslat() ile doğrudan yapıyor; bu bileşen alt bilgi için duruyor. */
-export function RestartTourLink({ className = '' }) {
-  return (
-    <button
-      onClick={rehberiYenidenBaslat}
-      className={`-my-2 inline-flex min-h-11 items-center py-2 text-xs text-slate-500 underline
-                  hover:text-slate-700 lg:my-0 lg:min-h-0 lg:py-0 ${className}`}
-    >
-      Rehberi tekrar izle
-    </button>
   )
 }
 
