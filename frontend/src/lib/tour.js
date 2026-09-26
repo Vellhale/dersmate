@@ -19,6 +19,28 @@
  * TEK paragrafta anlatıyordu — turun en yoğun ve en atlanan yeriydi. Şimdi arkadaşlık,
  * sohbet ve kanıt ayrı adımlar; her biri kendi menü öğesinin üstünde duruyor.
  *
+ * ─── 6 → 8 ADIM (2026-09-26) ─────────────────────────────────────────────────────
+ * Topluluk ve Profil adımları eklendi (ürün kararı: rehber ürünün SON hâlini anlatsın).
+ * Topluluk'un çıpası menüde zaten vardı, adımı yoktu; Profil adımı sağ üstteki ayarlar
+ * (dişli) menüsünü ve fotoğrafın altındaki "Arkadaşlarım"ı anlatıyor.
+ *
+ *   • YENİ ADIMLAR SONA EKLENDİ, araya DEĞİL. Sunucu kaldığın adımı SAYI olarak tutuyor
+ *     (onboardingLastStep); ilk altı adımın indeksi aynı kaldığı için yarıda bırakan
+ *     kullanıcı kaldığı adımdan devam ediyor. Araya eklenen bir adım herkesi bir adım
+ *     kaydırırdı.
+ *   • Rehber SÜRÜMÜ tutulmuyor: eski rehberi bitirmiş kullanıcıya yeni adımlar
+ *     kendiliğinden gösterilmez, "Rehberi tekrar izle" ile görür. Tamamlanma bir sürüm
+ *     değil bir bayrak (UserPreference.OnboardingCompleted).
+ *   • Mobil rehber AYRI bir dizi (mobil src/lib/tur.js: 9 adım, Topluluk ve menü başta,
+ *     bildirimler sonda). Ortak adımların metni iki platformda aynı; SIRA ve SAYI farklı.
+ *     İlerleme satırı hesapta TEK olduğu için aynı indeks iki platformda farklı adımı
+ *     gösterir — bilinen, düşük etkili sınır (en kötüde birkaç adım erken ya da geç
+ *     devam edilir).
+ *   • Web'de push yok: mobildeki bildirim adımı ve bildirim maddeleri BURADA YOK.
+ *   • Metinler ÇIPAYA DAYANMIYOR ("burada bulursun" değil "menüdeki “Keşfet”te
+ *     bulursun"): lg altında ray gizli ve kart ortada çıkıyor; neyi anlattığını cümle
+ *     kendisi söylemek zorunda.
+ *
  * BAŞLIKLARDA EMOJİ YOK. İlk adım "Ders almak ücretsiz 🌱" idi. Aynı gerekçe rozetlerde
  * de uygulandı (bkz. SubjectBadges): emoji her platformda başka çiziliyor, aynı ekran
  * her cihazda başka görünüyor. Vurgu için BÜYÜK HARF de kullanılmıyor — "ders ALMAK"
@@ -36,9 +58,16 @@
  * kimse hatırlamaz ve rehber sessizce yalan söylemeye başlar. Anlatılan tek şey
  * mekanizma. "10 basamaklı" bir istisna: o, ölçeğin kendisi, eşiği değil.
  *
- * selector: rehberin ışık tutacağı öğe. Bulunamazsa adım ORTADA kart olarak gösterilir
- * (bkz. ProductTour). Bu sayede ekran boyutuna göre gizlenen öğeler rehberi KIRMAZ —
- * mobilde gezinme hamburgere dönüştüğü için bu gerçek bir durum.
+ * selector: rehberin ışık tutacağı öğe — tek seçici ya da TERCİH SIRASIYLA seçici dizisi.
+ * GÖRÜNÜR bir karşılığı yoksa adım ORTADA kart olarak gösterilir (ProductTour →
+ * hedefBul). Bu sayede ekran boyutuna göre gizlenen öğeler rehberi KIRMAZ — lg altında
+ * ray gizli ve gezinme hamburgerde.
+ *
+ * ⚠️ Bu cümle 2026-09-26'ya kadar YANLIŞTI. Tek querySelector gizli raydaki öğeyi de
+ * buluyordu (`display: none` öğe DOM'da duruyor) ve onun sıfır dikdörtgenini "çıpa
+ * var" diye ölçüyordu: 375 ve 800px'te 2–6. adımlarda sol üst köşede 16px'lik bir
+ * halka, 800px'te bir de köşeye yapışmış kart çıkıyordu (ölçüldü). hedefBul artık
+ * yalnızca kutusu olan öğeyi kabul ediyor (getClientRects().length > 0).
  *
  * Çıpalar Layout'taki NAV tanımından ve seviye rozetinden gelir; buradaki her
  * selector'ın karşılığı orada VARDIR. (Eskiden ilk adım `[data-tour="wallet"]`
@@ -62,10 +91,10 @@ export const TOUR_STEPS = [
     id: 'discover',
     selector: '[data-tour="discover"]',
     title: 'Keşfet — ders bul',
-    body: 'Almak istediğin konuyu anlatabilen öğrencileri burada bulursun.',
+    body: 'Almak istediğin konuyu anlatabilen öğrencileri menüdeki “Keşfet”te bulursun.',
     points: [
-      'Konu, ders ya da eğitmen adıyla ara.',
-      'Filtreyle sıralamayı ve eğitmen puanını daralt.',
+      'YKS sekmesi, almak istediğin konulara göre sana öneri getirir; yazarak katalogda da ararsın.',
+      'Üniversite ve Arkadaş Ekle sekmeleriyle okulundan ya da tanıdığın birini bulursun.',
       '“Karşılıklı takas” etiketi, o kişinin de senden bir konu aradığını gösterir.',
     ],
   },
@@ -75,16 +104,18 @@ export const TOUR_STEPS = [
     title: 'Ders Portföyü — ne anlatabilirsin',
     body: 'Anlatabildiğin konuları ekle; Keşfet’te başkalarına böyle görünürsün.',
     points: [
+      'Almak istediğin konuları da buraya eklersin; öneriler onlardan üretilir.',
       'Portföyün boşken kimse senden ders isteyemez.',
-      'Her konu için kendi seviyeni işaretlersin.',
-      'Puan kazanmanın tek yolu ders anlatmak — başlangıcı burası.',
+      // "Tek yolu" DEĞİL (2026-09-26): Topluluk'ta oy toplayan katkılar da puan getiriyor
+      // (Kullanım koşulları §3; sunucuda CommunityRewardRules).
+      'Puanın asıl kaynağı ders anlatmak — başlangıcı burası.',
     ],
   },
   {
     id: 'matches',
     selector: '[data-tour="matches"]',
     title: 'Arkadaşlar — istek gönder ve al',
-    body: 'Gönderdiğin ve sana gelen ders istekleri bu sayfada toplanır.',
+    body: 'Gönderdiğin ve sana gelen ders istekleri menüdeki “Arkadaşlar”da toplanır.',
     points: [
       'Gelen bir isteği kabul ya da reddedersin.',
       'Kabul edilen istekte sohbet kendiliğinden açılır.',
@@ -95,22 +126,51 @@ export const TOUR_STEPS = [
     id: 'chat',
     selector: '[data-tour="chat"]',
     title: 'Sohbet — saati ve linki kararlaştır',
-    body: 'Ders saatini ve görüşme linkini karşı tarafla burada konuşursun.',
+    body: 'Ders saatini ve görüşme linkini karşı tarafla menüdeki “Sohbet”te konuşursun.',
     points: [
       'Zoom, Google Meet ya da Discord — dersi biz barındırmıyoruz.',
       'Linki sohbete yapıştırman yeterli.',
-      'Anlaştıktan sonra dersi Derslerim’den rezerve edersiniz.',
+      // Rezervasyonu yapan ÖĞRENCİ olur (BookSession: çağıran, StudentUserId). Eski metin
+      // "rezerve edersiniz" diyordu ve iki taraf da rezerve edebilir gibi okunuyordu.
+      'Anlaştığınızda dersi alan taraf Derslerim’den rezerve eder.',
     ],
   },
   {
     id: 'sessions',
     selector: '[data-tour="sessions"]',
-    title: 'Derslerim — kanıt ve onay',
-    body: 'Ders bittikten sonra puanın yazılması için tek bir adım kalır: onay.',
+    title: 'Derslerim — rezervasyon, kanıt ve onay',
+    // Sekme adları Sessions.jsx → SEKMELER ile aynı: rehberin söylediği ad ekranda yazan
+    // adla aynı olmalı. Sekmeler yeniden adlandırılırsa bu adım aynı değişiklikte değişir.
+    body: 'Her dersin burada; planlanmış, geçmiş dersler, puan ve rezerve geçmişi ayrı sekmelerde.',
     points: [
-      'Anlatan taraf dersin ekran görüntüsünü yükler.',
-      'Alan taraf onaylar; puan tam o anda yazılır.',
-      'Bir sorun varsa itiraz edersin, kararı hakem verir.',
+      '“Senden aksiyon bekleyenler”, kanıt yüklemen ya da onaylaman gereken dersleri toplar.',
+      'Anlatan taraf dersin ekran görüntüsünü yükler, alan taraf onaylar; puan o anda yazılır.',
+      'Onay gelmezse ders kendiliğinden onaylanır; sorun varsa itiraz edersin, kararı yönetim verir.',
+    ],
+  },
+  {
+    id: 'community',
+    selector: '[data-tour="community"]',
+    title: 'Topluluk — öğrencilerin sosyal ağı',
+    body: 'Menüdeki “Topluluk”, dersmate’in sosyal ağı: soru sorar, deneyimini paylaşır, başkalarına yanıt verirsin.',
+    points: [
+      'Gönderini bir etiketle paylaş; yalnızca metin, dosya yükleme kapalı.',
+      'Gönderileri oyla, altına yorum yaz.',
+      'Kurallara aykırı bir içerik görürsen şikayet et.',
+    ],
+  },
+  {
+    id: 'profil',
+    /* Tercih sırası: lg'de üst bardaki avatar (`profil`); lg altında avatar gizli olduğu
+       için seviye rozeti (`rank`). İkisi de profile götürüyor. Avatar çıpası yoksa ya da
+       gizliyse hedefBul rozete düşer, ikisi de yoksa kart ortada çıkar. */
+    selector: ['[data-tour="profil"]', '[data-tour="rank"]'],
+    title: 'Profilin ve ayarların',
+    body: 'Üst çubuktaki seviye rozetin ya da fotoğrafın seni profiline götürür.',
+    points: [
+      'Profilini ve fotoğrafını sağ üstteki ayarlar (dişli) menüsünden düzenlersin.',
+      'Arkadaşlarına fotoğrafının altındaki “Arkadaşlarım”dan ulaşırsın.',
+      'Bu rehberi ayarlar menüsünden ya da sayfanın altından yeniden izleyebilirsin.',
     ],
   },
 ]

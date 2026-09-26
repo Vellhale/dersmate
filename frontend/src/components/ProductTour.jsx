@@ -9,7 +9,7 @@ import { Button } from './ui'
 /**
  * İnteraktif ürün rehberi (Modül 5).
  *
- * NEDEN HAZIR KÜTÜPHANE (Joyride/Driver.js) DEĞİL: altı adımlık bir spot ışığı için yeni
+ * NEDEN HAZIR KÜTÜPHANE (Joyride/Driver.js) DEĞİL: sekiz adımlık bir spot ışığı için yeni
  * bir bağımlılık, bakım yükünü kazanılan koddan daha çok artırıyordu. Karşılığında Türkçe
  * metin, mobil davranış ve 44px dokunma kuralı bizde.
  *
@@ -24,6 +24,39 @@ import { Button } from './ui'
  * bir tetik için context kurmak fazla ağır olurdu.
  */
 const RESTART_EVENT = 'peerlearn:restart-tour'
+
+/**
+ * Rehberi 1. adımdan yeniden başlatır (profilin ayarlar menüsü ve alt bilgideki bağlantı).
+ * Olayı dinleyen ProductTour Layout'ta; çağıran taraf rehberin nerede kurulduğunu bilmek
+ * zorunda kalmasın diye tek dışa açık giriş bu.
+ */
+export function rehberiYenidenBaslat() {
+  window.dispatchEvent(new CustomEvent(RESTART_EVENT))
+}
+
+/**
+ * Adımın ışık tutacağı öğeyi bulur. `selector` tek seçici ya da TERCİH SIRASIYLA seçici
+ * dizisi; her seçici için eşleşen öğelerden KUTUSU OLAN ilki döner, hiçbiri yoksa null
+ * (→ ortada kart).
+ *
+ * ⚠️ NEDEN querySelector DEĞİL: lg altında ray `hidden` (display: none) ama öğeleri DOM'da
+ * duruyor. querySelector o gizli öğeyi buluyor, getBoundingClientRect sıfır dikdörtgen
+ * veriyordu; rect null OLMADIĞI için "ortada kart" yedeği hiç devreye girmiyordu. Sonuç
+ * (ölçüldü, 2026-09-26): 375 ve 800px'te 2–6. adımlarda ekranın sol üst köşesinde
+ * 16px'lik bir halka, 800px'te bir de köşeye yapışmış kart. getClientRects() display:none
+ * öğede (ve display:none bir atanın içindeki öğede) BOŞ döner — "görünür mü" sorusunun
+ * doğru ölçüsü bu. querySelectorAll şart: aynı çıpa hem gizli rayda hem açık çekmecede
+ * olabilir ve görünen ilk kopya seçilmeli.
+ */
+function hedefBul(selector) {
+  const seciciler = Array.isArray(selector) ? selector : [selector]
+  for (const secici of seciciler) {
+    for (const el of document.querySelectorAll(secici)) {
+      if (el.getClientRects().length > 0) return el
+    }
+  }
+  return null
+}
 
 /*
   "Rehberi geç" OTURUM boyunca susturur. Sunucudaki kayıt "tamamlanmadı" olarak kalır —
@@ -138,25 +171,31 @@ export function ProductTour() {
   useLayoutEffect(() => {
     if (!state.active || !current) return
 
-    const el = document.querySelector(current.selector)
-    if (!el) {
-      setRect(null) // Çapa yok → ortada kart.
-      return
-    }
-
     /*
       KAYDIRMA ve ÖLÇÜM ayrı tutulur. İlk yazımda ikisi tek fonksiyondaydı ve o fonksiyon
       scroll dinleyicisine bağlıydı: scrollIntoView kaydırma olayı üretiyor, olay yeniden
       scrollIntoView çağırıyordu — kendi kendini besleyen bir döngü. Artık kaydırma adım
       başına BİR kez, ölçüm ise her kaydırma/yeniden boyutlandırmada yapılıyor.
     */
-    el.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    const ilkHedef = hedefBul(current.selector)
+    // Çıpasız adımda önceki adımın halkası bir kare bile kalmasın: boyamadan önce temizle.
+    if (!ilkHedef) setRect(null)
+    ilkHedef?.scrollIntoView({ block: 'center', behavior: 'smooth' })
 
     let frame = 0
     const measure = () => {
       cancelAnimationFrame(frame)
       // Kaydırma sürerken ölçüm eskir; bir sonraki karede oku.
       frame = requestAnimationFrame(() => {
+        /* Hedef HER ÖLÇÜMDE yeniden aranıyor, adımın başında bir kez değil: pencere lg
+           sınırını geçince ray görünür ya da gizli olur (profil adımında avatar ile rozet
+           yer değiştirir). Bir kez bulunmuş öğeye bakmaya devam etmek, gizlenmiş öğenin
+           sıfır dikdörtgenini yeniden çizerdi. Maliyeti kare başına birkaç seçici. */
+        const el = hedefBul(current.selector)
+        if (!el) {
+          setRect(null) // Görünür çıpa yok → ortada kart.
+          return
+        }
         const r = el.getBoundingClientRect()
         setRect({ top: r.top, left: r.left, width: r.width, height: r.height })
       })
@@ -221,8 +260,9 @@ export function ProductTour() {
     return () => window.removeEventListener('keydown', onKey)
   }, [state.active, finish])
 
-  // Alttaki "Rehberi tekrar izle" bağlantısı. Elle başlatılan rehber, "bir daha gösterme"
-  // tercihini de sıfırlar: kullanıcı açıkça yeniden istedi.
+  // "Rehberi tekrar izle" (alt bilgi ya da profilin ayarlar menüsü → rehberiYenidenBaslat).
+  // Elle başlatılan rehber, "bir daha gösterme" tercihini de sıfırlar: kullanıcı açıkça
+  // yeniden istedi.
   useEffect(() => {
     const onRestart = () => {
       // Kullanıcı AÇIKÇA istedi: oturum susturması kalkar ve çapaların bulunduğu panele
@@ -288,11 +328,12 @@ export function ProductTour() {
   )
 }
 
-/** Sayfa altındaki "Rehberi tekrar izle" bağlantısı. */
+/** Sayfa altındaki "Rehberi tekrar izle" bağlantısı. Profilin ayarlar menüsü aynı işi
+    rehberiYenidenBaslat() ile doğrudan yapıyor; bu bileşen alt bilgi için duruyor. */
 export function RestartTourLink({ className = '' }) {
   return (
     <button
-      onClick={() => window.dispatchEvent(new CustomEvent(RESTART_EVENT))}
+      onClick={rehberiYenidenBaslat}
       className={`-my-2 inline-flex min-h-11 items-center py-2 text-xs text-slate-500 underline
                   hover:text-slate-700 lg:my-0 lg:min-h-0 lg:py-0 ${className}`}
     >
@@ -356,15 +397,22 @@ function TourCard({ rect, step, title, body, points, isLast, onNext, onBack, onS
       }
       style={style ?? undefined}
     >
+      {/*
+        İLERLEME ÇUBUKLARI ESNEK (2026-09-26). Sabit w-6 altı adımda sığıyordu; sekiz
+        adımda şerit 8×24 + 7×4 = 220px, 320px'lik ekranda kartın iç genişliği 248px ve
+        yanında ~65px'lik sayaç + 12px aralık var — sığmazdı. Çubuklar artık kalan yeri
+        paylaşıyor ve en fazla 24px oluyor (max-w-6): geniş kartta görünüm aynı, 320px'te
+        19px (ölçüldü). Sayaç shrink-0: "Adım 8 / 8" hiç kırılmamalı.
+      */}
       <div className="flex items-center justify-between gap-3">
-        <span className="text-xs font-medium text-brand-600">
+        <span className="shrink-0 text-xs font-medium text-brand-600">
           Adım {step + 1} / {TOUR_STEP_COUNT}
         </span>
-        <div className="flex gap-1" aria-hidden="true">
+        <div className="flex min-w-0 flex-1 justify-end gap-1" aria-hidden="true">
           {TOUR_STEPS.map((s, i) => (
             <span
               key={s.id}
-              className={`h-1.5 w-6 rounded-full ${i <= step ? 'bg-brand-500' : 'bg-slate-200'}`}
+              className={`h-1.5 max-w-6 flex-1 rounded-full ${i <= step ? 'bg-brand-500' : 'bg-slate-200'}`}
             />
           ))}
         </div>
