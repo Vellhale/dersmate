@@ -53,6 +53,13 @@ import { ISLETMECI, ISLETMECI_ADRESI, ISLETMECI_ALAN_ADI, MARKA } from '../lib/k
   Aynı turda §7'deki "mobilde Profil sekmesi" de düzeltildi: mobilde sekme çubuğu
   2026-09-23'te kalktı, Profil'e sol üstteki menüden (adına dokunarak) gidiliyor.
 
+  2026-09-26: §7'deki YOLLAR yeniden yazıldı, olgular değil. "Profili düzenle" ve
+  "Hesabımı sil" web'de profil sayfasının sağ üstündeki ayarlar (dişli) menüsüne, mobilde
+  Profil'in dişlisinden açılan Ayarlar ekranına taşındı; "sayfanın en altındaki Hesabımı
+  sil" artık yanlış. Yeni bir ifşa olmadığı ve 2026-09-25 metni henüz yayınlanmadığı için
+  sürüm ARTMADI. HesapSilme.jsx §1 ve mobil app/gizlilik.jsx §7 aynı yolu anlatıyor; biri
+  değişirse üçü birlikte.
+
   ─── 2026-09-25: PUSH BİLDİRİMLERİ — SÖZLEŞME SÜRÜMÜ ARTTI ─────────────────
   §1/§2/§3/§5/§6/§7 push için genişledi; sürüm 2026-09-19 → 2026-09-25 (üç yer birlikte,
   gerekçe lib/yasalMetinler.js). Bölüm numaraları DEĞİŞMEDİ. Push YALNIZCA mobil
@@ -435,15 +442,17 @@ export default function Gizlilik() {
         </p>
         <Maddeler>
           <li>
-            <strong>Düzeltme:</strong> profil bilgilerinin çoğunu doğrudan “Profili
-            düzenle” ekranından değiştirebilirsin.
+            <strong>Düzeltme:</strong> profil bilgilerinin çoğunu Profil sayfasının sağ
+            üstündeki ayarlar menüsünden, “Profili düzenle” ile değiştirebilirsin (mobil
+            uygulamada Profil › Ayarlar › “Profili düzenle”); profil fotoğrafını,
+            fotoğrafının köşesindeki kamera simgesinden değiştirirsin.
           </li>
           <li>
-            <strong>Silme:</strong> hesabını kendin silebilirsin — Profil sayfasının
-            (mobil uygulamada Profil ekranının; ona sol üstteki menüden, adına dokunarak
-            gidilir) en altındaki “Hesabımı sil” bağlantısı. Onay için
-            parolan yeniden sorulur ve işlem geri alınamaz. Kimlik bilgilerin siliniyor;
-            bildirim kayıtların, bildirim ayarların ve bildirim alan cihazların da
+            <strong>Silme:</strong> hesabını kendin silebilirsin — Profil sayfasının sağ
+            üstündeki ayarlar (dişli) menüsünden “Hesabımı sil” (mobil uygulamada Profil ›
+            Ayarlar › “Hesabımı sil”; Profil’e sol üstteki menüden, adına dokunarak
+            gidilir). Onay için parolan yeniden sorulur ve işlem geri alınamaz. Kimlik
+            bilgilerin siliniyor; bildirim kayıtların, bildirim ayarların ve bildirim alan cihazların da
             siliniyor. Ders geçmişi, kazandırdığın puanlar ve değerlendirmeler karşı tarafa
             ait olduğu için kalıyor ve orada adın yerine “Silinmiş kullanıcı” görünüyor.
             Adım adım anlatım:{' '}
@@ -452,13 +461,14 @@ export default function Gizlilik() {
             </Link>
             .
           </li>
-          {/* Bildirim ayarlarının TEK girişi mobil Profil › "Bildirim ayarları" (mobil
-              app/profil/index.jsx). Web'de bu ayar bilerek YOK: web'de push yok, anahtar
-              burada hiçbir şeyi açıp kapatmazdı. */}
+          {/* Bildirim ayarlarının TEK girişi mobil Profil › Ayarlar › "Bildirim ayarları"
+              (mobil app/ayarlar.jsx; 2026-09-26'ya kadar doğrudan Profil ekranındaydı).
+              Web'de bu ayar bilerek YOK — ne ayarlar menüsünde ne başka yerde: web'de push
+              yok, anahtar burada hiçbir şeyi açıp kapatmazdı. */}
           <li>
-            <strong>Bildirimleri kapatma (mobil uygulama):</strong> Profil › Bildirim
-            ayarları’ndan bildirim türlerini tek tek kapatabilirsin; kapattığın türler sana
-            hiç gönderilmez. Bildirimleri telefonunun ayarlarından da tamamen
+            <strong>Bildirimleri kapatma (mobil uygulama):</strong> Profil › Ayarlar ›
+            Bildirim ayarları’ndan bildirim türlerini tek tek kapatabilirsin; kapattığın
+            türler sana hiç gönderilmez. Bildirimleri telefonunun ayarlarından da tamamen
             kapatabilirsin. O telefonun bildirim kaydını sunucudan kaldırmak için orada
             çıkış yapman yeterli (bkz. §5).
           </li>

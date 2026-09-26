@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useCallback, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { api } from '../lib/api'
 import { useAsync } from '../state/useAsync'
 import { formatDateTime } from '../lib/format'
@@ -30,10 +30,36 @@ const TABS = [
   { key: 'outgoing', label: 'Gönderdiklerim', kisa: 'Giden' },
   { key: 'active', label: 'Arkadaşlarım', kisa: 'Arkadaş' },
 ]
+const SEKME_ANAHTARLARI = new Set(TABS.map((t) => t.key))
 
 export default function Matches() {
   const matches = useAsync(() => api.myMatches(), [])
-  const [tab, setTab] = useState('incoming')
+
+  /*
+    SEKME ADRESTE (?sekme=incoming|outgoing|active, 2026-09-26). Profildeki "Arkadaşlarım"
+    hapı doğrudan listeye gidiyor (/arkadaslar?sekme=active); sekme yalnızca bileşen
+    durumundayken o bağlantı her zaman "Gelen" sekmesini açardı. Derslerim'deki kalıpla
+    aynı (Sessions.jsx): tek doğruluk kaynağı adres, sekme değişimi replace ile yazılıyor
+    (geri tuşu sekme sekme gezmesin), yenileme ve paylaşılan bağlantı sekmeyi koruyor.
+    Parametre yoksa ya da tanınmıyorsa "Gelen" — eskisi gibi. Menüden "Arkadaşlar"a
+    tıklamak parametresiz adrese gittiği için de Gelen'e döner. Mobil aynı parametreyi
+    (/eslesmeler?sekme=) bir KOMUT olarak okuyup adresten siliyor; bilinçli fark.
+  */
+  const [adres, setAdres] = useSearchParams()
+  const adrestekiSekme = adres.get('sekme')
+  const tab = SEKME_ANAHTARLARI.has(adrestekiSekme) ? adrestekiSekme : 'incoming'
+  const setTab = useCallback(
+    (yeni) =>
+      setAdres(
+        (onceki) => {
+          const p = new URLSearchParams(onceki)
+          p.set('sekme', yeni)
+          return p
+        },
+        { replace: true },
+      ),
+    [setAdres],
+  )
   const [notice, setNotice] = useState(null)
 
   const lists = matches.data ?? { incoming: [], outgoing: [], active: [] }

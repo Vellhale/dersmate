@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { api } from '../lib/api'
 import { useAsync } from '../state/useAsync'
 import { formatDateTime } from '../lib/format'
 import { Avatar } from './Avatar'
 import { Badge, Button, EmptyState, ErrorBox, Loading } from './ui'
 import { CamKart } from './SayfaZemini'
-import { GrafikIkonu, KepIkonu, TakvimIkonu, YildizIkonu } from './Ikonlar'
+import { GrafikIkonu, KameraIkonu, KepIkonu, KisilerIkonu, TakvimIkonu, YildizIkonu } from './Ikonlar'
 import { ArkadaslarBolumu } from './ArkadaslarBolumu'
 import { SubjectBadges } from './SubjectBadges'
 import { UniversiteRozetleri } from './UniversiteRozetleri'
@@ -39,11 +40,19 @@ import { seviyeEtiketi, seviyeHesapla, seviyeIlerlemeMetni } from '../lib/seviye
  *   yalnızca burada, bu istekte var. Alternatif, Profile.jsx'in aynı ucu ikinci kez
  *   çağırmasıydı — profil ucu birkaç toplama sorgusu koşuyor (bkz. ProfileQueries),
  *   yani ikinci istek ölçülebilir bir israf olurdu.
+ * @param onFotografDegistir  Verilirse (yalnızca kendi profilinde) avatarın köşesinde kamera
+ *   rozeti çizilir ve bu işlevi çağırır. Profil sahipliği ayrıca sunucunun `isSelf`'iyle de
+ *   sınanıyor: çağıran yanlışlıkla başkasının profilinde geçse bile rozet çizilmez.
  */
-export function UserProfileView({ userId, onYuklendi }) {
+export function UserProfileView({ userId, onYuklendi, onFotografDegistir }) {
   const profile = useAsync(() => api.userProfile(userId), [userId])
   const [reviewPage, setReviewPage] = useState(1)
   const reviews = useAsync(() => api.userReviews(userId, reviewPage), [userId, reviewPage])
+  /* ARKADAŞ VERİSİ TEK ÇEKİM (2026-09-26): aynı sayı hem başlıkta (ArkadasOzeti) hem
+     aşağıdaki Arkadaşlar bölümünde çiziliyor. Çekim burada, erken dönüşlerden ÖNCE
+     (koşullu kanca olmasın) ve profille PARALEL başlıyor; eskiden bölümün içindeydi ve
+     ancak profil geldikten sonra kurulup istek atıyordu. */
+  const arkadaslar = useAsync(() => api.userFriends(userId), [userId])
 
   /* Kanca ERKEN DÖNÜŞLERDEN ÖNCE: aşağıdaki `if (profile.loading) return` satırları
      koşullu kanca çağrısı üretirdi. Bağımlılıkta veri kimliği var, çağıran ise kararlı
@@ -76,7 +85,11 @@ export function UserProfileView({ userId, onYuklendi }) {
       {/* StatsRow KALDIRILDI: dört ayrı sayaç kartı, profil kartının İÇİNDEKİ tek
           şeride indi (bkz. SayacSeridi). Yüzey sayısı beşten ikiye düştü ve sayfa bir
           gösterge paneli değil, bir kişi gibi okunmaya başladı. */}
-      <ProfileHeader profile={p} />
+      <ProfileHeader
+        profile={p}
+        arkadaslar={arkadaslar}
+        onFotografDegistir={p.isSelf ? onFotografDegistir : undefined}
+      />
 
       {/* Branş rozetleri istatistiklerin hemen altında: ikisi de "bu kişi ne yapmış"
           sorusunu yanıtlıyor, konu panellerinden ("ne yapabilir") önce gelmeli.
@@ -143,7 +156,7 @@ export function UserProfileView({ userId, onYuklendi }) {
         başlıyor. Dar ekranda ise 2+2+1 öksüz bir satır kalıyor. Sayı bu yüzden
         bölümün kendi başlığında.
       */}
-      <ArkadaslarBolumu userId={userId} kendiProfilim={p.isSelf} ad={p.displayName} />
+      <ArkadaslarBolumu veri={arkadaslar} kendiProfilim={p.isSelf} ad={p.displayName} />
 
       <ReviewsSection reviews={reviews} page={reviewPage} onPage={setReviewPage} />
     </div>
@@ -161,7 +174,8 @@ export function UserProfileView({ userId, onYuklendi }) {
  *
  * Şimdiki düzen sıralamayı tersine çeviriyor: ÖNCE KİŞİ, sonra sayılar.
  *   • Avatar 112–128px ve tek başına duran ilk şey. Tıklanınca tam ekran açılıyor.
- *   • Hemen altında ad + seviye, sonra okul, sonra biyografi.
+ *   • Hemen altında ad + seviye, sonra okul, arkadaş satırı (2026-09-26), sonra biyografi.
+ *   • Kendi profilinde avatarın köşesinde kamera rozeti (fotoğrafı değiştir).
  *   • Sayaçlar dört ayrı karttan çıkıp AYNI kartın içinde tek bir şeride indi.
  *
  * DÖRT KART NEDEN KALDIRILDI: her biri kendi kenarlığı, gölgesi ve dolgusuyla ayrı bir
@@ -174,7 +188,7 @@ export function UserProfileView({ userId, onYuklendi }) {
  * asılı bırakıyor ve okuma başlangıcı her satırda kayıyor.
  * ─────────────────────────────────────────────────────────────────────────────
  */
-function ProfileHeader({ profile }) {
+function ProfileHeader({ profile, arkadaslar, onFotografDegistir }) {
   /*
     CAM YÜZEY. Kart artık opak beyaz değil, CamKart: zeminin mesh havuzları kartın
     KENARLARINDAN ve blur'ından okunuyor, metnin arkası pratik olarak beyaz kalıyor
@@ -199,13 +213,45 @@ function ProfileHeader({ profile }) {
           marka tonu — %10 opaklık bilinçli, daha koyusu "parlama" efektine kayar ve
           bu projede glow yasak.
         */}
-        <Avatar
-          userId={profile.userId}
-          name={profile.displayName}
-          size="xl"
-          buyutulebilir
-          className="shrink-0 shadow-lg shadow-brand-500/10 ring-4 ring-brand-200"
-        />
+        {/*
+          KAMERA ROZETİ (2026-09-26, yalnızca kendi profilinde): "Fotoğrafı değiştir"
+          düğmesi başlık satırından kalktı; fotoğrafı değiştirmenin beklenen yeri
+          fotoğrafın kendisi. Ayarlar menüsündeki "Profil fotoğrafını değiştir" ikinci yol.
+
+          Rozet büyütme düğmesinin KARDEŞİ, içinde değil: Avatar fotoğraf varken kendini
+          bir <button>'a sarıyor (tam ekran büyütme) ve button içinde button geçersiz HTML —
+          tarayıcı iç içe düğmeyi dışarı atıp tıklamayı yanlış öğeye verebiliyor. İki ayrı
+          durak, iki ayrı iş: fotoğrafa tıklamak BÜYÜTÜR, rozete tıklamak DEĞİŞTİRİR.
+          (Mobilde ise avatarın tamamı "değiştir" düğmesi ve rozet yalnızca işaret: RN'de
+          büyütme yok.)
+
+          44px lg altında, 40px lg'de (dokunma kuralı). border-4 border-white: rozet
+          fotoğrafın halkasının üstüne biniyor; beyaz kenar olmadan mavi rozet mavi halkaya
+          karışıyordu.
+        */}
+        <div className="relative shrink-0">
+          <Avatar
+            userId={profile.userId}
+            name={profile.displayName}
+            size="xl"
+            buyutulebilir
+            className="shrink-0 shadow-lg shadow-brand-500/10 ring-4 ring-brand-200"
+          />
+          {onFotografDegistir && (
+            <button
+              type="button"
+              onClick={onFotografDegistir}
+              aria-label="Profil fotoğrafını değiştir"
+              title="Profil fotoğrafını değiştir"
+              className="absolute -bottom-1 -right-1 grid h-11 w-11 place-items-center rounded-full border-4
+                         border-white bg-brand-600 text-white shadow transition hover:bg-brand-700
+                         focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500
+                         focus-visible:ring-offset-2 lg:h-10 lg:w-10"
+            >
+              <KameraIkonu className="h-[18px] w-[18px]" />
+            </button>
+          )}
+        </div>
 
         <div className="min-w-0 flex-1">
           {/*
@@ -254,6 +300,8 @@ function ProfileHeader({ profile }) {
             </p>
           )}
 
+          <ArkadasOzeti kendiProfilim={profile.isSelf} veri={arkadaslar} />
+
           {/* BİYOGRAFİ: profilin tek serbest metni, o yüzden en okunur tipografi
               buranın. leading-relaxed + max-w-prose: satır uzunluğu göz için sınırlı,
               kart genişlese bile metin okunur kalıyor. Adın büyümesiyle birlikte üstteki
@@ -268,6 +316,60 @@ function ProfileHeader({ profile }) {
         </div>
       </div>
     </CamKart>
+  )
+}
+
+/*
+  ARKADAŞ SATIRI (2026-09-26) — okulun altında, biyografinin üstünde. Sayaç şeridine
+  beşinci kutu olarak girmedi (UserProfileView'daki ARKADAŞLAR notu: şerit 1024px'te
+  ölçülmüş bir kırılıma bağlı); sayının yeri kimlik bloğu. Mobil ProfilGorunumu →
+  ArkadasOzeti ile aynı metinler.
+
+  • Kendi profilin: HAP BAĞLANTI, Arkadaşlar sayfasının "Arkadaşlarım" sekmesini açar
+    (/arkadaslar?sekme=active — Matches.jsx sekmeyi adresten okuyor). Veri gelmeden ya
+    da hata verdiyse SAYISIZ çiziliyor: giriş her zaman var, sayı gelince kart zıplamıyor.
+    <Link> (button değil): bir sayfaya gidiyor — yeni sekmede açılabilmeli.
+  • Başkasının profili: düz bilgi satırı, eylem yok ("12 arkadaş · 3 ortak"; ortak yoksa
+    yalnızca "12 arkadaş"). "0 arkadaş" da yazılıyor — sayının bazen görünüp bazen
+    görünmemesi, bölümün her profilde aynı çizilmesi kuralını bozardı (ArkadaslarBolumu).
+    Yüklenirken aynı yükseklikte boş satır (min-h-5): veri gelince kart zıplamasın.
+*/
+function ArkadasOzeti({ kendiProfilim, veri }) {
+  const d = veri.data
+  const sayi = d ? (d.friendCount ?? 0) : null
+
+  if (kendiProfilim) {
+    return (
+      <div className="mt-4">
+        <Link
+          to="/arkadaslar?sekme=active"
+          aria-label={sayi == null ? 'Arkadaşlarım. Listeyi aç' : `Arkadaşlarım, ${sayi} arkadaş. Listeyi aç`}
+          className="inline-flex min-h-11 items-center gap-2 rounded-full bg-brand-50 px-4 text-sm font-semibold
+                     text-brand-800 ring-1 ring-inset ring-brand-100 transition hover:bg-brand-100
+                     focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 lg:min-h-9"
+        >
+          <KisilerIkonu className="h-[18px] w-[18px] text-brand-600" />
+          {sayi == null ? 'Arkadaşlarım' : `Arkadaşlarım · ${sayi}`}
+        </Link>
+      </div>
+    )
+  }
+
+  const ortak = d?.mutualCount ?? 0
+  return (
+    <p className="mt-2 min-h-5 text-sm text-slate-600">
+      {d && (
+        <>
+          <span className="font-semibold text-slate-800">{sayi}</span> arkadaş
+          {ortak > 0 && (
+            <>
+              {' · '}
+              <span className="font-semibold text-slate-800">{ortak}</span> ortak
+            </>
+          )}
+        </>
+      )}
+    </p>
   )
 }
 

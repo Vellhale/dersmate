@@ -451,6 +451,17 @@ export function AyarlarIkonu(props) {
   )
 }
 
+/** Kalem: düzenleme — ayarlar menüsündeki "Profili düzenle". Mobildeki KalemIkonu ile aynı
+    path'ler (Lucide `pencil`); mobil Ayarlar ekranının satır ikonları web menüsünde de aynı. */
+export function KalemIkonu(props) {
+  return (
+    <Cizgi {...props}>
+      <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z" />
+      <path d="m15 5 4 4" />
+    </Cizgi>
+  )
+}
+
 /** Kamera: profil fotoğrafının köşesindeki "fotoğrafı değiştir" rozeti. */
 export function KameraIkonu(props) {
   return (

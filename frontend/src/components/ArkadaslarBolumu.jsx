@@ -1,5 +1,3 @@
-import { api } from '../lib/api'
-import { useAsync } from '../state/useAsync'
 import { Avatar } from './Avatar'
 import { PersonLink } from './PersonLink'
 import { CamKart } from './SayfaZemini'
@@ -29,9 +27,15 @@ import { ErrorBox } from './ui'
  * kullanıcı) geçiyor. İkisi ayrışsaydı — "12 arkadaş" yazıp 11 kart göstermek — kullanıcı
  * eksik olanın kim olduğunu merak ederdi; ortak arkadaşlarda ise bu doğrudan bir kâhin
  * olurdu: "seninle bu kişi arasında gizlenmiş biri var".
+ *
+ * ─── VERİ DIŞARIDAN (2026-09-26) ────────────────────────────────────────────
+ * Bölüm yalnızca ÇİZİYOR; `veri`, UserProfileView'daki TEK userFriends çekiminin
+ * useAsync sonucu. Aynı sayı artık profil başlığında da (fotoğrafın altındaki
+ * "Arkadaşlarım · 12" hapı ya da "12 arkadaş · 3 ortak" satırı) çiziliyor; iki yer
+ * ayrı ayrı çekseydi her profil açılışında aynı uç iki kez çağrılır ve iki sayı bir
+ * an birbirinden farklı görünebilirdi. Mobil aynı ayrımı useProfilArkadaslari ile yapıyor.
  */
-export function ArkadaslarBolumu({ userId, kendiProfilim, ad }) {
-  const veri = useAsync(() => api.userFriends(userId), [userId])
+export function ArkadaslarBolumu({ veri, kendiProfilim, ad }) {
   const d = veri.data
 
   /*
