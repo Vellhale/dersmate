@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 import { Avatar } from './Avatar'
 import { PersonLink } from './PersonLink'
 import { CamKart } from './SayfaZemini'
@@ -328,6 +328,21 @@ export function YorumDugmesi({ sayi, acik, onClick, dugmeRef }) {
   )
 }
 
+/*
+  Sunucunun önizleme sınırı (ForumQueries.cs → ForumOnizleme.EnFazlaGrafem). Kesilen gövde
+  "…" ile biter ve 199 ya da 200 grafemdir (kesme noktasındaki boşluk kırpıldıysa 199).
+*/
+const ONIZLEME_GRAFEM_SINIRI = 200
+
+/**
+ * Sunucu gövdeyi kestiyse true. Kod noktası sayısı grafem sayısından küçük olamaz, yani
+ * kesilmiş bir gövde bu eşiğin altına düşmez; eşiğin altında "…" ile biten bir yorum
+ * yazarın kendi üç noktasıdır, kesilme değil.
+ */
+function sunucuKestiMi(govde) {
+  return govde.endsWith('…') && Array.from(govde).length >= ONIZLEME_GRAFEM_SINIRI - 1
+}
+
 /**
  * İlk yorumun önizlemesi (sunucu: ForumPostDto.firstComment). "Ad yorum" tek paragrafta,
  * iki satırda kesiliyor.
@@ -337,16 +352,52 @@ export function YorumDugmesi({ sayi, acik, onClick, dugmeRef }) {
  * indirilmiş ve 200 grafemde kesilmiş geliyor. İstemci bu kararları YENİDEN VERMİYOR
  * (iplikten türetmek de yok: iplik ucu engele göre süzmüyor).
  *
- * "{n} yorumun tümünü gör" yalnızca n ≥ 2 iken: tek yorum zaten önizlemede. Sayı
- * sunucunun commentCount'u ve kaldırılan yorumları da sayıyor; iplik açılınca kart
- * görünen sayıya düzeltiliyor (Topluluk.jsx → yorumEkle notu).
+ * ALTTAKİ SATIR yorumun geri kalanına giden yol:
+ *   • n ≥ 2 → "{n} yorumun tümünü gör". Sayı sunucunun commentCount'u ve kaldırılan
+ *     yorumları da sayıyor; iplik açılınca kart görünen sayıya düzeltiliyor
+ *     (Topluluk.jsx → yorumEkle notu).
+ *   • n = 1 ve önizleme KESİKSE → "Yorumun tamamını gör". Kesik iki yoldan olur: satır
+ *     sınırı (line-clamp-2; dar ekranda ~90 karakter) ya da sunucunun 200 grafem sınırı
+ *     (geniş kartta iki satıra sığıp "…" ile biten gövde). 2026-09-27'ye kadar satır
+ *     yalnızca n ≥ 2 iken çiziliyordu ("tek yorum zaten önizlemede"); uzun tek yorum
+ *     kesiliyor ve devamına giden tek yol eylem satırındaki balon düğmesi kalıyordu.
+ *     Paragrafın kendisi düğme YAPILAMAZ: içinde yazarın profil bağlantısı var. (Mobilde
+ *     önizlemenin tamamı ipliği açan tek Pressable; orada ad bağlantı değil.)
+ *   • n = 1 ve yorum sığıyorsa satır yok: gösterilecek başka bir şey yok.
+ *
+ * Satır sınırı ÖLÇÜLÜYOR (scrollHeight > clientHeight), karakter saymak yetmez: kaç
+ * karakterin iki satıra sığdığı kartın genişliğine bağlı. ResizeObserver genişlik
+ * değişince yeniden ölçüyor; +1 alt piksel yuvarlamasının payı (satır yüksekliği
+ * 22.75px, iki satır 45.5px).
  */
 export function YorumOnizlemesi({ yorum, toplam, onTumu }) {
   const ad = yorum.author?.displayName ?? 'Kullanıcı'
+  const metinRef = useRef(null)
+  const [satirdaKesik, setSatirdaKesik] = useState(false)
+
+  useLayoutEffect(() => {
+    const metin = metinRef.current
+    if (!metin) return undefined
+
+    const olc = () => setSatirdaKesik(metin.scrollHeight > metin.clientHeight + 1)
+    olc()
+
+    if (typeof ResizeObserver === 'undefined') return undefined
+    const gozlemci = new ResizeObserver(olc)
+    gozlemci.observe(metin)
+    return () => gozlemci.disconnect()
+  }, [yorum.body, ad])
+
+  const devamSatiri =
+    toplam >= 2
+      ? `${toplam} yorumun tümünü gör`
+      : satirdaKesik || sunucuKestiMi(yorum.body)
+        ? 'Yorumun tamamını gör'
+        : null
 
   return (
     <div className="px-4 pb-3 pt-1 sm:px-5">
-      <p className="line-clamp-2 text-sm leading-relaxed text-slate-700">
+      <p ref={metinRef} className="line-clamp-2 text-sm leading-relaxed text-slate-700">
         <span className="sr-only">İlk yorum, </span>
         <PersonLink userId={yorum.author?.userId} className="font-semibold text-slate-900">
           {ad}
@@ -354,7 +405,7 @@ export function YorumOnizlemesi({ yorum, toplam, onTumu }) {
         {yorum.author?.isStaff && <YonetimRozeti kucuk className="ml-1 align-[-2px]" />}
         <span className="sr-only">:</span> {yorum.body}
       </p>
-      {toplam >= 2 && (
+      {devamSatiri && (
         /* Dokunma sınırı lg (CLAUDE.md): altında 44px, üstünde metin boyu. */
         <button
           type="button"
@@ -362,7 +413,7 @@ export function YorumOnizlemesi({ yorum, toplam, onTumu }) {
           className="inline-flex min-h-11 items-center text-xs font-medium text-slate-600
                      transition hover:text-slate-900 lg:mt-1 lg:min-h-0"
         >
-          {toplam} yorumun tümünü gör
+          {devamSatiri}
         </button>
       )}
     </div>
@@ -510,7 +561,16 @@ export function YazarSatiri({ yazar, boyut = 'xs' }) {
           <Avatar userId={yazar?.userId} name={ad} size={boyut} />
         </span>
       </PersonLink>
-      <PersonLink userId={yazar?.userId} className="min-w-0 truncate text-xs font-medium text-slate-700">
+      {/* -my-3.5 py-3.5: görünüm aynı, dokunma yüksekliği lg altında 44px (text-xs satırı
+          16px + 2 × 14px). YazarBasligi'ndaki kalıp; orada text-sm (20px) olduğu için 3.
+          Taşan dolgu hiçbir düğmeyle kesişmiyor (375px'te ölçüldü, 2026-09-27): yukarıda
+          li arası 16px ya da kartın dolgusu, oy rayı ayrı sütunda, aşağıda iplik satırı
+          en az 44px (YorumListesi'ndeki min-h-11). Reddit kartında altta başlık var, o
+          bağlantı değil. 2026-09-27'ye kadar ad 16px yüksekliğindeydi ("Mert Demir 63x16"). */}
+      <PersonLink
+        userId={yazar?.userId}
+        className="-my-3.5 min-w-0 truncate py-3.5 text-xs font-medium text-slate-700 lg:my-0 lg:py-0"
+      >
         {ad}
       </PersonLink>
       {yazar?.isStaff && <YonetimRozeti kucuk={boyut === 'xs'} />}
@@ -690,7 +750,12 @@ export function YorumListesi({
                 />
 
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-start justify-between gap-2">
+                  {/* min-h-11 (lg altı): yazar adının 44px dokunma alanı (YazarSatiri) satırın
+                      İÇİNDE kalsın. Başkasının yorumunda satırı şikayet düğmesi zaten 44px
+                      yapıyordu; kendi yorumunda düğme yok, satır 24px kalıyor ve adın alt
+                      dolgusunu gövde metni örtüyordu (etkin alan 36px, 375px'te ölçüldü).
+                      Artık iki tür yorumun gövdesi aynı yükseklikten başlıyor. */}
+                  <div className="flex min-h-11 items-start justify-between gap-2 lg:min-h-0">
                     <span className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1">
                       <YazarSatiri yazar={yorum.author} boyut="xs" />
                       <span className="flex items-center gap-1.5 text-xs text-slate-600">

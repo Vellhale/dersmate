@@ -45,6 +45,7 @@ hatası vermez, hiçbiri gözle fark edilmez, hepsi "zararsız bir düzeltme"yle
 | `kaynak-sabitleri.spec.js` | HWID parmak izinin bayt düzeyinde dokunulmazlığı; paletin tek kaynakta kalması (logo + favicon + skala senkronu, sabit renk yasağı). Tarayıcı açmaz. |
 | `marka.spec.js` | Ürün adının ekranda dersmate olması, marka renginin gerçekten render edilmesi, WCAG AA kontrast eşikleri. |
 | `giris-akisi.spec.js` | Oturum kapısı, giriş formu, hata kodlarına verilen tepkiler, dokunma hedefi ölçüleri. |
+| `topluluk-karti.spec.js` | Topluluk kartında ilk yorum önizlemesinin "tümünü / tamamını gör" satırı (satır sınırı ve sunucunun 200 grafem kesmesi ayrı ayrı) ve iplikteki yazar adının lg altındaki 44px etkin dokunma alanı. |
 | `yardimcilar.js` | API taklidi, renk ayrıştırma, WCAG kontrast hesabı. Test değil. |
 
 ## En kritik iki test
