@@ -558,9 +558,10 @@ tekilleştirmeyi kendisi yapar. Ayrıca her bacak `(InitiatorUserId, Status)` /
 `e2e-arkadaslar.ps1` C bölümü aynı çifte ikinci bir kabul satırı yazıp sayının
 değişmediğini sınıyor.
 
-### Engel artık SEKİZ yerden kesiyor
+### Engel artık DOKUZ yerden kesiyor
 
-2026-09-10'daki ilk listeye dört madde daha eklendi. Engelleme kabul edilmiş eşleşmeyi
+2026-09-10'daki ilk listeye dört madde daha eklendi (2026-09-26'da bir tane daha: 9).
+Engelleme kabul edilmiş eşleşmeyi
 **kapatmıyor** (bilinçli sınır — kapatmak, sonuçlanmamış dersi olan eşleşmede ekonomiyi
 sahipsiz bırakırdı), yani `Status` `'Accepted'` kalıyor ve arkadaş sorguları engeli
 **ayrıca** elemek zorunda:
@@ -573,9 +574,19 @@ sahipsiz bırakırdı), yani `Status` `'Accepted'` kalıyor ve arkadaş sorgular
 6. **arkadaş sayısı / tam liste / ortak arkadaşlar** — `GetProfileFriendsHandler`
 7. **ilan araması** — `SearchOffers` (önbellekten SONRA, bellekte)
 8. **eşleşme önerileri** — `GetMatchSuggestions`
+9. **Topluluk kartındaki ilk yorum önizlemesi** (2026-09-26) — `GetForumFeedHandler` →
+   `IlkYorumlarAsync`, `EngelSorgusu.KisisiEngelsiz` (iki yönlü; engelli yorum atlanır,
+   sıradaki görünür yorum gelir)
 
 Biri unutulursa engel tam o yüzeyden delinir ve bu bir hata mesajıyla değil, **sessizce
 görünen bir kartla** olur.
+
+**Topluluk'un kendisi engele göre SÜZÜLMÜYOR** (açık sınır, 2026-09-26'da kayda geçti):
+akıştaki gönderiler (`GetForumFeedHandler`) ve yorum ipliği (`GetForumCommentsHandler`)
+engellenen kişinin içeriğini göstermeye devam ediyor. Önizleme süzülüyor çünkü kullanıcının
+önüne kendiliğinden çıkan tek yorum o; ipliği açan kişi engelli kişinin yorumunu yine görür.
+Akışı ve ipliği süzmek ayrı bir ürün kararı; yapılırsa `commentCount` (yalnızca artan sayaç)
+ile görünen yorum sayısının ayrışması da ele alınmalı.
 
 ### Sayı = liste (kâhin kontrolü)
 
@@ -814,3 +825,51 @@ tarafa), yaklaşan ders 60/10 dk, test bildirimi.
   (HTTP'den sürülemiyor), bildirim gövdesi (Log sağlayıcısı bilerek yazmıyor; birim testte),
   dağıtıcının 400'de parti bölmesi (Log sağlayıcısında tetikleyecek kanca yok; S6'nın
   handler düzeyindeki doğrulamasında ölçüldü).
+
+---
+
+## Profil, Derslerim, Topluluk, rehber, alt bilgi (2026-09-26)
+
+Yedi maddelik tasarım işi (`tasarim/profil-dersler-topluluk`, web + mobil + sunucu aynı adlı
+dalda). Sunucuya iki eklemeli değişiklik girdi: `GET /sessions?pastStatus=` ve
+`ForumPostDto.FirstComment`. Gerekçeleri ve tuzakları `CLAUDE.md` → "Mobil uygulamayla ortak
+sözleşme"de; Derslerim'in sekme kararları `ASAMA-3-FRONTEND.md` §3'te. Sunucu PR'ı
+istemcilerden önce birleşir.
+
+### Kabul edilmiş sınırlar
+
+- **Önizleme ile ipliğin ilk yorumu farklı olabilir.** Önizleme engelli ve perdeli yorumu
+  atlıyor; iplik engele göre süzmüyor (yukarıda, "Engel artık DOKUZ yerden kesiyor").
+- **Yorum yazılınca kartın önizlemesi istemcide güncellenmiyor**; bir sonraki akış
+  çekilişinde gelir. İplikten türetmek sunucunun önizleme kuralını (engel) bozardı.
+- **Rehber sürümü yok.** Eski rehberi bitirmiş kullanıcı yeni adımları (Topluluk, Profil)
+  kendiliğinden görmez; "Rehberi tekrar izle" ile görür.
+- **Rehber ilerlemesi iki platformda farklı adımı gösterir**: sunucu tek bir sayı tutuyor,
+  web ve mobil dizileri farklı.
+- **Sohbet sayfası lg altında alt bilgi kadar kayıyor** (390x844'te 101px). Panel kaymadan
+  ekranda (altı 748 / 844); alt bilgiyi de sığdırmak, telefonda sohbet alanını kısaltmak
+  olurdu. Ölçüm `Chat.jsx` başında.
+- **Alt bilginin odak sırası lg altında künyeden başlıyor**: dar ekranda bağlantılar görsel
+  olarak üstte (`flex-col-reverse`), DOM sırası lg'deki görsel sırayla aynı. Gerekçe
+  `AltBilgi.jsx`'te.
+
+### Açık işler
+
+- ⬜ **`CamKart`'ın `backdrop-blur`'ü içindeki `fixed` katmanları kartla sınırlıyor.**
+  Fotoğraflı profilde avatarın tam ekran büyütme katmanı (`Avatar.jsx` → `AvatarKatmani`,
+  `fixed inset-0`) ekranı değil yalnızca profil kartını kaplıyor. Önceden de vardı. Çözüm
+  portal ister ve projenin "portal yok" kararına dokunuyor (`Layout.jsx`'teki `isolate`
+  notu); ayrı iş.
+- ⬜ **Topluluk'ta `GonderiKutusu`, `SiralamaSeridi` ve `IncelemePerdesi` `p-4` yazıyor ama
+  `p-5` çiziliyor** (`CamKart` `!p-*` tuzağı, `CLAUDE.md` → Frontend). Bu turda bilerek
+  dokunulmadı; düzeltilirse üçü birlikte `!p-4` olur ve kart aralıklarına yeniden bakılır.
+
+### Testler
+
+- Birim: `DersGecmisiSuzgeciTests` (23) ve `ForumOnizlemeTests` (7).
+- Uçtan uca: `tools/e2e-topluluk.ps1` (26 kontrol; her dışlamanın yanında serbest iddia) ve
+  `tools/e2e-scale.ps1` A2 (12 kontrol). Mutasyon kanıtı: süzgeç satırı, `Visible` koşulu,
+  engel süzgeci (tek yönlüye indirmek dahil) ve perdeli gönderi dışlaması silinince ilgili
+  kontroller kırıldı.
+- Web arayüzüne yeni otomatik test eklenmedi (`frontend/e2e` 31/31 değişmeden geçiyor);
+  sekmeler, menü, rehber ve alt bilgi ölçümleri tarayıcıda 320–1440px arasında elle yapıldı.
