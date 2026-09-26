@@ -250,6 +250,11 @@ Hepsi bu projede **en az bir kez** ısırdı:
   `ProductTour` → `hedefBul` ile aranır: lg altında raydaki çıpalar DOM'da ama `hidden`,
   `querySelector` onları kutusuz döndürür ve halka ekranın sol üst köşesine çizilirdi.
   Seçici dizisi tercih sırasıdır (profil adımı: avatar, yoksa seviye rozeti).
+- **Tailwind `ring-*` ile satır içi `boxShadow` birlikte kullanılmaz**: `ring` de bir
+  box-shadow ve satır içi stil onu tamamen ezer. Rehberin brand-400 halkası bu yüzden ilk
+  commit'ten 2026-09-26'ya kadar HİÇ çizilmedi (karartma satır içindeydi; koyu ray ve üst
+  barda hangi öğenin gösterildiği okunmuyordu). Ek gölge `shadow-[…]` sınıfıyla verilir:
+  `--tw-shadow` katmanına yazar ve halkayla aynı listede birleşir.
 
 ---
 

@@ -58,6 +58,32 @@ function hedefBul(selector) {
   return null
 }
 
+/** Halka ile hedef arasındaki boşluk (px). */
+const HALKA_BOSLUGU = 8
+/** Halkanın kalınlığı (ring-2): halka pencere kenarından en az bu kadar içeride durur. */
+const HALKA_KALINLIGI = 2
+
+/**
+ * Halkanın kutusu: hedef + her yandan HALKA_BOSLUGU, pencerenin içine kırpılmış.
+ *
+ * KIRPMA NEDEN: üst bardaki seviye rozeti y=8'de başlıyor; boşluk eklenince halkanın üst
+ * kenarı y=0'a, ring-2'nin çizgisi de pencerenin DIŞINA (−2…0) düşüyordu — rozetin
+ * halkası üç kenarlı görünürdü. Kutu pencerenin HALKA_KALINLIGI kadar içinde tutuluyor;
+ * hedef hiçbir kenardan kesilmiyor, yalnızca o kenardaki boşluk daralıyor.
+ * clientWidth/clientHeight: `fixed inset-0` örtünün kutusu kaydırma çubuğunu içermiyor.
+ * Math.max(0, …): yumuşak kaydırma sürerken hedef bir an pencerenin tamamen dışında
+ * olabiliyor; eksi boy geçersiz CSS olurdu.
+ */
+function halkaKutusu(rect) {
+  const genislik = document.documentElement.clientWidth
+  const yukseklik = document.documentElement.clientHeight
+  const ust = Math.max(HALKA_KALINLIGI, rect.top - HALKA_BOSLUGU)
+  const sol = Math.max(HALKA_KALINLIGI, rect.left - HALKA_BOSLUGU)
+  const alt = Math.min(yukseklik - HALKA_KALINLIGI, rect.top + rect.height + HALKA_BOSLUGU)
+  const sag = Math.min(genislik - HALKA_KALINLIGI, rect.left + rect.width + HALKA_BOSLUGU)
+  return { top: ust, left: sol, width: Math.max(0, sag - sol), height: Math.max(0, alt - ust) }
+}
+
 /*
   "Rehberi geç" OTURUM boyunca susturur. Sunucudaki kayıt "tamamlanmadı" olarak kalır —
   yani rehber ileride yeniden önerilebilir — ama aynı oturumda her sayfa yüklemesinde
@@ -288,7 +314,6 @@ export function ProductTour() {
   if (state.loading || !state.active || !current) return null
 
   const isLast = state.step === TOUR_STEP_COUNT - 1
-  const padding = 8
 
   return (
     <div className="fixed inset-0 z-[60]" role="dialog" aria-modal="true" aria-label="Ürün rehberi">
@@ -297,16 +322,21 @@ export function ProductTour() {
           Spot ışığı: karartma ayrı bir katman DEĞİL, hedefin etrafına taşan devasa bir
           box-shadow. Böylece "delik" tek bir öğeyle elde ediliyor; dört ayrı karartma
           paneli hizalamaya çalışmak piksel kaymalarına açık olurdu.
+
+          ⚠️ KARARTMA SINIFLA VERİLİYOR, satır içi `boxShadow` İLE DEĞİL (2026-09-26).
+          Tailwind'in `ring-2`'si de bir box-shadow; satır içi `boxShadow` onu tamamen
+          eziyordu ve brand-400 halka ilk commit'ten beri HİÇ çizilmemişti (ekran
+          görüntüsünde ölçüldü, 1280px: 1, 2, 7 ve 8. adımda halka yok). Açık zeminde
+          deliğin kendisi hedefi seçtiriyordu, ama ray ve üst bar koyu: slate-900'ün
+          üstündeki %60 slate-900 karartma neredeyse görünmüyor, yani rayda ve üst barda
+          hangi menü öğesinin, rozetin ya da avatarın gösterildiği okunmuyordu. `shadow-[…]` Tailwind'in
+          `--tw-shadow` katmanına yazıyor ve halkayla (`--tw-ring-shadow`) aynı
+          box-shadow listesinde birleşiyor: ikisi birlikte çiziliyor.
         */
         <div
-          className="pointer-events-none absolute rounded-xl ring-2 ring-brand-400 transition-all duration-200"
-          style={{
-            top: rect.top - padding,
-            left: rect.left - padding,
-            width: rect.width + padding * 2,
-            height: rect.height + padding * 2,
-            boxShadow: '0 0 0 9999px rgba(15, 23, 42, 0.6)',
-          }}
+          className="pointer-events-none absolute rounded-xl ring-2 ring-brand-400
+                     shadow-[0_0_0_9999px_rgba(15,23,42,0.6)] transition-all duration-200"
+          style={halkaKutusu(rect)}
         />
       ) : (
         <div className="absolute inset-0 bg-slate-900/60" />
