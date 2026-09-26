@@ -863,6 +863,20 @@ istemcilerden önce birleşir.
 - ⬜ **Topluluk'ta `GonderiKutusu`, `SiralamaSeridi` ve `IncelemePerdesi` `p-4` yazıyor ama
   `p-5` çiziliyor** (`CamKart` `!p-*` tuzağı, `CLAUDE.md` → Frontend). Bu turda bilerek
   dokunulmadı; düzeltilirse üçü birlikte `!p-4` olur ve kart aralıklarına yeniden bakılır.
+- ⬜ **Rızası sorulmamış yeni kullanıcıda rehber çerez şeridini örtüyor.** Şerit `z-50`,
+  rehber katmanı `z-[60]` ve `fixed inset-0`; ikisi aynı açılışta beliriyor ve dar ekranda
+  rehber kartı şeridin tam üstüne oturuyor. Ölçüm (2026-09-26, 375 ve 1280px, sunucuda
+  `consentVersion` yok, rehber bitmemiş): "Yalnızca zorunlu" düğmesinin ortasındaki öğe
+  rehber katmanı, yani şerit rehber kapanana kadar kullanılamıyor. Bu işten önce de vardı
+  (`ProductTour` başlatma koşulu rızaya bakmıyor). Rıza kaydı yazılmadığı için hukuki bir
+  delik değil, sıra sorunu. Çözüm bir ürün kararı: rehber rıza verilene kadar beklesin mi,
+  yoksa şerit rehberin üstüne mi çıksın?
+
+### Bu işte bulunup düzeltilen eski hata
+
+- **Rehberin brand-400 halkası ilk commit'ten beri hiç çizilmiyordu** (`ceb18de`). Karartma
+  satır içi `boxShadow`'du ve Tailwind `ring` de bir box-shadow olduğu için onu eziyordu.
+  Koyu ray ve üst barda hangi öğenin gösterildiği okunmuyordu. Kural `CLAUDE.md` → Frontend.
 
 ### Testler
 
@@ -873,3 +887,16 @@ istemcilerden önce birleşir.
   kontroller kırıldı.
 - Web arayüzüne yeni otomatik test eklenmedi (`frontend/e2e` 31/31 değişmeden geçiyor);
   sekmeler, menü, rehber ve alt bilgi ölçümleri tarayıcıda 320–1440px arasında elle yapıldı.
+- ⚠️ **Tam paket (`run-all-tests.ps1 -SkipConcurrency`) bu dalda üç pakette KIRMIZI, üçü de
+  bu işten bağımsız.** Dalın başındaki kodda (`41a395e`, geçici worktree) aynı adımda, aynı
+  hatayla tekrarlandı:
+  - `e2e-smoke` 10c (EXIF temizliği): testin SQL eklemesi
+    `EX_LessonSessions_TutorNoOverlap` kısıtına çarpıyor; paket orada duruyor.
+  - `e2e-fixes` E: "rol atandı" adımından sonra yeniden giriş yapan hesabın ilk isteği
+    (`/api/wallet`, dosyada ~465. satır) 401 alıyor.
+  - `e2e-engelleme` F2: ilan araması test ilanını hiç bulmuyor (engelden önce de 0). 56 OK,
+    2 KALDI.
+
+  Push ve MintGuard paketlerinin "EKSİK" sonucu beklenen durum: saat penceresi ve ikinci
+  instance yok. Sebepler araştırılmadı; bir sonraki test turunda önce bu üçü ele alınmalı,
+  yoksa yeni bir kırmızı bunların arasında görünmez.
