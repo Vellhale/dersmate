@@ -932,9 +932,13 @@ function PuanPaneli({ defter, toplamPuan }) {
 
   return (
     <>
+      {/* Puanın İKİ kaynağı var: onaylanan dersin anlatanı ve Topluluk'ta net oy eşiğini
+          geçen katkı (CommunityReward). 2026-09-27'ye kadar bu cümle "her hareketin hangi
+          dersten geldiği" diyordu; listedeki Topluluk ve hoş geldin satırları dersten
+          gelmiyor. Mobil app/dersler.jsx → PuanPaneli ile aynı metin. */}
       <p className="max-w-prose text-sm text-slate-600">
-        Ders almak ücretsizdir. Ders onaylandığında anlatan tarafa puan yazılır; her hareketin
-        hangi dersten geldiği burada.
+        Ders almak ücretsizdir. Puan, onaylanan dersin anlatanına ve Topluluk’ta oy toplayan
+        katkılara yazılır; her hareketin kaynağı burada.
       </p>
       {/* Cüzdan bağlamından, ek istek yok (başlıktaki seviye rozetiyle aynı sayı). */}
       {Number.isInteger(toplamPuan) && (
@@ -950,7 +954,8 @@ function PuanPaneli({ defter, toplamPuan }) {
       ) : satirlar.length === 0 ? (
         <CamKart>
           <p className="text-sm text-slate-600">
-            Henüz puan hareketin yok. Bir ders anlatıp onaylandığında ilk kaydın burada belirir.
+            Henüz puan hareketin yok. Bir ders anlatıp onaylandığında ya da Topluluk katkın
+            puan kazandığında ilk kaydın burada belirir.
           </p>
         </CamKart>
       ) : (
@@ -1092,13 +1097,16 @@ function HistoryRow({ row }) {
           {TRANSACTION_LABELS[row.type] ?? row.type}
         </p>
         {/* Konu ve karşı taraf sunucudan geliyor: çıplak bir ders kimliği kullanıcıya
-            hiçbir şey anlatmıyor. Ders bilgisi yoksa (hoş geldin puanı gibi) satır
-            yalnızca türüyle kalır. */}
-        <p className="truncate text-xs text-slate-600">
-          {row.topicName
-            ? `${row.topicName}${row.counterpartDisplayName ? ` · ${row.counterpartDisplayName}` : ''}`
-            : formatDateTime(row.createdAtUtc)}
-        </p>
+            hiçbir şey anlatmıyor. Ders bilgisi yoksa (Topluluk katkısı, hoş geldin puanı,
+            süresi dolan puan) satır yalnızca türüyle kalır: kaynağı etiket zaten söylüyor
+            (TRANSACTION_LABELS). 2026-09-27'ye kadar bu satır yedek olarak tarihi yazıyordu
+            ve aynı tarih sağ sütunda ikinci kez görünüyordu. */}
+        {row.topicName && (
+          <p className="truncate text-xs text-slate-600">
+            {row.topicName}
+            {row.counterpartDisplayName ? ` · ${row.counterpartDisplayName}` : ''}
+          </p>
+        )}
       </div>
 
       <div className="shrink-0 text-right">

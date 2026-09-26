@@ -36,6 +36,16 @@ import { ISLETMECI, ISLETMECI_ADRESI, ISLETMECI_ALAN_ADI, MARKA } from '../lib/k
   O bir kazanç değil hediye ve unvana da sayılmıyor; ama "puan yanmaz" diye genel bir
   cümle, kullanıcının kendi puan geçmişindeki eksi satırla çelişirdi. Madde bu yüzden
   kaynağı adıyla sayıyor.
+
+  HOŞ GELDİN PUANI MADDESİ (2026-09-27, yine 2026-09-25'in içinde): yukarıdaki notun
+  kabul ettiği eksi satırı metin kullanıcıya hiç anlatmıyordu. Eski §3 "süresi dolan
+  puan yanar" diyerek onu kabaca kapsıyordu; yeni metin o cümleyi kaldırınca, e-posta
+  doğrulamasında verilen puanın 14 gün sonra "Süresi dolan puan" satırıyla düştüğünü
+  söyleyen tek açıklama da gitmişti. Dayanak: CreditLedgerService.GrantWelcomeCreditAsync
+  (ExpiresAtUtc = now + WelcomeCreditValidityDays; appsettings.json'da 14, üretimde
+  ezilmiyor), ExpireCreditsHandler → ExpireDueLotsAsync (BackgroundJobs), "seviyene
+  sayılmaz" için User.TotalEarnedCredits'in yalnızca ders ve topluluk kazancıyla artması.
+  WelcomeCreditValidityDays değişirse bu madde ve mobil app/kosullar.jsx aynı gün değişir.
 */
 export default function Kosullar() {
   return (
@@ -102,6 +112,10 @@ export default function Kosullar() {
           <li>
             Ders anlatarak ve Topluluk katkılarınla kazandığın puanın{' '}
             <strong>süresi dolmaz</strong>; bu puan yanmaz.
+          </li>
+          <li>
+            E-posta doğrulamasında verilen hoş geldin puanı 14 gün sonra silinir; seviyene
+            sayılmaz.
           </li>
           <li>
             Puanın nakit veya başka bir değerle karşılığı yoktur, devredilemez.
