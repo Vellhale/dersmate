@@ -64,10 +64,16 @@ export const SESSION_STATUS_LABELS = {
   duruyor ve kullanıcının geçmişinde görünüyor. Etiketi kaldırmak o satırları ham enum
   adıyla ("LessonSpending") gösterirdi; "eski" ön eki hem okunur tutuyor hem de artık
   olmayan bir mekanizmayı yürürlükteymiş gibi anlatmıyor.
+
+  CommunityReward (Topluluk'ta net oy eşiğinin bastığı puan, sunucuda
+  CreditTransactionType.CommunityReward) 2026-09-26'ya kadar tabloda YOKTU: Puan geçmişi
+  o satırı ham enum adıyla ("CommunityReward") gösteriyordu. Sunucuya yeni bir tür
+  eklenirse etiketi AYNI GÜN iki istemcide buraya da yazılır.
 */
 export const TRANSACTION_LABELS = {
   WelcomeBonus: 'Hoş geldin puanı',
   LessonEarning: 'Ders anlatım puanı',
+  CommunityReward: 'Topluluk katkı puanı',
   LessonSpending: 'Ders harcaması (eski)',
   Expiry: 'Süresi dolan puan (eski)',
   AdminGrant: 'Yönetici tanımı',
