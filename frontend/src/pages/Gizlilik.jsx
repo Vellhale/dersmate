@@ -60,6 +60,28 @@ import { ISLETMECI, ISLETMECI_ADRESI, ISLETMECI_ALAN_ADI, MARKA } from '../lib/k
   sürüm ARTMADI. HesapSilme.jsx §1 ve mobil app/gizlilik.jsx §7 aynı yolu anlatıyor; biri
   değişirse üçü birlikte.
 
+  ─── 2026-09-27: TOPLULUK İÇERİĞİ METNE GİRDİ (yine 2026-09-25'in içinde) ────────
+  Forum 2026-08-27'den (64d7edf) beri var ama bu metin işlenen içeriği yalnızca "mesajlar
+  ve kanıt görselleri" diye sayıyordu; §6 gönderi ve yorumların adınla herkese açık
+  olduğunu, §7 de hesap silinince onların KALDIĞINI söylemiyordu. Topluluk artık mobilin
+  ana ekranı ve akış ilk yorumu adla birlikte öne çıkarıyor. Olgular koddan:
+    • İşlenen      → Domain/Community/Forum.cs (gönderi, yorum, oy, şikayet)
+    • Kime görünür → CommunityController [Authorize] (giriş yapmış herkes); akış ve iplik
+                     yazarın adını, fotoğrafını ve seviyesini taşıyor (ForumAuthorDto);
+                     profil ucu katkı sayılarını veriyor (ProfileQueries: gönderi, yorum,
+                     aldığı net oy; web başkasının profilinde onları ilk rozet kademesinden
+                     sonra çiziyor, ToplulukRozetleri — metin bu yüzden "görünebilir").
+                     Oy kimseye adla gösterilmiyor: DTO'da yalnızca sayılar ve isteyenin
+                     kendi oyu (MyVote) var.
+    • Silmede      → DeleteAccount forum tablolarına DOKUNMUYOR; yazar adı mezar taşının
+                     DisplayName'inden ("Silinmiş kullanıcı") okunuyor. Kullanıcının kendi
+                     gönderisini ya da yorumunu silme ucu yok.
+  Hesap silme sayfası (§3), Profil'deki silme penceresinin "Kalacaklar"ı ve mobil
+  app/gizlilik.jsx §2/§6/§7 + app/ayarlar.jsx aynı olguları söylüyor. Sürüm ARTMADI:
+  2026-09-25 henüz yayında değil (bkz. lib/yasalMetinler.js). Aynı turda §4'teki yol
+  tarifi de düzeltildi: "sayfa altındaki “Çerez ayarları”" adında bir öğe hiçbir yerde
+  yoktu (alt bilgi, ayarlar menüsü ve pencere "Çerez tercihleri" diyor).
+
   ─── 2026-09-25: PUSH BİLDİRİMLERİ — SÖZLEŞME SÜRÜMÜ ARTTI ─────────────────
   §1/§2/§3/§5/§6/§7 push için genişledi; sürüm 2026-09-19 → 2026-09-25 (üç yer birlikte,
   gerekçe lib/yasalMetinler.js). Bölüm numaraları DEĞİŞMEDİ. Push YALNIZCA mobil
@@ -175,8 +197,9 @@ export default function Gizlilik() {
           kazandığın puan, aldığın değerlendirmeler, son giriş zamanın.
         </p>
         <p>
-          <strong>İçerik:</strong> arkadaşlarınla yazıştığın mesajlar ve dersin
-          yapıldığını gösteren kanıt görselleri.
+          <strong>İçerik:</strong> arkadaşlarınla yazıştığın mesajlar, dersin
+          yapıldığını gösteren kanıt görselleri ve Topluluk’ta yazdığın gönderiler ve
+          yorumlar, verdiğin oylar ve yaptığın şikayetler.
         </p>
         <p>
           <strong>Cihaz kimliği (önemli):</strong> giriş yaptığında tarayıcından bir
@@ -250,7 +273,8 @@ export default function Gizlilik() {
       <Bolum no="4" baslik="Çerezler">
         <p>
           İlk girişte üç kategori sunuyoruz ve seçimini istediğin zaman
-          değiştirebilirsin (sayfa altındaki “Çerez ayarları”).
+          değiştirebilirsin (sayfaların altındaki “Çerez tercihleri” bağlantısından ya da
+          Profil sayfasının sağ üstündeki ayarlar menüsünden).
         </p>
         <Maddeler>
           <li>
@@ -341,6 +365,18 @@ export default function Gizlilik() {
           yalnızca sen görürsün; başka bir kullanıcı profiline baktığında yalnızca
           <strong>ortak arkadaşlarınızı</strong> — yani zaten ikinizin de arkadaşı olan
           kişileri — görür. Engellediğin kişiler bu sayıya ve listelere hiç girmez.
+        </p>
+        {/* Mobil app/gizlilik.jsx §6 ile aynı olgular (2026-09-27). Şikayet eden kişinin adı
+            yalnızca yönetim kuyruğunda (Reports.cs → GetReportsHandler, AdminController);
+            perde yalnızca sayıyı yazıyor (GonderiKarti → IncelemePerdesi). */}
+        <p>
+          <strong>Topluluk’ta yazdığın gönderiler ve yorumlar</strong> adın, fotoğrafın ve
+          seviyenle birlikte platformdaki diğer kullanıcılara açıktır; Topluluk’u yalnızca
+          giriş yapmış kullanıcılar görür. Profilinde de Topluluk rozetin ve katkı sayıların
+          (gönderi, yorum ve aldığın net oy) görünebilir. Verdiğin oyların yalnızca toplamı
+          görünür, kimin oy verdiği gösterilmez. Şikayetlerini yalnızca yönetim görür;
+          incelemeye alınan içerikte kimin şikayet ettiği değil, yalnızca kaç şikayet aldığı
+          yazar.
         </p>
         <p>
           Görünen adınla <strong>aranabilirsin</strong>: Keşfet’teki “Arkadaş Ekle”
@@ -455,7 +491,8 @@ export default function Gizlilik() {
             bilgilerin siliniyor; bildirim kayıtların, bildirim ayarların ve bildirim alan cihazların da
             siliniyor. Ders geçmişi, kazandırdığın puanlar ve değerlendirmeler karşı tarafa
             ait olduğu için kalıyor ve orada adın yerine “Silinmiş kullanıcı” görünüyor.
-            Adım adım anlatım:{' '}
+            Topluluk’taki gönderilerin, yorumların ve oyların da kalıyor; gönderi ve
+            yorumlarında adın yerine “Silinmiş kullanıcı” görünüyor. Adım adım anlatım:{' '}
             <Link to="/hesap-silme" className="font-medium text-brand-700 hover:underline">
               hesabını silme
             </Link>

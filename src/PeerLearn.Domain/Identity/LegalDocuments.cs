@@ -79,6 +79,20 @@ public static class LegalDocuments
     /// Mevcut kullanıcılar yeniden onaylatılmıyor (sürüm yalnızca yeni kayıtları kapsar).
     /// Push'un aydınlatması mobil uygulamada veri akışından ÖNCE yapılıyor ve cihaz kaydı
     /// ucu <c>NotificationPreference.DisclosureShownAtUtc</c> olmadan hiçbir şey yazmıyor.
+    ///
+    /// 2026-09-25 İÇİNDE, YAYINDAN ÖNCE (2026-09-26/27, tasarim/profil-dersler-topluluk):
+    /// metin sürüm ARTMADAN düzeltildi, çünkü bu sürüm henüz hiçbir yerde yayında değil ve
+    /// onu kabul etmiş kullanıcı yok. Düzeltilenler: Koşullar §3 (puanın iki kaynağı, ders
+    /// ve topluluk kazancının yanmaması, hoş geldin puanının 14 günde düşmesi), Gizlilik
+    /// §2/§6/§7 ve hesap silme sayfası (Topluluk içeriği; ayarlar menüsüne taşınan yollar),
+    /// Gizlilik §4 (çerez yolu). Liste ve gerekçe web frontend/src/lib/yasalMetinler.js'te.
+    ///
+    /// ⛔ BİRLEŞTİRME SIRASI: ozellik/push-bildirimleri (PR #38, mobil PR #20) bu sabiti
+    /// AYNI değerle ama ESKİ metinle taşıyor. O PR'lar tasarım dalından önce ya da onsuz
+    /// birleşip dağıtılırsa aynı sürüm iki ayrı metne karşılık gelir ve Register.cs'in
+    /// yazdığı TermsVersion kanıt değerini kaybeder. #38 ve #20 tek başına main'e alınmaz ve
+    /// dağıtılmaz; tasarım dalı push dalının üstünde, ikisi aynı dağıtımda çıkar. Push tek
+    /// başına çıkacaksa tasarım dalı bu değeri (ve iki istemcidekini) artırmak zorundadır.
     /// </remarks>
     public const string CurrentVersion = "2026-09-25";
 }

@@ -94,6 +94,12 @@ export default function HesapSilme() {
         <Maddeler>
           <li>Ders oturumları, arkadaşlıklar ve mesaj kayıtları</li>
           <li>Kredi defteri (puanların basıldığı kayıtlar)</li>
+          {/* DeleteAccount forum tablolarına dokunmuyor (2026-09-27'de metne girdi; gerekçe
+              Gizlilik.jsx başında). Kullanıcının kendi gönderisini silme ucu da yok. */}
+          <li>
+            Topluluk’ta yazdığın gönderiler ve yorumlar ile verdiğin oylar — gönderi ve
+            yorumlarında yazar olarak “Silinmiş kullanıcı” görünür
+          </li>
           {/* DeleteAccount aktörü olunan defter satırlarını SİLMİYOR (karşı tarafın kaydı),
               bekleyenleri gönderilmeyecek diye kapatıyor; temizlik işi (CleanupNotifications)
               30 gün sonra siliyor. */}

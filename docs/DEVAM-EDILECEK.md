@@ -855,6 +855,18 @@ istemcilerden önce birleşir.
 
 ### Açık işler
 
+- ⬜ **Birleştirme sırası: push PR'ları (#38, mobil #20) tek başına alınmaz.** Bu dal
+  2026-09-25'in metnini sürüm artırmadan düzeltti (Koşullar §3, Gizlilik §2/§4/§6/§7, hesap
+  silme metinleri; liste `frontend/src/lib/yasalMetinler.js`'te). Push PR'ları aynı sürümü
+  ESKİ metinle taşıyor; önce ya da tek başına dağıtılırlarsa kayıttaki `TermsVersion` iki ayrı
+  metne karşılık gelir. Kural `CLAUDE.md`, `LegalDocuments.cs` ve iki `yasalMetinler.js`'te
+  yazılı; #38 ve #20'nin PR açıklamalarına da eklenmeli (depo dışı, kullanıcının işi). Push
+  tek başına çıkacaksa bu dal sürümü üç yerde artırır.
+- ⬜ **Kullanıcı kendi Topluluk gönderisini ya da yorumunu silemiyor; hesap silinince de
+  kalıyor** (`DeleteAccount` forum tablolarına dokunmuyor, yazar "Silinmiş kullanıcı"
+  görünüyor). 2026-09-27'den beri metinlerde yazılı (Gizlilik §2/§6/§7, HesapSilme §3, silme
+  penceresi). Silme ya da anonimleştirme eklenmesi ürün ve hukuk kararı; eklenirse o metinler
+  aynı gün değişir.
 - ⬜ **`CamKart`'ın `backdrop-blur`'ü içindeki `fixed` katmanları kartla sınırlıyor.**
   Fotoğraflı profilde avatarın tam ekran büyütme katmanı (`Avatar.jsx` → `AvatarKatmani`,
   `fixed inset-0`) ekranı değil yalnızca profil kartını kaplıyor. Önceden de vardı. Çözüm

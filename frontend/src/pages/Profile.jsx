@@ -536,6 +536,8 @@ function HesabiSilModali({ open, onClose, onDeleted }) {
           <p className="mt-1.5 text-sm leading-relaxed text-slate-600">
             Yaptığın dersler, kazandırdığın puanlar ve yazdığın değerlendirmeler karşı
             tarafın geçmişine ait olduğu için siliniyor değil — orada adın yerine
+            &ldquo;Silinmiş kullanıcı&rdquo; görünecek. Topluluk&rsquo;taki gönderilerin,
+            yorumların ve oyların da kalacak; gönderi ve yorumlarında da adın yerine
             &ldquo;Silinmiş kullanıcı&rdquo; görünecek.
           </p>
         </div>

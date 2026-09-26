@@ -307,9 +307,14 @@ Web ile mobil arasındaki diğer bağlar:
 - **`SOZLESME_SURUMU` üç yerde** (`LegalDocuments.cs`, web ve mobil `yasalMetinler.js`) ve
   `Register.cs` eşitlik arıyor. Mağazada mobil sürüm varken sıra: önce mobil yayın, sonra
   sunucu. Sürüm "kullanıcıya hangi metni gösterdim" beyanıdır: hiçbir yerde yayında olmayan
-  sürümün metni sürüm artmadan düzeltilebilir (2026-09-26'da Koşullar §3 böyle düzeltildi,
-  2026-09-25 sürümünün içinde; tarihçe `yasalMetinler.js`'te). Yayındaki metin değişirse
-  sürüm artar.
+  sürümün metni sürüm artmadan düzeltilebilir (2026-09-26/27'de Koşullar §3, Gizlilik
+  §2/§4/§6/§7 ve hesap silme metinleri böyle düzeltildi, 2026-09-25 sürümünün içinde;
+  tarihçe `yasalMetinler.js`'te). Yayındaki metin değişirse sürüm artar.
+  - ⛔ **Bedeli bir birleştirme sırası:** push PR'ları (#38, mobil #20) 2026-09-25'i ESKİ
+    metinle taşıyor. Tek başına birleşip dağıtılırlarsa aynı sürüm iki metne karşılık gelir
+    ve kayıttaki `TermsVersion` kanıt olmaktan çıkar. #38 ve #20 tasarım dalından önce ya da
+    onsuz main'e alınmaz; tasarım dalı push dalının üstünde, ikisi aynı dağıtımda çıkar.
+    Push tek başına çıkacaksa tasarım dalı sürümü üç yerde artırır.
 - **`HesapSilme.jsx` mağazaların silme adresi** ve mobildeki yolu adım adım tarif ediyor
   (ayrıca Gizlilik §7). Mobilin ayarlar düzeni değişirse bu metinler AYNI GÜN değişir;
   mağaza incelemesi tarifi izliyor.
