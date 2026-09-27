@@ -173,6 +173,81 @@ export const TOUR_STEPS = [
       'Bu rehberi ayarlar menüsünden ya da sayfanın altından yeniden izleyebilirsin.',
     ],
   },
+
+  /* ─── 8 → 13 ADIM (2026-09-27): AYRINTI YENİ ADIMLARA, MOBİLLE BİREBİR ────────────
+     Kullanıcı kararı: ürün karmaşık, rehber daha ayrıntılı anlatsın. Beş adım eklendi
+     ve İLK ALTI ADIMIN metnine DOKUNULMADI — mobil src/lib/tur.js ile bayt pariteti
+     korundu. Bu beşinin title/body/points'i de mobille BİREBİR AYNI; biri değişirse
+     öteki AYNI GÜN değişir (mobilde ek olarak `yer` alanı var, burada `selector`).
+
+     YİNE SONA EKLENDİ, araya DEĞİL: `onboardingLastStep` sunucuda tek sayı ve araya
+     eklenen adım turu yarıda bırakan herkesi kaydırırdı. Mobil araya ekleyebildi
+     (mağazada henüz uygulama yok); web CANLIDA, o serbestlik burada yok.
+     Sonuç: anlatım sırası mobildekinden farklı — bilinçli, indeks korunması uğruna.
+
+     ⚠️ Mobildeki `menu` adımının "hamburger rozeti üçünün toplamı" maddesi BURAYA
+     TAŞINMADI ve taşınmamalı: webde hamburgerde sayı değil nokta var, yalnızca
+     okunmamış mesaj sayıyor ve düğme geniş ekranda çekmeceyi bile açmıyor.
+
+     ⚠️ `rules` adımının üçüncü maddesi bilerek SAYFA ADI VERMİYOR: mobilde kurallar
+     bir alt sayfada, burada Topluluk sayfasının yan sütunundaki iki kartta. Tarafsız
+     ifade sayesinde madde iki platformda birebir kalabiliyor.
+     ───────────────────────────────────────────────────────────────────────────── */
+  {
+    id: 'requests',
+    selector: '[data-tour="matches"]',
+    title: 'İstek gönderdikten sonra',
+    body: 'Gönderdiğin bir isteğin üç farklı sonu var ve ikisi sessiz.',
+    points: [
+      'Kabul edilirse sohbet açılır ve kişi “Arkadaşlar”da görünür.',
+      'Reddedilirse sana bildirilmez; istek listeden sessizce kalkar.',
+      'Yanıtsız kalan istek bir süre sonra kendiliğinden düşer — aynı kişiye yeniden gönderebilirsin.',
+    ],
+  },
+  {
+    id: 'proof',
+    selector: '[data-tour="sessions"]',
+    title: 'Kanıt ve doğrulama kodu',
+    body: 'Ders bitince anlatan taraf bir ekran görüntüsü yükler; o görüntüde dersin doğrulama kodu ve sistem saati görünmelidir.',
+    points: [
+      'Kod dersin kendisine ait ve Derslerim’de iki tarafta da yazılı; ders başlarken görüşme ekranına yazın.',
+      'Tamamlama, dersin planlanan bitişinden önce açılmaz.',
+      'Onay kendiliğinden geldiğinde itiraz yolu da kapanır — kanıta beklemeden bak.',
+    ],
+  },
+  {
+    id: 'history',
+    selector: '[data-tour="sessions"]',
+    title: 'Hangi ders hangi sekmede',
+    body: '“Geçmiş dersler” yalnızca tamamlananları gösterir; iptal edilen ve süresi geçip kapanan dersleri bütün rezervasyonların durduğu “Rezerve geçmişi”nde bulursun.',
+    points: [
+      '“Senden aksiyon bekleyenler” kanıt yüklemen ya da onaylaman gereken dersleri toplar; itirazdakiler ayrı başlıkta.',
+      'Anlatan taraf hiç tamamlamazsa rezervasyon bir süre sonra düşer ve kimse puan almaz.',
+      'Onayı verdiğin anda değerlendirme ekranı açılır — tek şansın o an: sonradan yazılamaz, yazdığın da değiştirilemez ve adınla anlatanın profilinde görünür.',
+    ],
+  },
+  {
+    id: 'rules',
+    selector: '[data-tour="community"]',
+    title: 'Toplulukta neler geçerli',
+    body: 'Paylaştığın gönderi ve yorum geri alınamaz — silme ya da düzenleme yok.',
+    points: [
+      'Yazdıklarının topladığı net oy belli bir düzeye ulaştıkça puan yazılır; puanın ikinci kaynağı burası.',
+      'Kendi gönderine oy veremezsin.',
+      'Dışarıya bağlantı paylaşımı gönderilerde belli bir seviyeden sonra açılıyor; kurallar ve alınan önlemler ayrıca yazılı.',
+    ],
+  },
+  {
+    id: 'safety',
+    selector: '[data-tour="discover"]',
+    title: 'Engelleme ve şikayet',
+    body: 'Engellediğin kişi seni aramada bulamaz, sana yazamaz ve yeni ders rezerve edemez.',
+    points: [
+      'Zaten arkadaşsanız engellemek kişiyi arkadaş listenden düşürmez; kaydı da kaldırmak istersen arkadaşlığı ayrıca sonlandır (açık ders varken sonlandırma çalışmaz).',
+      'Engeli Keşfet’in “Arkadaş Ekle” sekmesindeki Engellediklerim listesinden ya da o kişinin profilinden kaldırırsın.',
+      'Kurallara aykırı bir içeriği gördüğün yerden şikayet edersin; kararı yönetim verir.',
+    ],
+  },
 ]
 
 export const TOUR_STEP_COUNT = TOUR_STEPS.length
