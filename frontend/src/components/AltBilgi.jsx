@@ -78,6 +78,15 @@ export function AltBilgi({ oturumlu = false, yigin = false, className = '' }) {
           yigin ? 'justify-center lg:justify-start' : ''
         }`}
       >
+        {/* Hakkımızda 2026-09-28'de EKLENDİ. Sayfa artık kabuğun dışında ve oturum
+            istemiyor; tek girişi sol rayın alt bağlantısı olsaydı oturumsuz ziyaretçi
+            (ve mağaza incelemecisi) ona hiç ulaşamazdı. Mobilin AltBilgi'sinde zaten
+            vardı — bu, iki platformun alt bilgi kümesini de eşitliyor. */}
+        <li>
+          <Link to="/hakkimizda" className={ALT_BAGLANTI}>
+            Hakkımızda
+          </Link>
+        </li>
         <li>
           <Link to="/kosullar" className={ALT_BAGLANTI}>
             Kullanım koşulları

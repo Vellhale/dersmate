@@ -140,6 +140,18 @@ export default function Gizlilik() {
       ozet="Hangi verini topluyoruz, neden topluyoruz, ne kadar saklıyoruz ve ne isteyebilirsin."
       sonGuncelleme={SOZLESME_TARIHI}
     >
+      {/* İki metin birbirine bağlı: okuyucunun yanlış belgeye düşmemesi için.
+          Mobil uygulamanın metni AYRI bir belge (/gizlilik-uygulama) ve ayrı kalmalı —
+          bu sayfa çerezleri, ölçüm taşıyıcısını ve canvas parmak izini anlatıyor,
+          üçü de uygulamada yok. İkisi aynı OLGULARI söyler, ifade ayrışır. */}
+      <p className="rounded-lg border border-brand-200 bg-brand-50 px-4 py-3 text-[15px] text-brand-900">
+        Bu metin <strong>dersmate.com web sitesi</strong> içindir. Telefonundaki{' '}
+        <strong>dersmate uygulamasını</strong> kullanıyorsan{' '}
+        <Link to="/gizlilik-uygulama" className="font-medium underline underline-offset-2">
+          uygulamanın gizlilik metnini
+        </Link>{' '}
+        oku: uygulamada çerez ve ölçüm taşıyıcısı yok, cihaz kimliği başka türlü üretiliyor.
+      </p>
       {/*
         ⚠️ BÖLÜM NUMARALARI DEĞİŞTİRİLEMEZ — yalnızca BAŞLIK değişti (2026-09-19).
 
@@ -320,15 +332,16 @@ export default function Gizlilik() {
             <strong>Bildirim kaydı (mobil uygulama, telefonunun bildirim adresi):</strong> o
             telefonda çıkış yapana kadar. Çıkış yaptığında, “her yerden çıkış” yaptığında ya
             da parolanı sıfırladığında, hesabın kalıcı olarak kapatıldığında ya da hesabını
-            sildiğinde hemen silinir. Uygulamayı telefondan kaldırırsan adres geçersizleşir
-            ve kayıt, o adrese bir sonraki bildirim denemesinde silinir. Hesabın geçici
-            olarak askıya alınırsa kayıt silinmez, yalnızca bildirim gönderilmez. İnternet
-            yokken çıkış yaptıysan sunucu çıkışını o an öğrenemez: kayıt, uygulamayı bir
-            sonraki açışında silinir; uygulamayı bir daha hiç açmazsan, o telefondaki
-            oturumunun süresi dolana kadar (en fazla 60 gün) o telefona bildirim gelmeye
-            devam edebilir. Bu yollardan hiçbiri işlemese de kayıt süresiz kalmaz: o
-            telefondaki oturum kapandıktan ya da süresi dolduktan (uygulamayı son
-            kullanmandan en fazla 60 gün sonra) en geç 7 gün sonra silinir.
+            sildiğinde hemen silinir. Hesabın geçici olarak askıya alınırsa kayıt silinmez,
+            yalnızca bildirim gönderilmez. İnternet yokken çıkış yaptıysan sunucu çıkışını o
+            an öğrenemez: kayıt, uygulamayı internete bağlıyken bir sonraki açışında silinir;
+            uygulamayı bir daha hiç açmazsan, o telefondaki oturumunun süresi dolana kadar
+            (en fazla 60 gün) bu telefona bildirim gelmeye devam edebilir. Uygulamayı
+            telefondan kaldırırsan adres geçersizleşir; oturumunun süresi dolmadan sana bir
+            bildirim gönderilirse kayıt o gönderimde silinir. Oturumunun süresi, uygulamayı o
+            telefonda son kullandığın andan 60 gün sonra dolar; bundan sonra o telefona
+            bildirim gönderilmez. Bu yollardan hiçbiri işlemese de kayıt süresiz kalmaz: o
+            telefondaki oturum kapandıktan ya da süresi dolduktan en geç 7 gün sonra silinir.
           </li>
           <li>
             <strong>Bildirim tercihlerin:</strong> hesabın açık olduğu sürece.
@@ -364,8 +377,18 @@ export default function Gizlilik() {
           <strong>Arkadaş sayın</strong> profilinde herkese görünür. Tam arkadaş listeni
           yalnızca sen görürsün; başka bir kullanıcı profiline baktığında yalnızca
           <strong>ortak arkadaşlarınızı</strong> — yani zaten ikinizin de arkadaşı olan
-          kişileri — görür. Engellediğin kişiler bu sayıya ve listelere hiç girmez.
+          kişileri — görür. Engellediğin kişiler bu sayıya, tam listene ve ortak arkadaş
+          listelerine girmez; Arkadaşlar ekranında ise arkadaşlığı sen sonlandırana kadar
+          görünmeye devam eder.
         </p>
+        {/* ⚠️ Son cümle 2026-09-27'de mobille EŞİTLENDİ (mobil app/gizlilik.jsx §6 önde
+            gidiyordu). Eski hâli "bu sayıya ve listelere hiç girmez" diyordu ve arka uç
+            ORTAK olduğu için web kullanıcısı için de YANLIŞ BEYANDI: engelleme kabul
+            edilmiş arkadaşlığı kapatmıyor (UserBlocks.cs) ve Arkadaşlar ekranının ucu
+            (GetMyMatches) engel süzmüyor — engellenen arkadaş orada ve "Arkadaş (N)"
+            sayısında duruyor. Metin gerçeğe daraltıldı, uç süzülmedi: Sonlandır düğmesi
+            YALNIZCA o ekranda ve kişiyi oradan gizlemek o arkadaşlığı bitirmenin tek
+            yolunu kaldırırdı. Daraltma yeni ifşa değil → SOZLESME_SURUMU artmadı. */}
         {/* Mobil app/gizlilik.jsx §6 ile aynı olgular (2026-09-27). Şikayet eden kişinin adı
             yalnızca yönetim kuyruğunda (Reports.cs → GetReportsHandler, AdminController);
             perde yalnızca sayıyı yazıyor (GonderiKarti → IncelemePerdesi). */}

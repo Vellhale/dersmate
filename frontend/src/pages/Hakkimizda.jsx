@@ -1,6 +1,8 @@
 import { Link } from 'react-router-dom'
+import { AltBilgi } from '../components/AltBilgi'
 import { Logo } from '../components/Logo'
-import { CamKart } from '../components/SayfaZemini'
+import { CamKart, SayfaZemini } from '../components/SayfaZemini'
+import { useAuth } from '../state/AuthContext'
 import {
   ADIMLAR,
   BILDIRIM_NOTU,
@@ -110,16 +112,53 @@ const IKON_KUTUSU =
   'grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-brand-50 text-brand-600 ' +
   'ring-1 ring-inset ring-brand-100'
 
-export default function Hakkimizda() {
-  return (
-    /* Zemini bu sayfa çizmiyor — Layout, rotaya bakarak `zengin` yoğunlukta veriyor
-       (bkz. ZENGIN_ZEMIN_ROTALARI). Burada da bir SayfaZemini olsaydı iki ızgara üst
-       üste biner ve çizgi opaklığı iki katına çıkardı.
+/*
+  KABUĞUN DIŞINA ALINDI — OTURUM GEREKTİRMİYOR (2026-09-28).
 
-       `isolate` de yok: bu projede modallar portal kullanmıyor ve isolate, z-50 perdeyi
-       kendi yığın bağlamına hapsedip z-40 üst barın altında bırakıyor. Bu sayfada şu an
-       modal yok ama tuzağı hazır bırakmamak için kural burada da geçerli. */
-    <div className="mx-auto max-w-5xl pb-10">
+  Sayfa RequireAuth + Layout bloğunun içindeydi; yani dışarıdan gelen bir ziyaretçi
+  ve MAĞAZA İNCELEMECİSİ metni hiç okuyamıyordu. Mobilde karşılığı oturumsuz da
+  açılıyor (app/hakkimizda.jsx: giriş, kayıt ve parola sıfırlama ekranlarının alt
+  bilgisinden ve derin bağlantıdan gelinebiliyor) — bu, iki platform arasında
+  kapatılan bir ERİŞİM farkı.
+
+  Bedeli açıkça yazılsın: oturumlu kullanıcı bu sayfada artık sol rayı görmüyor.
+  Bu bir gerileme değil, var olan kalıba uyum — /kosullar, /gizlilik ve /hesap-silme
+  de kabuğun dışında ve oturumlu kullanıcıda aynı şekilde davranıyor. Mobilde de
+  Hakkımızda çekmeceli bir kabuk ekranı değil, geri şeridi taşıyan bir yığın ekranı.
+
+  Zemin ARTIK BURADA çiziliyor: Layout onu rotaya bakarak veriyordu
+  (ZENGIN_ZEMIN_ROTALARI) ve kabuğun dışında o kanca yok. Tek ızgara kalsın diye
+  Layout'un listesinden de çıkarıldı; ikisi birden çizerse çizgi opaklığı iki
+  katına çıkar.
+
+  `isolate` BİLEREK YOK: bu projede modallar portal kullanmıyor ve isolate, z-50
+  perdeyi kendi yığın bağlamına hapsedip z-40 üst barın altında bırakıyor. Bu
+  sayfada şu an modal yok ama tuzağı hazır bırakmamak için kural burada da geçerli.
+*/
+export default function Hakkimizda() {
+  const { isAuthenticated } = useAuth()
+
+  return (
+    <div className="relative min-h-[100dvh] bg-slate-50">
+      <SayfaZemini yogunluk="zengin" desenId="dm-kabuk" />
+
+      {/* Kabuğun dışındaki sayfaların ortak başlığıyla aynı kalıp (MetinSayfasi):
+          solda logo, sağda bağlama göre değişen tek bağlantı. */}
+      <header className="relative border-b border-slate-200/70 bg-white/70 backdrop-blur">
+        <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-4">
+          <Link to="/" className="flex items-center" aria-label="Ana sayfa">
+            <Logo boyut="sm" />
+          </Link>
+          <Link
+            to={isAuthenticated ? '/kesfet' : '/giris'}
+            className="text-sm font-medium text-brand-700 hover:underline"
+          >
+            {isAuthenticated ? 'Uygulamaya dön' : 'Girişe dön'}
+          </Link>
+        </div>
+      </header>
+
+      <main className="relative mx-auto max-w-5xl px-4 pt-10 pb-10">
       {/* ── AÇILIŞ ────────────────────────────────────────────────────────── */}
       <header>
         <Logo boyut="lg" />
@@ -191,14 +230,17 @@ export default function Hakkimizda() {
             {/* Bağlantı OPAK beyaz kalıyor: cam bir kartın içinde ikinci bir yarı saydam
                 yüzey, tıklanabilir olanı tıklanamayandan ayırmayı bırakır. Denetimler
                 zemine değil, KENDİLERİNE benziyor. */}
+            {/* Hedef oturuma göre değişiyor (mobil app/hakkimizda.jsx ile aynı kural):
+                sayfa artık oturumsuz da açıldığı için "Keşfet'e göz at" demek, henüz
+                hesabı olmayan ziyaretçiyi giriş duvarına çarptırmak olurdu. */}
             <Link
-              to="/kesfet"
+              to={isAuthenticated ? '/kesfet' : '/kayit'}
               className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-xl border
                          border-slate-200 bg-white px-5 text-sm font-semibold text-slate-800
                          shadow-sm transition hover:border-brand-300 hover:bg-brand-50
                          hover:text-brand-800"
             >
-              Keşfet’e göz at
+              {isAuthenticated ? 'Keşfet’e göz at' : 'Hesap oluştur'}
               <span aria-hidden="true">→</span>
             </Link>
           </div>
@@ -248,8 +290,18 @@ export default function Hakkimizda() {
       </section>
 
       {/* Kapanış: sayfanın tezi, tek cümlede. Kutu yok — burada duracak bir şey
-          değil, okunup geçilecek bir cümle. Altındaki künye Layout'un alt bilgisi. */}
-      <p className="mt-10 text-center text-sm italic text-slate-600">{KAPANIS}</p>
+          değil, okunup geçilecek bir cümle. Altındaki künye alt bilgiden geliyor. */}
+        <p className="mt-10 text-center text-sm italic text-slate-600">{KAPANIS}</p>
+      </main>
+
+      {/* Alt bilgi Layout'tan geliyordu; kabuğun dışında onu bu sayfa çiziyor.
+          `oturumlu` verilmiyor: "Rehberi tekrar izle" düğmesi oturumsuz ziyaretçide
+          anlamsız olurdu ve rehber zaten oturum istiyor. */}
+      <div className="relative border-t border-slate-200/70 bg-white/70">
+        <div className="mx-auto max-w-5xl px-4 py-8">
+          <AltBilgi />
+        </div>
+      </div>
     </div>
   )
 }
