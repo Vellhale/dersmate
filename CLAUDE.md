@@ -264,13 +264,16 @@ Mobil istemci (`C:\projeler\dersmate Mobil`, React Native / Expo, JavaScript) ay
 uçlarına gidiyor ve kendi CLAUDE.md'sinde sunucuyu **değişmez** sayıyor. Sunucuya dokunan bir
 istemci işi bu yüzden istisnadır ve iki depoda AYNI adlı dalda yürür:
 
-| tarih | dal | sunucuya eklenen |
-|---|---|---|
-| 2026-09-25 | `ozellik/push-bildirimleri` | push (yukarıdaki bölüm) |
-| 2026-09-26 | `tasarim/profil-dersler-topluluk` | `GET /sessions?pastStatus=`, `ForumPostDto.FirstComment` |
+| tarih | dal | PR (sunucu+web / mobil) | sunucuya eklenen |
+|---|---|---|---|
+| 2026-09-25 | `ozellik/push-bildirimleri` | #38 / dersmate-mobil#20 | push (yukarıdaki bölüm) |
+| 2026-09-26 | `tasarim/profil-dersler-topluluk` | #39 / dersmate-mobil#21 | `GET /sessions?pastStatus=`, `ForumPostDto.FirstComment` |
+
+Dördü de 2026-09-27'de `main`'e birleşti (#38 → #39 → #20 → #21, aynı gün).
 
 İstisnanın koşulu: **eklemeli ve geri uyumlu** (parametresiz istek bugünkü yanıtı birebir
-alır) ve **sunucu PR'ı istemcilerden ÖNCE birleşip dağıtılır**. 2026-09-26'nın tuzakları:
+alır) ve **sunucu PR'ı istemcilerden ÖNCE birleşir; dağıtımda sunucu istemcilerden önce ya
+da onlarla birlikte çıkar**. 2026-09-26'nın tuzakları:
 
 - **`pastStatus`** (Derslerim'de "Geçmiş dersler" = yalnızca tamamlananlar). İstemcide süzmek
   sayfalamayı bozuyordu: `past.totalCount` üç durumun toplamı, beşerli sayfa 0–5 karta
@@ -310,11 +313,16 @@ Web ile mobil arasındaki diğer bağlar:
   sürümün metni sürüm artmadan düzeltilebilir (2026-09-26/27'de Koşullar §3, Gizlilik
   §2/§4/§6/§7 ve hesap silme metinleri böyle düzeltildi, 2026-09-25 sürümünün içinde;
   tarihçe `yasalMetinler.js`'te). Yayındaki metin değişirse sürüm artar.
-  - ⛔ **Bedeli bir birleştirme sırası:** push PR'ları (#38, mobil #20) 2026-09-25'i ESKİ
-    metinle taşıyor. Tek başına birleşip dağıtılırlarsa aynı sürüm iki metne karşılık gelir
-    ve kayıttaki `TermsVersion` kanıt olmaktan çıkar. #38 ve #20 tasarım dalından önce ya da
-    onsuz main'e alınmaz; tasarım dalı push dalının üstünde, ikisi aynı dağıtımda çıkar.
-    Push tek başına çıkacaksa tasarım dalı sürümü üç yerde artırır.
+  - **Bedeli bir birleştirme sırasıydı (2026-09-27'de kapandı):** push PR'ları (#38, mobil
+    #20) 2026-09-25'i ESKİ metinle taşıyordu; tek başına çıksalardı aynı sürüm iki metne
+    karşılık gelir ve kayıttaki `TermsVersion` kanıt olmaktan çıkardı. Dört PR aynı gün ve
+    #38 → #39 → #20 → #21 sırasıyla birleşti; `main`'de 2026-09-25 artık tek metin.
+    `LegalDocuments.cs` ve iki `yasalMetinler.js`'teki "#38 ve #20 tek başına main'e alınmaz"
+    yorumları bu olayın tarihçesi.
+  - ⚠️ **Kalan kural — dağıtım:** 2026-09-25 hâlâ hiçbir yerde yayında değil. Sunucu
+    (`--migrate`: `BildirimAltyapisi` göçü dahil) ve yeni mobil paket AYNI GÜN çıkar; biri eski
+    sabitle kalırsa `Register.cs` eşitlik aradığı için o arada kayıt kırılır. İlk dağıtımdan
+    SONRA "sürüm içi düzeltme" yolu kapanır: yayındaki metin değişirse sürüm artar.
 - **`HesapSilme.jsx` mağazaların silme adresi** ve mobildeki yolu adım adım tarif ediyor
   (ayrıca Gizlilik §7). Mobilin ayarlar düzeni değişirse bu metinler AYNI GÜN değişir;
   mağaza incelemesi tarifi izliyor.
