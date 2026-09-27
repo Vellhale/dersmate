@@ -162,6 +162,15 @@ export default function Kosullar() {
           yönetime gider; şikayet ettiğin kişi ne şikayeti görür ne de kim olduğunu
           öğrenir.
         </p>
+        {/* 2026-09-27'de mobille EŞİTLENDİ. Paragraf bir süre yalnızca mobilde vardı
+            (app/kosullar.jsx §6, mağaza incelemesi şartı diye eklenmişti) ama anlattığı
+            yetenek web'de de var: api.closeMatch → pages/Matches.jsx, "Sonlandır" düğmesi.
+            Var olan bir yeteneğin tarifi, yeni ifşa değil → SOZLESME_SURUMU artmadı. */}
+        <p>
+          Rahatsız eden biriyle iletişimi kesmek için yönetimi beklemek zorunda değilsin:
+          arkadaşlığı Arkadaşlar ekranından tek taraflı sonlandırabilirsin. Sonlandırılan
+          arkadaşlıktan sana yeni mesaj gelmez.
+        </p>
         <p>Yönetimin uygulayabileceği yaptırımlar:</p>
         <Maddeler>
           <li>

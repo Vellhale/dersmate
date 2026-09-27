@@ -7,6 +7,7 @@ import VerifyEmail from './pages/VerifyEmail'
 import SifreSifirla from './pages/SifreSifirla'
 import Kosullar from './pages/Kosullar'
 import Gizlilik from './pages/Gizlilik'
+import GizlilikUygulama from './pages/GizlilikUygulama'
 import HesapSilme from './pages/HesapSilme'
 import Portfolio from './pages/Portfolio'
 import Discover from './pages/Discover'
@@ -54,6 +55,13 @@ export default function App() {
           biri okuyamıyorsa "okudum, kabul ediyorum" demesi anlamsız olurdu. */}
       <Route path="/kosullar" element={<Kosullar />} />
       <Route path="/gizlilik" element={<Gizlilik />} />
+
+      {/* MOBİL UYGULAMANIN gizlilik metni — App Store Connect ve Play'in zorunlu
+          "gizlilik politikası adresi" alanına verilecek adres. /gizlilik'i vermek
+          yanlış beyan olurdu: o sayfa çerezleri, Google Analytics'i ve canvas parmak
+          izini anlatıyor, üçü de uygulamada YOK. Oturum gerektirmez — mağaza
+          incelemecisi hesap açmadan okuyabilmeli. */}
+      <Route path="/gizlilik-uygulama" element={<GizlilikUygulama />} />
 
       {/* HESAP SİLME — oturum GEREKTİRMEZ ve kabuğun dışında.
           Google Play, hesap açtıran uygulamalarda silme yolunu uygulamayı KURMADAN
