@@ -1445,13 +1445,13 @@ function EconomyPanel({ metrics }) {
               label="7 gün içinde yanacak"
               value={m.expiringWithin7Days}
               tone={m.expiringWithin7Days > 0 ? 'warn' : 'default'}
-              hint="Yalnızca vadeli eski lotlar; ders kazancı yanmaz"
+              hint="Hoş geldin puanı ve eski vadeli lotlar; ders ve topluluk kazancı yanmaz"
             />
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <Metric label="Toplam basılan" value={m.totalMinted} hint="Ders kazancı + hoş geldin" />
-            <Metric label="Toplam yakılan" value={m.totalExpired} hint="Vadesi dolanlar (eski)" />
+            <Metric label="Toplam yakılan" value={m.totalExpired} hint="Vadesi dolan hoş geldin puanı ve eski lotlar" />
             <Metric label="Cüzdan sayısı" value={m.walletCount} />
           </div>
 

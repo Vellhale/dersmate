@@ -102,8 +102,9 @@ export default function App() {
         <Route path="/topluluk" element={<Topluluk />} />
         {/* CÜZDAN KALDIRILDI: puan artık harcanan bir bakiye değil, profilde görünen bir
             unvan. Eski bağlantılar (yer imi, tur adımı) kırık kalmasın diye yönlendiriliyor;
-            işlem geçmişi Derslerim'e taşındı. */}
-        <Route path="/cuzdan" element={<Navigate to="/dersler" replace />} />
+            işlem geçmişi Derslerim'e taşındı ve 2026-09-26'dan beri kendi sekmesinde
+            ("Puan geçmişi"): eski adres doğrudan o sekmeyi açıyor. */}
+        <Route path="/cuzdan" element={<Navigate to="/dersler?sekme=puan" replace />} />
         {/* Yan menünün alt bağlantısı: misyon sayfası. Kabuğun (Layout) içinde, çünkü
             tek erişim yolu menü ve menü yalnızca giriş yapmış kullanıcıda var. */}
         <Route path="/hakkimizda" element={<Hakkimizda />} />

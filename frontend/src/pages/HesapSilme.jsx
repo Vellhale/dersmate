@@ -6,10 +6,10 @@ import { SOZLESME_TARIHI } from '../lib/yasalMetinler'
   HESAP SİLME — HERKESE AÇIK SAYFA.
 
   NEDEN AYRI BİR SAYFA: Google Play, hesap açtıran uygulamalarda silmeyi İKİ yerde
-  birden istiyor — uygulamanın içinde (Profil → "Hesabımı sil") ve uygulamayı KURMADAN
-  açılabilen bir web adresinde. İkincisinin gerekçesi şu: telefonunu kaybetmiş, uygulamayı
-  silmiş ya da hesabına hiç giremeyen biri de silme talebinde bulunabilmeli. Bu yüzden
-  sayfa oturum GEREKTİRMİYOR ve kabuğun (Layout) dışında duruyor.
+  birden istiyor — uygulamanın içinde (Profil › Ayarlar › "Hesabımı sil") ve uygulamayı
+  KURMADAN açılabilen bir web adresinde. İkincisinin gerekçesi şu: telefonunu kaybetmiş,
+  uygulamayı silmiş ya da hesabına hiç giremeyen biri de silme talebinde bulunabilmeli. Bu
+  yüzden sayfa oturum GEREKTİRMİYOR ve kabuğun (Layout) dışında duruyor.
 
   Bu sayfa mağaza kaydındaki "hesap silme URL'i" alanına yazılacak adrestir.
 
@@ -30,19 +30,28 @@ export default function HesapSilme() {
           Hesabını kendin silebilirsin; kimseye başvurmana gerek yok. İşlem geri alınamaz.
         </p>
         <Maddeler>
+          {/*
+            BU SAYFA MAĞAZA KAYDINDAKİ SİLME ADRESİ: tarif ettiği yol uygulamadaki yolla
+            BİREBİR aynı olmalı. İki kez bayatladı:
+              • 2026-09-23 "Profil sekmesi": mobilde sekme çubuğu kalktı, Profil'e
+                çekmecenin başındaki ada dokunarak gidiliyor (mobil Cekmece.jsx).
+              • 2026-09-26 "sayfanın en altındaki Hesabımı sil": silme iki platformda da
+                profilin sağ üstündeki dişliye taşındı — mobilde Ayarlar ekranının en altı
+                (app/ayarlar.jsx), web'de ayarlar menüsünün son öğesi (Profile.jsx →
+                AyarlarMenusu). Gizlilik §7 ve mobil gizlilik §7 aynı yolu anlatıyor.
+          */}
           <li>
-            {/* "Profil sekmesi" 2026-09-23'te bayatladı: mobilde sekme çubuğu yok, Profil'e
-                çekmecenin başındaki ada dokunarak gidiliyor (mobil Cekmece.jsx). */}
             <strong>Mobil uygulamada:</strong> sol üstteki menüyü aç ve adına dokunarak
-            Profil’e git; sayfanın en altındaki <strong>“Hesabımı sil”</strong> bağlantısına
-            dokun.
+            Profil’e git; sağ üstteki dişli simgesine dokun ve Ayarlar’ın en altındaki{' '}
+            <strong>“Hesabımı sil”</strong>e dokun.
           </li>
           <li>
             <strong>Web sitesinde:</strong>{' '}
             <Link to="/profil" className="font-medium text-brand-700 hover:underline">
               Profil
             </Link>{' '}
-            sayfasının en altındaki <strong>“Hesabımı sil”</strong> bağlantısına tıkla.
+            sayfasında sağ üstteki dişli simgesine tıkla ve menüden{' '}
+            <strong>“Hesabımı sil”</strong>i seç.
           </li>
         </Maddeler>
         <p>
@@ -61,7 +70,7 @@ export default function HesapSilme() {
           <li>Cihaz kaydın (giriş yaptığın cihazların kimliği)</li>
           {/* Sunucu hesap silmede (DeleteAccount) alıcısı olduğun bildirim defteri
               satırlarını, bildirim tercihlerini ve push cihaz kayıtlarını KOŞULSUZ siliyor
-              (banlı hesap dahil — yukarıdaki cihaz kaydının aksine). Mobil profil/index.jsx
+              (banlı hesap dahil — yukarıdaki cihaz kaydının aksine). Mobil app/ayarlar.jsx
               "Silinecekler" listesiyle aynı olgu. */}
           <li>
             Bildirim kayıtların, bildirim ayarların ve bildirim alan cihazların (mobil
@@ -85,6 +94,12 @@ export default function HesapSilme() {
         <Maddeler>
           <li>Ders oturumları, arkadaşlıklar ve mesaj kayıtları</li>
           <li>Kredi defteri (puanların basıldığı kayıtlar)</li>
+          {/* DeleteAccount forum tablolarına dokunmuyor (2026-09-27'de metne girdi; gerekçe
+              Gizlilik.jsx başında). Kullanıcının kendi gönderisini silme ucu da yok. */}
+          <li>
+            Topluluk’ta yazdığın gönderiler ve yorumlar ile verdiğin oylar — gönderi ve
+            yorumlarında yazar olarak “Silinmiş kullanıcı” görünür
+          </li>
           {/* DeleteAccount aktörü olunan defter satırlarını SİLMİYOR (karşı tarafın kaydı),
               bekleyenleri gönderilmeyecek diye kapatıyor; temizlik işi (CleanupNotifications)
               30 gün sonra siliyor. */}

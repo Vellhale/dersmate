@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useCallback, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { api } from '../lib/api'
 import { useAsync } from '../state/useAsync'
 import { formatDateTime } from '../lib/format'
@@ -30,10 +30,36 @@ const TABS = [
   { key: 'outgoing', label: 'Gönderdiklerim', kisa: 'Giden' },
   { key: 'active', label: 'Arkadaşlarım', kisa: 'Arkadaş' },
 ]
+const SEKME_ANAHTARLARI = new Set(TABS.map((t) => t.key))
 
 export default function Matches() {
   const matches = useAsync(() => api.myMatches(), [])
-  const [tab, setTab] = useState('incoming')
+
+  /*
+    SEKME ADRESTE (?sekme=incoming|outgoing|active, 2026-09-26). Profildeki "Arkadaşlarım"
+    hapı doğrudan listeye gidiyor (/arkadaslar?sekme=active); sekme yalnızca bileşen
+    durumundayken o bağlantı her zaman "Gelen" sekmesini açardı. Derslerim'deki kalıpla
+    aynı (Sessions.jsx): tek doğruluk kaynağı adres, sekme değişimi replace ile yazılıyor
+    (geri tuşu sekme sekme gezmesin), yenileme ve paylaşılan bağlantı sekmeyi koruyor.
+    Parametre yoksa ya da tanınmıyorsa "Gelen" — eskisi gibi. Menüden "Arkadaşlar"a
+    tıklamak parametresiz adrese gittiği için de Gelen'e döner. Mobil aynı parametreyi
+    (/eslesmeler?sekme=) bir KOMUT olarak okuyup adresten siliyor; bilinçli fark.
+  */
+  const [adres, setAdres] = useSearchParams()
+  const adrestekiSekme = adres.get('sekme')
+  const tab = SEKME_ANAHTARLARI.has(adrestekiSekme) ? adrestekiSekme : 'incoming'
+  const setTab = useCallback(
+    (yeni) =>
+      setAdres(
+        (onceki) => {
+          const p = new URLSearchParams(onceki)
+          p.set('sekme', yeni)
+          return p
+        },
+        { replace: true },
+      ),
+    [setAdres],
+  )
   const [notice, setNotice] = useState(null)
 
   const lists = matches.data ?? { incoming: [], outgoing: [], active: [] }
@@ -49,10 +75,12 @@ export default function Matches() {
       Artık lg üstünde sayfa sabit; yalnızca sekme içeriği kendi panelinde kayar
       (bir sohbet penceresi gibi), başlık ve sekmeler hep görünür kalır.
 
-      Yükseklik: 100dvh − 10.5rem. Üç parça: 4rem sabit üst bar + 3rem <main> dolgusu
-      (py-6) + 3.5rem altbilgi. Bu toplam Sessions.jsx düzeni kurulurken TARAYICIDA
-      ÖLÇÜLDÜ — sayıyı değiştirmeden önce oradaki gerekçeyi oku (altbilgi ilk hesapta
-      atlanmış ve sayfa tam 56px kaymıştı). vh DEĞİL dvh: mobil adres çubuğu vh'ye
+      Yükseklik: 100dvh − 12.25rem. Üç parça: 4rem sabit üst bar + 3rem <main> dolgusu
+      (py-6) + alt bilgi (AltBilgi, lg'de TEK satır: künye solda, bağlantılar sağda) —
+      2026-09-26'da 1024–1440px'te ölçüldü: 81px ≈ 5.06rem; 3px pay bırakıldı. Alt
+      bilgi ilk hesapta atlanmış ve sayfa tam 56px kaymıştı; künye eklenince (2026-09-19)
+      değer yine bayatladı ve sayfa 28px kayıyordu. Alt bilginin yüksekliği değişirse
+      bu sayı da değişir (AltBilgi.jsx'teki not). vh DEĞİL dvh: mobil adres çubuğu vh'ye
       dahil değil ve alt kenar kırpılırdı.
 
       lg ALTINDA kilitleme YOK ve bu bilinçli: dar ekranda iç içe kaydırma alanları
@@ -60,7 +88,7 @@ export default function Matches() {
       sayfa akışı sürüyor — aynı karar Sessions.jsx'te verildi, gerekçesi orada.
       ─────────────────────────────────────────────────────────────────────────
     */
-    <div className="flex flex-col gap-6 lg:h-[calc(100dvh-10.5rem)] lg:min-h-[520px] lg:overflow-hidden">
+    <div className="flex flex-col gap-6 lg:h-[calc(100dvh-12.25rem)] lg:min-h-[520px] lg:overflow-hidden">
       <div className="shrink-0">
         <h1 className="text-2xl font-bold text-slate-900">Arkadaşlar</h1>
         <p className="mt-1 text-sm text-slate-600">

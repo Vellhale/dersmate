@@ -70,6 +70,37 @@
  * yapılıyor ve sunucu o anın damgası (DisclosureShownAtUtc) olmadan cihaz kaydını kabul
  * etmiyor.
  *
+ * 2026-09-25 İÇİNDE, YAYINDAN ÖNCE — KOŞULLAR §3 PUAN DÜZELTMESİ (2026-09-26). §3
+ * sunucuyla çelişiyordu: "puan yalnızca ders anlatana yazılır" (Topluluk oyları da puan
+ * basıyor) ve "kazanılan puan 30 günde yanar" (ders ve topluluk kazancı vadesiz). Metin
+ * gerçeğe çekildi (pages/Kosullar.jsx; mobil app/kosullar.jsx aynı gün, aynı cümleler).
+ * SÜRÜM ARTMADI ve bu bir istisna değil, kuralın kendisi: sürüm "kullanıcıya hangi metni
+ * gösterdim" beyanı. 2026-09-25 bugün HİÇBİR yerde yayında değil (sunucu, web ve mobil
+ * main'e birleşmemiş dallarda); bu sürümü kabul etmiş tek bir kullanıcı yok. Yayından
+ * önce aynı sürümün metnini düzeltmek, kimseye gösterilmemiş bir metni değiştirmek.
+ * 2026-09-25 yayına çıktıktan SONRA §3'e dokunan her değişiklik sürümü artırır.
+ *
+ * Aynı dalda (tasarim/profil-dersler-topluluk), yine 2026-09-25'in içinde düzeltilenler:
+ *   • Gizlilik §7 ve HesapSilme §1 yol metinleri (ayarlar profilin dişlisine taşındı).
+ *   • Koşullar §3'e hoş geldin puanı maddesi (14 günde düşüyor, seviyeye sayılmıyor).
+ *   • Gizlilik §2/§6/§7, HesapSilme §3 ve silme penceresine Topluluk içeriği (gönderi,
+ *     yorum, oy; herkese açıklığı ve hesap silinince kaldığı).
+ *   • Gizlilik §4 çerez yolu ("Çerez ayarları" diye bir öğe yoktu).
+ *
+ * ⛔ BİRLEŞTİRME SIRASI — bu düzeltmelerin sürüm artırmadan yapılabilmesinin BEDELİ.
+ * 2026-09-25 bugün İKİ dalda İKİ ayrı metne karşılık geliyor: ozellik/push-bildirimleri
+ * (sunucu + web PR #38, mobil PR #20; ikisi de açık ve main'e hedefli) ESKİ metni taşıyor
+ * ("puan yalnızca ders anlatana", "30 günde yanar", "sayfanın en altındaki Hesabımı sil",
+ * Topluluk içeriği yok), bu dal yenisini. #38 ya da #20 bu daldan ÖNCE ya da onsuz
+ * birleşip dağıtılırsa, o arada kayıt olanlar için Register.cs TermsVersion olarak
+ * 2026-09-25 yazar ve bu dal gelince aynı dizge başka bir metni gösterir: kayıt, kullanıcının
+ * hangi metni kabul ettiğini artık kanıtlamaz.
+ *   KURAL: #38 ve #20 TEK BAŞINA main'e alınmaz, dağıtılmaz. Bu dal push dalının üstünde
+ *   (push dalı atası), yani bu dalın PR'ı push işini de taşıyor; iki iş aynı birleştirmede
+ *   ve aynı dağıtımda çıkar. Push tek başına çıkacaksa (ör. bu dal gecikir), bu dal
+ *   birleşmeden önce sürümü ÜÇ YERDE artırmak zorundadır.
+ * Aynı kural LegalDocuments.cs notunda ve CLAUDE.md "Mobil uygulamayla ortak sözleşme"de.
+ *
  * ⚠️ tools/yasal-surum.ps1 bu dosyada sabitin ATAMASINI düzenli ifadeyle arıyor ve İLK
  * eşleşmeyi alıyor. Bu yorumlara sabitin adını eşittir ve tırnaklı bir değerle yazma:
  * yazılırsa betik yorumdaki değeri okur ve bütün e2e paketleri kayıtta düşer.

@@ -2,6 +2,7 @@
 #
 # Kapsam:
 #   A. Derslerim sayfalama — aktif/geçmiş ayrımı, geçmişin sayfalanması, sessiz kesme yok
+#   A2. Geçmiş süzgeci (?pastStatus=) — süzülmüş toplam, aktif dokunulmaz, geçersize 400
 #   B. Eşleşme sonlandırma — sohbet salt okunur, rezervasyon kapalı, açık ders korumalı
 #   C. Eşleşme isteğinin süresi dolumu — süpürücü Pending'i Expired yapar, yeniden istek açılır
 #   D. Süpürücüde geri çekilme — takılan kayıt partiyi TIKAMAZ
@@ -209,6 +210,84 @@ if ($s1 -ne $s2) { OK 'ikinci sayfa farklı kaydı verdi (sayfalama gerçek)' } 
 $aktifDurumlar = @($liste1.active | ForEach-Object { $_.status })
 $sizinti = @($aktifDurumlar | Where-Object { $_ -in @('Completed', 'Cancelled', 'Expired') })
 if ($sizinti.Count -eq 0) { OK 'nihai durumdaki ders aktif listesine sızmadı' } else { Fail "aktifte nihai durum: $($sizinti -join ',')" }
+
+# ---------------------------------------------------------------------------
+Section 'A2. Geçmiş süzgeci (?pastStatus=)'
+
+# "Geçmiş dersler = yalnızca tamamlananlar" (2026-09-26). İstemcide süzmek beşerli sayfayı
+# 0-5 karta düşürüyor, tamamlanan SAYISI hiçbir yerden gelmiyor ve RN listesi boş sayfadan
+# sonra onEndReached'i bir daha çağırmıyordu. Süzgeç sunucuda, sayım ve sayfayla AYNI
+# kaynakta — totalCount süzülmüş toplam. Veri A bölümünden: [0] Booked, [1] Completed,
+# [2] Cancelled.
+#
+# Hatalı istekte hata kodu (ProblemDetails.title) de ölçülüyor: parametre enum olarak
+# bağlansaydı ?pastStatus=99 ASP.NET'in kendi 400'ünü döndürürdü, VALIDATION_FAILED değil.
+function HataDurumuVeKodu($path, $token) {
+    try {
+        Get_ $path $token | Out-Null
+        return @{ status = 200; code = 'BEKLENMEDIK_BASARI' }
+    } catch {
+        $resp = $_.Exception.Response
+        if ($null -eq $resp) { return @{ status = 0; code = 'NO_RESPONSE' } }
+        $govde = $_.ErrorDetails.Message
+        if (-not $govde) {
+            try { $govde = (New-Object System.IO.StreamReader($resp.GetResponseStream())).ReadToEnd() } catch {}
+        }
+        $kod = $null
+        try { $kod = ($govde | ConvertFrom-Json).title } catch {}
+        return @{ status = [int]$resp.StatusCode; code = $kod }
+    }
+}
+
+$suzCompleted = Get_ '/api/sessions?pastStatus=Completed&pastPageSize=5' $ogrA.Token
+$suzOgeler = @($suzCompleted.past.items)
+if ($suzCompleted.past.totalCount -eq 1 -and $suzOgeler.Count -eq 1 -and $suzOgeler[0].sessionId -eq $sesIds[1] -and $suzOgeler[0].status -eq 'Completed') {
+    OK 'pastStatus=Completed yalnızca tamamlanan dersi verdi, totalCount süzülmüş toplam (1)'
+} else {
+    Fail "pastStatus=Completed: totalCount=$($suzCompleted.past.totalCount), öğeler=$(($suzOgeler | ForEach-Object { "$($_.sessionId):$($_.status)" }) -join ',')"
+}
+
+# Aktif kısım süzgeçten ETKİLENMEZ: Derslerim'in aksiyon ve planlanmış grupları aynı yanıttan.
+if ($suzCompleted.activeTotal -eq 1 -and @($suzCompleted.active).Count -eq 1 -and @($suzCompleted.active)[0].sessionId -eq $sesIds[0]) {
+    OK 'süzgeçli yanıtta aktif liste aynen duruyor'
+} else { Fail "süzgeçli yanıtta aktif: activeTotal=$($suzCompleted.activeTotal), sayı=$(@($suzCompleted.active).Count)" }
+
+# Ad büyük/küçük harf duyarsız; başka durum başka dersi veriyor (süzgeç gerçekten duruma bakıyor).
+$suzCancelled = Get_ '/api/sessions?pastStatus=cancelled&pastPageSize=5' $ogrA.Token
+if ($suzCancelled.past.totalCount -eq 1 -and @($suzCancelled.past.items)[0].sessionId -eq $sesIds[2]) {
+    OK 'pastStatus=cancelled (küçük harf) yalnızca iptal edilen dersi verdi'
+} else { Fail "pastStatus=cancelled: totalCount=$($suzCancelled.past.totalCount)" }
+
+$suzExpired = Get_ '/api/sessions?pastStatus=Expired' $ogrA.Token
+if ($suzExpired.past.totalCount -eq 0 -and @($suzExpired.past.items).Count -eq 0) {
+    OK 'pastStatus=Expired boş döndü (bu kullanıcının süresi dolmuş dersi yok)'
+} else { Fail "pastStatus=Expired: totalCount=$($suzExpired.past.totalCount)" }
+
+# Sayfalama süzülmüş kümenin üzerinde: 1 kayıtlık kümede 2. sayfa boş, toplam yine 1.
+$suzSayfa2 = Get_ '/api/sessions?pastStatus=Completed&pastPage=2&pastPageSize=1' $ogrA.Token
+if ($suzSayfa2.past.totalCount -eq 1 -and @($suzSayfa2.past.items).Count -eq 0 -and $suzSayfa2.past.page -eq 2) {
+    OK 'süzülmüş geçmişin 2. sayfası boş, toplam 1 (sayfa süzülmüş küme üzerinde)'
+} else { Fail "süzgeçli 2. sayfa: totalCount=$($suzSayfa2.past.totalCount), öğe=$(@($suzSayfa2.past.items).Count)" }
+
+# Parametresiz ve BOŞ parametre bugünkü davranış: süzgeç yok, iki nihai ders.
+$suzBos = Get_ '/api/sessions?pastStatus=&pastPageSize=5' $ogrA.Token
+$suzYok = Get_ '/api/sessions?pastPageSize=5' $ogrA.Token
+if ($suzYok.past.totalCount -eq 2 -and $suzBos.past.totalCount -eq 2 -and @($suzYok.past.items).Count -eq 2) {
+    OK 'parametresiz ve boş pastStatus süzmüyor (toplam 2, iki nihai ders)'
+} else { Fail "süzgeçsiz: parametresiz=$($suzYok.past.totalCount), boş=$($suzBos.past.totalCount)" }
+
+# Mobil /api/v1 çağırıyor: aynı parametre orada da.
+$suzV1 = Get_ '/api/v1/sessions?pastStatus=Completed' $ogrA.Token
+if ($suzV1.past.totalCount -eq 1) { OK '/api/v1/sessions?pastStatus=Completed aynı sonucu verdi' }
+else { Fail "/api/v1 pastStatus: totalCount=$($suzV1.past.totalCount)" }
+
+# Geçersiz her değer 400 VALIDATION_FAILED: aktif durum (sessiz boş liste yerine), tanımsız
+# sayı, TANIMLI sayı (kapı yalnızca ad kabul ediyor) ve çöp.
+foreach ($gecersiz in @('Booked', 'Disputed', '99', '2', 'foo')) {
+    $h = HataDurumuVeKodu "/api/sessions?pastStatus=$gecersiz" $ogrA.Token
+    if ($h.status -eq 400 -and $h.code -eq 'VALIDATION_FAILED') { OK "pastStatus=$gecersiz → 400 VALIDATION_FAILED" }
+    else { Fail "pastStatus=$gecersiz → $($h.status) $($h.code) (400 VALIDATION_FAILED bekleniyordu)" }
+}
 
 # ---------------------------------------------------------------------------
 Section 'B. Eşleşme sonlandırma'

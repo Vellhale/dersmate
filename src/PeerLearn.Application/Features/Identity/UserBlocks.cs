@@ -1,3 +1,4 @@
+using System.Linq.Expressions;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using PeerLearn.Application.Abstractions;
@@ -43,9 +44,38 @@ public static class EngelSorgusu
     /// ters yön için (BlockedUserId) — ikisi de IdentityConfigurations'ta.
     /// </remarks>
     public static IQueryable<Guid> Engelsiz(IAppDbContext db, IQueryable<Guid> idler, Guid bakan) =>
-        idler.Where(id => !db.UserBlocks.Any(x =>
+        idler.Where(EngelsizKosulu(db, bakan));
+
+    /// <summary>
+    /// <see cref="Engelsiz(IAppDbContext, IQueryable{Guid}, Guid)"/>'in SATIR akışı için olanı:
+    /// <paramref name="kisi"/>'nin gösterdiği kullanıcı ile <paramref name="bakan"/> arasında
+    /// HERHANGİ BİR YÖNDE engel olan satırları eler (ör. yazarı engelli yorumlar).
+    /// </summary>
+    /// <remarks>
+    /// Koşul ELLE YENİDEN YAZILMIYOR: <see cref="EngelsizKosulu"/>'nun ifade ağacındaki kimlik
+    /// parametresi <paramref name="kisi"/>'nin gövdesiyle değiştiriliyor. İki yol aynı ağaçtan
+    /// türediği için biri tek yönlüye dönemez. Sonuç yine korele bir NOT EXISTS; satır başına
+    /// ayrı sorgu (N+1) yok ve üstteki sorgunun kısmi index'i kullanmasını engellemiyor.
+    /// </remarks>
+    public static IQueryable<T> KisisiEngelsiz<T>(
+        IAppDbContext db, IQueryable<T> kaynak, Expression<Func<T, Guid>> kisi, Guid bakan)
+    {
+        var kosul = EngelsizKosulu(db, bakan);
+        var govde = new ParametreDegistirici(kosul.Parameters[0], kisi.Body).Visit(kosul.Body);
+        return kaynak.Where(Expression.Lambda<Func<T, bool>>(govde, kisi.Parameters));
+    }
+
+    /// <summary>Çift yönlü "engel YOK" koşulu — iki süzgecin ortak ve TEK tanımı.</summary>
+    private static Expression<Func<Guid, bool>> EngelsizKosulu(IAppDbContext db, Guid bakan) =>
+        id => !db.UserBlocks.Any(x =>
             (x.BlockerUserId == bakan && x.BlockedUserId == id) ||
-            (x.BlockerUserId == id && x.BlockedUserId == bakan)));
+            (x.BlockerUserId == id && x.BlockedUserId == bakan));
+
+    private sealed class ParametreDegistirici(ParameterExpression eski, Expression yeni) : ExpressionVisitor
+    {
+        protected override Expression VisitParameter(ParameterExpression node)
+            => node == eski ? yeni : base.VisitParameter(node);
+    }
 }
 
 public sealed record BlockUserCommand(Guid BlockerUserId, Guid BlockedUserId, string? Note)

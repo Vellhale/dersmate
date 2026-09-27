@@ -6,9 +6,8 @@ import { RAIL_KEY } from '../lib/consent'
 import { WalletProvider, useWallet } from '../state/WalletContext'
 import { InboxProvider, useInbox } from '../state/InboxContext'
 import { Logo } from './Logo'
-import { CookieSettingsLink } from './CookieBanner'
-import { KunyeSatiri } from './Kunye'
-import { ProductTour, RestartTourLink } from './ProductTour'
+import { AltBilgi } from './AltBilgi'
+import { ProductTour } from './ProductTour'
 import { Avatar } from './Avatar'
 import { SeviyeRozeti } from './SeviyeRozeti'
 import { SayfaZemini } from './SayfaZemini'
@@ -82,10 +81,10 @@ const NAV = [
       • forum şikayetlerinin moderasyon kuyruğunda İÇERİĞİYLE görünmesi
       • kaldırılan/perdelenen içeriğe müdahale ucu (ModerateForumContentCommand)
   */
-  /* `tour` çıpası duruyor ama lib/tour.js'te KARŞILIĞI YOK ve bu bilinçli: rehber altı
-     adımda bitiyor ve yedincisini eklemek, kullanıcının ilk açılışta okuduğu akışı
-     uzatmak demek — ayrı bir ürün kararı. Çıpa şimdiden var ki o karar verildiğinde
-     tek satır yetsin. */
+  /* `tour` çıpası rehberin 7. adımına (community) bağlı. Çıpa, adımdan önce vardı:
+     rehber altı adımda bitiyordu ve Topluluk adımı ayrı bir ürün kararı olarak
+     bekletilmişti. Karar 2026-09-26'da verildi (rehber 6 → 8 adım, lib/tour.js); adım
+     SONA eklendi, yani ilk altı adımın indeksi değişmedi. */
   { to: '/topluluk', label: 'Topluluk', tour: 'community', Ikon: ToplulukIkonu },
 ]
 
@@ -362,7 +361,8 @@ function LayoutShell() {
                 söylüyor. Seviye SUNUCUDAN geliyor (cüzdan ucundaki `level` alanı,
                 krediden türer — Domain/Community/UserLevel.cs); arayüz eşik taşımıyor.
                 data-tour="rank" çıpası KORUNDU: ürün turunun ilk adımı bu seçiciye
-                bağlı (lib/tour.js) ve rozet yer değiştirdi, kaybolmadı. */}
+                bağlı (lib/tour.js) ve rozet yer değiştirdi, kaybolmadı. Son adım
+                (profil) da lg altında buraya düşüyor; avatar orada gizli. */}
             <NavLink
               to="/profil"
               data-tour="rank"
@@ -373,8 +373,19 @@ function LayoutShell() {
 
             {/* Avatar profile giden kısayol: sosyal bir üründe kendi profiline ulaşmanın
                 en beklenen yolu fotoğrafına tıklamaktır. lg altında kimlik satırı
-                çekmecenin tepesinde — barda avatara yer yok. */}
-            <NavLink to="/profil" className="hidden shrink-0 lg:block" aria-label="Profilim" title="Profilim">
+                çekmecenin tepesinde — barda avatara yer yok.
+
+                data-tour="profil": rehberin son adımının (lib/tour.js → profil) ilk tercihi.
+                Seçici dizisi önce buna, yoksa seviye rozetine (rank) bakıyor; lg altında
+                avatar `hidden` olduğu için ProductTour'un hedefBul'u onu atlıyor (kutusu
+                yok) ve adım rozette çıkıyor. */}
+            <NavLink
+              to="/profil"
+              data-tour="profil"
+              className="hidden shrink-0 lg:block"
+              aria-label="Profilim"
+              title="Profilim"
+            >
               <Avatar userId={session?.userId} name={session?.displayName} size="sm" />
             </NavLink>
 
@@ -531,34 +542,11 @@ function LayoutShell() {
             <Outlet />
           </main>
 
-          {/* Rıza her zaman geri alınabilir olmalı: tercihi değiştirmenin yolu, vermenin
-              yolu kadar erişilebilir olmadan rıza "özgür iradeyle verilmiş" sayılmaz. */}
-          {/* Yasal metinler kabuğun altbilgisinde de: oturum açtıktan sonra bunlara
-              ulaşmanın başka yolu kalmıyordu (AuthShell'deki bağlantılar yalnızca
-              giriş öncesi ekranlarda). Metni okumak, kabul ettikten sonra da mümkün
-              olmalı. */}
+          {/* Alt bilgi AltBilgi bileşeninden: yasal metinler, hesap silme, çerez
+              tercihleri, rehber ve künye. Neyin neden orada olduğu ve neyin oradan
+              ÇIKAMAYACAĞI (çerez tercihleri, hesap silme) o dosyanın başında. */}
           <footer className="mx-auto max-w-6xl px-4 pb-8 pt-2">
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-              <CookieSettingsLink />
-              <RestartTourLink />
-              <NavLink to="/kosullar" className="text-xs text-slate-500 underline hover:text-slate-700">
-                Kullanım koşulları
-              </NavLink>
-              <NavLink to="/gizlilik" className="text-xs text-slate-500 underline hover:text-slate-700">
-                Gizlilik
-              </NavLink>
-              {/* Silme sayfası altbilgide: mağaza kaydındaki adresin sitede de bulunabilir
-                  olması gerekiyor, yalnızca doğrudan yazılarak ulaşılan gizli bir sayfa değil. */}
-              <NavLink to="/hesap-silme" className="text-xs text-slate-500 underline hover:text-slate-700">
-                Hesap silme
-              </NavLink>
-            </div>
-
-            {/* Künye AYRI SATIRDA, bağlantı şeridinin İÇİNDE değil. İki sebep: (1) bu bir
-                gezinme bağlantısı değil, bir kimlik beyanı — aynı sırada durunca "Hesap
-                silme"nin komşusu gibi okunuyordu; (2) şerit dar ekranda zaten sarılıyor,
-                araya girince künye iki bağlantının ortasında kalıyordu. */}
-            <KunyeSatiri className="mt-2" />
+            <AltBilgi oturumlu />
           </footer>
         </div>
       </div>

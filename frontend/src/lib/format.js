@@ -59,17 +59,31 @@ export const SESSION_STATUS_LABELS = {
 }
 
 /*
-  ESKİ TÜRLER LİSTEDEN ÇIKARILMADI. LessonSpending ve Expiry artık YAZILMIYOR (ders almak
-  ücretsiz, kazanılan puan da yanmıyor) ama geçiş öncesinden kalan satırlar defterde
-  duruyor ve kullanıcının geçmişinde görünüyor. Etiketi kaldırmak o satırları ham enum
-  adıyla ("LessonSpending") gösterirdi; "eski" ön eki hem okunur tutuyor hem de artık
-  olmayan bir mekanizmayı yürürlükteymiş gibi anlatmıyor.
+  ESKİ TÜR LİSTEDEN ÇIKARILMADI. LessonSpending artık YAZILMIYOR (ders almak ücretsiz) ama
+  geçiş öncesinden kalan satırlar defterde duruyor ve kullanıcının geçmişinde görünüyor.
+  Etiketi kaldırmak o satırları ham enum adıyla ("LessonSpending") gösterirdi; "eski" eki
+  hem okunur tutuyor hem de artık olmayan bir mekanizmayı yürürlükteymiş gibi anlatmıyor.
+
+  Expiry "eski" DEĞİL ve hâlâ yazılıyor: ders ve topluluk kazancı yanmıyor, ama
+  e-posta doğrulamasında verilen hoş geldin puanı 14 günde doluyor
+  (CreditLedgerService.GrantWelcomeCreditAsync → WelcomeCreditValidityDays) ve
+  ExpireCredits işi onu, geçiş öncesinden kalan vadeli lotlarla birlikte, bir Expiry
+  satırıyla düşürüyor. 2026-09-27'ye kadar etiket "Süresi dolan puan (eski)" idi ve bu
+  yorum "Expiry artık yazılmıyor" diyordu: her yeni kullanıcı 14 gün sonra kendi
+  geçmişinde bu satırı, artık olmayan bir mekanizmanın kalıntısı gibi görüyordu. Satırın
+  açıklaması Kullanım koşulları §3'te.
+
+  CommunityReward (Topluluk'ta net oy eşiğinin bastığı puan, sunucuda
+  CreditTransactionType.CommunityReward) 2026-09-26'ya kadar tabloda YOKTU: Puan geçmişi
+  o satırı ham enum adıyla ("CommunityReward") gösteriyordu. Sunucuya yeni bir tür
+  eklenirse etiketi AYNI GÜN iki istemcide buraya da yazılır.
 */
 export const TRANSACTION_LABELS = {
   WelcomeBonus: 'Hoş geldin puanı',
   LessonEarning: 'Ders anlatım puanı',
+  CommunityReward: 'Topluluk katkı puanı',
   LessonSpending: 'Ders harcaması (eski)',
-  Expiry: 'Süresi dolan puan (eski)',
+  Expiry: 'Süresi dolan puan',
   AdminGrant: 'Yönetici tanımı',
   AdminAdjustment: 'Yönetici düzeltmesi',
 }

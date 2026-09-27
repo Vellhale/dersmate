@@ -455,9 +455,19 @@ export const api = {
   /**
    * Derslerim. Aktif dersler HER ZAMAN tam döner; yalnızca geçmiş sayfalanır
    * (bkz. GetMySessions: aksiyon bekleyen bir ders sayfanın altında kalmamalı).
+   *
+   * pastStatus ('Completed' | 'Cancelled' | 'Expired') yalnızca GEÇMİŞİ süzer ve
+   * past.totalCount süzülmüş toplam olur; aktif kısım değişmez. Parametre yalnızca
+   * doluysa gönderilir (forumFeed'deki `tag` kuralı); yoksa yanıt bugünküyle aynı.
+   * Geçmiş olmayan bir durum 400 VALIDATION_FAILED. Sunucu parametreyi tanımıyorsa
+   * (eski sürüm) yok sayar ve süzülmemiş geçmiş döner: çağıran öğeleri ayrıca süzmeli.
+   * İmza mobilin api.js'iyle aynı; yalnızca sayfa boyutu varsayılanı farklı (mobil 5).
    */
-  mySessions: (pastPage = 1, pastPageSize = 20) =>
-    request(`/api/v1/sessions?pastPage=${pastPage}&pastPageSize=${pastPageSize}`),
+  mySessions: (pastPage = 1, pastPageSize = 20, pastStatus = null) =>
+    request(
+      `/api/v1/sessions?pastPage=${pastPage}&pastPageSize=${pastPageSize}` +
+        (pastStatus ? `&pastStatus=${encodeURIComponent(pastStatus)}` : ''),
+    ),
   sessionProofs: (sessionId) => request(`/api/v1/sessions/${sessionId}/proofs`),
 
   /**

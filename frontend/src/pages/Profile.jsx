@@ -1,21 +1,35 @@
-import { useEffect, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useCallback, useEffect, useId, useRef, useState } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
 import { api } from '../lib/api'
 import { useAuth } from '../state/AuthContext'
+import { useConsent } from '../state/ConsentContext'
 import { useAsync } from '../state/useAsync'
 import { EngellemeModali } from '../components/EngellemeModali'
 import { UserProfileView } from '../components/UserProfileView'
 import { AvatarPicker } from '../components/AvatarPicker'
+import { rehberiYenidenBaslat } from '../components/ProductTour'
+import {
+  AyarlarIkonu,
+  BilgiIkonu,
+  CikisIkonu,
+  KalemIkonu,
+  KalkanIkonu,
+  KameraIkonu,
+  UyariIkonu,
+} from '../components/Ikonlar'
 import { Button, ErrorBox, Field, Modal, Notice } from '../components/ui'
 
 /**
  * Profil sayfası. Parametresiz (/profil) kendi profilini, /profil/:userId başkasınınkini
- * gösterir — tek bileşen, çünkü görüntülenen içerik aynı; fark yalnızca düzenleme
- * düğmelerinin görünürlüğü. İki ayrı sayfa yazmak aynı kartı iki yerde bakımı gerektirirdi.
+ * gösterir — tek bileşen, çünkü görüntülenen içerik aynı; fark yalnızca kendi profildeki
+ * ayarlar menüsü ve kamera rozeti. İki ayrı sayfa yazmak aynı kartı iki yerde bakımı
+ * gerektirirdi.
  */
 export default function Profile() {
   const { userId } = useParams()
   const { session, logout } = useAuth()
+  const { openSettings } = useConsent()
+  const navigate = useNavigate()
   const targetId = userId ?? session?.userId
 
   const [dialog, setDialog] = useState(null)
@@ -28,6 +42,25 @@ export default function Profile() {
   const [kisi, setKisi] = useState(null)
 
   const isSelf = targetId === session?.userId
+
+  // Üst bardaki çıkış düğmesiyle aynı sıra (Layout.jsx → cikisYap).
+  const cikisYap = () => {
+    logout()
+    navigate('/giris')
+  }
+
+  /* Menü öğeleri. Web'de "Bildirim ayarları" YOK: web'de push yok, bir anahtar burada hiçbir
+     şeyi açıp kapatmazdı (mobil Ayarlar ekranında var). */
+  const ayarlar = [
+    { ad: 'Profili düzenle', Ikon: KalemIkonu, onSec: () => setDialog('edit') },
+    { ad: 'Profil fotoğrafını değiştir', Ikon: KameraIkonu, onSec: () => setDialog('avatar') },
+    AYRAC,
+    { ad: 'Çerez tercihleri', Ikon: KalkanIkonu, onSec: openSettings },
+    { ad: 'Rehberi tekrar izle', Ikon: BilgiIkonu, onSec: rehberiYenidenBaslat },
+    AYRAC,
+    { ad: 'Çıkış yap', Ikon: CikisIkonu, onSec: cikisYap },
+    { ad: 'Hesabımı sil', Ikon: UyariIkonu, tehlike: true, onSec: () => setDialog('sil') },
+  ]
 
   /*
     ZEMİN "zengin" KİPTE. Profil bu üründeki vitrin sayfası: veri yoğun değil, tek bir
@@ -58,24 +91,10 @@ export default function Profile() {
             {isSelf ? 'Profilim' : 'Profil'}
           </h1>
 
-          {isSelf && (
-            <div className="flex flex-wrap gap-2">
-              {/* hover'da marka tonu: ikincil buton normalde nötr kalır (birincilin
-                  vurgusunu çalmasın) ama üzerine gelince "tıklanabilirim" der.
-                  ui.jsx'e DOKUNULMADI — görünüm className ile ekleniyor; className,
-                  variant sınıflarından sonra geldiği için hover'da kazanır. */}
-              <Button
-                variant="secondary"
-                className="hover:border-brand-300 hover:text-brand-700"
-                onClick={() => setDialog('avatar')}
-              >
-                Fotoğrafı değiştir
-              </Button>
-              {/* "Öğretmen adaylığı" düğmesi kaldırıldı: adaylık beyanı ve ona bağlı
-                  gönüllü ders yetkisi üründen çıktı, herkes aynı yetkiye sahip. */}
-              <Button onClick={() => setDialog('edit')}>Profili düzenle</Button>
-            </div>
-          )}
+          {/* "Fotoğrafı değiştir" ve "Profili düzenle" düğmeleri 2026-09-26'da dişli
+              menüsüne taşındı (fotoğrafın ayrıca kamera rozeti var). Profil bir vitrin:
+              başlık satırında kişinin kendisiyle yarışan iki büyük düğme duruyordu. */}
+          {isSelf && <AyarlarMenusu ogeler={ayarlar} />}
 
           {/*
             BAŞKASININ PROFİLİNDE: arkadaş ekle + engelle.
@@ -119,25 +138,8 @@ export default function Profile() {
           key={`${targetId}-${version}`}
           userId={targetId}
           onYuklendi={setKisi}
+          onFotografDegistir={isSelf ? () => setDialog('avatar') : undefined}
         />
-
-        {/*
-          HESABI SİL — Google Play, hesap açtıran uygulamalarda silmeyi uygulama içinde
-          zorunlu tutuyor ve web sürümü de aynı hesabı yönettiği için burada da olmalı.
-          Bulunabilir ama öne çıkmıyor: geri alınamaz bir işlem, düzenleme düğmelerinin
-          yanında eşit ağırlıkta durursa yanlışlıkla tıklanır.
-        */}
-        {isSelf && (
-          <div className="border-t border-slate-200 pt-4 text-center">
-            <button
-              type="button"
-              onClick={() => setDialog('sil')}
-              className="text-sm text-slate-400 underline underline-offset-2 hover:text-rose-600"
-            >
-              Hesabımı sil
-            </button>
-          </div>
-        )}
       </div>
 
       {isSelf && (
@@ -171,6 +173,162 @@ export default function Profile() {
             }}
           />
         </>
+      )}
+    </div>
+  )
+}
+
+/** Menüdeki grup ayracı. */
+const AYRAC = { ayrac: true }
+
+/**
+ * AYARLAR MENÜSÜ — profil başlığının sağındaki dişli (2026-09-26).
+ *
+ * ─── NEDEN AÇILIR MENÜ, SAYFA DEĞİL ──────────────────────────────────────────
+ * Mobilde aynı düğme ayrı bir Ayarlar ekranı açıyor (app/ayarlar.jsx): orada öğelerin
+ * açıklama satırı ve bildirim ayarları var, üstelik RN'de alt sayfa üstüne modal açmak
+ * iOS'ta iki Modal'ı üst üste bindiriyordu. Web'de öğeler az ve her biri ya bir modal ya
+ * tek bir eylem; masaüstünde açılır menü alışılmış kalıp. Sayfada TEK `dialog` durumu
+ * olduğu için menüden modal açmak katman yığmıyor: menü kapanır, dialog set edilir.
+ *
+ * ─── HESABIMI SİL EN SONDA, AYRAÇTAN SONRA VE KIRMIZI ─────────────────────────
+ * Google Play, hesap açtıran uygulamalarda silmeyi uygulama içinde zorunlu tutuyor ve web
+ * aynı hesabı yönettiği için burada da olmalı (alt bilgideki "Hesap silme" sayfası da
+ * burayı tarif ediyor). Eskiden profilin en altında soluk bir bağlantıydı; artık tek giriş
+ * bu menü. Geri alınamaz eylem düzenleme öğelerinin yanında eşit ağırlıkta durmasın diye
+ * son sırada ve rose; onayı yine parolayla veriliyor (HesabiSilModali).
+ *
+ * ─── ERİŞİLEBİLİRLİK (WAI-ARIA menü düğmesi kalıbı) ───────────────────────────
+ * Düğme aria-haspopup="menu" + aria-expanded. Açılınca odak ilk öğeye (↑ ile açılırsa son
+ * öğeye) gider; ↑/↓ döngüsel, Home/End uçlara. Escape kapatır ve odağı düğmeye geri
+ * verir; Tab menüyü kapatıp sıradaki öğeye geçer. Dışarı tıklama (pointerdown: fare ve
+ * dokunma) kapatır. Öğeler tabIndex=-1: Tab sırasında TEK durak düğmenin kendisi.
+ *
+ * ⚠️ PORTAL YOK ve `isolate` EKLENMEZ (Layout.jsx'teki zemin notu): menü sayfa akışında
+ * `absolute z-30` ile çiziliyor, yapışkan üst bar (z-40) onun üstünde kalıyor ama menü
+ * düğmenin ALTINA açıldığı için çakışmıyor. Seçilen öğenin açtığı modallar (z-50) da
+ * burada çiziliyor.
+ */
+function AyarlarMenusu({ ogeler }) {
+  // null = kapalı; 'ilk' | 'son' = açık ve odak hangi uca gidecek.
+  const [acik, setAcik] = useState(null)
+  const kapRef = useRef(null)
+  const dugmeRef = useRef(null)
+  const menuRef = useRef(null)
+  const menuId = useId()
+
+  const secilebilir = () => [...(menuRef.current?.querySelectorAll('[role="menuitem"]') ?? [])]
+
+  const kapat = useCallback((odakDugmeye) => {
+    setAcik(null)
+    if (odakDugmeye) dugmeRef.current?.focus()
+  }, [])
+
+  // Açılışta odak menüye: ilk ya da (↑ ile açıldıysa) son öğe.
+  useEffect(() => {
+    if (!acik) return
+    const liste = secilebilir()
+    ;(acik === 'son' ? liste[liste.length - 1] : liste[0])?.focus()
+  }, [acik])
+
+  // Dışarı tıklama kapatır. Düğmenin kendisi kabın İÇİNDE: ona basmak burada yakalanmıyor,
+  // onClick'teki aç/kapa çalışıyor (aksi hâlde önce kapanıp hemen yeniden açılırdı).
+  useEffect(() => {
+    if (!acik) return
+    const disari = (e) => {
+      if (!kapRef.current?.contains(e.target)) setAcik(null)
+    }
+    document.addEventListener('pointerdown', disari)
+    return () => document.removeEventListener('pointerdown', disari)
+  }, [acik])
+
+  function dugmeTusu(e) {
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault()
+      setAcik(e.key === 'ArrowUp' ? 'son' : 'ilk')
+    }
+  }
+
+  function menuTusu(e) {
+    const liste = secilebilir()
+    const i = liste.indexOf(document.activeElement)
+    const odakla = (j) => {
+      e.preventDefault()
+      liste[(j + liste.length) % liste.length]?.focus()
+    }
+    if (e.key === 'ArrowDown') odakla(i + 1)
+    else if (e.key === 'ArrowUp') odakla(i < 0 ? liste.length - 1 : i - 1)
+    else if (e.key === 'Home') odakla(0)
+    else if (e.key === 'End') odakla(liste.length - 1)
+    else if (e.key === 'Escape') {
+      e.preventDefault()
+      kapat(true)
+    } else if (e.key === 'Tab') {
+      // Varsayılan davranış sürsün (odak sıradaki öğeye), menü yalnızca kapansın.
+      setAcik(null)
+    }
+  }
+
+  function sec(oge) {
+    // Önce kapat ve odağı düğmeye ver: seçilen öğe bir modal açarsa, modal kapanınca
+    // odak menünün bıraktığı yerde değil düğmede olur.
+    kapat(true)
+    oge.onSec()
+  }
+
+  return (
+    <div ref={kapRef} className="relative">
+      <button
+        ref={dugmeRef}
+        type="button"
+        aria-label="Ayarlar"
+        title="Ayarlar"
+        aria-haspopup="menu"
+        aria-expanded={Boolean(acik)}
+        aria-controls={acik ? menuId : undefined}
+        onClick={() => setAcik((a) => (a ? null : 'ilk'))}
+        onKeyDown={dugmeTusu}
+        className="grid h-11 w-11 place-items-center rounded-lg border border-slate-300 bg-white text-slate-700
+                   transition hover:border-brand-300 hover:text-brand-700 focus:outline-none
+                   focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2
+                   aria-expanded:border-brand-300 aria-expanded:text-brand-700 lg:h-10 lg:w-10"
+      >
+        <AyarlarIkonu className="h-[22px] w-[22px]" />
+      </button>
+
+      {acik && (
+        <div
+          ref={menuRef}
+          id={menuId}
+          role="menu"
+          aria-label="Ayarlar"
+          onKeyDown={menuTusu}
+          className="absolute right-0 top-full z-30 mt-2 w-64 overflow-hidden rounded-xl border border-slate-200
+                     bg-white py-1 shadow-lg"
+        >
+          {ogeler.map((oge, i) =>
+            oge.ayrac ? (
+              <div key={`ayrac-${i}`} role="separator" className="my-1 border-t border-slate-100" />
+            ) : (
+              <button
+                key={oge.ad}
+                type="button"
+                role="menuitem"
+                tabIndex={-1}
+                onClick={() => sec(oge)}
+                className={`flex min-h-11 w-full items-center gap-3 px-4 text-left text-sm transition
+                            focus:outline-none lg:min-h-10 ${
+                              oge.tehlike
+                                ? 'text-rose-700 hover:bg-rose-50 focus-visible:bg-rose-50'
+                                : 'text-slate-700 hover:bg-slate-50 focus-visible:bg-slate-100'
+                            }`}
+              >
+                <oge.Ikon className={`h-[18px] w-[18px] ${oge.tehlike ? 'text-rose-600' : 'text-slate-500'}`} />
+                {oge.ad}
+              </button>
+            ),
+          )}
+        </div>
       )}
     </div>
   )
@@ -360,14 +518,15 @@ function HesabiSilModali({ open, onClose, onDeleted }) {
           <p className="text-sm font-semibold text-slate-900">Silinecekler</p>
           <ul className="mt-1.5 list-disc space-y-1 pl-5 text-sm text-slate-600">
             {/* "telefonun" 2026-09-25'te çıkarıldı: telefon numarası toplanmıyor
-                (bkz. Gizlilik.jsx başı). Liste mobil profil/index.jsx ile aynı olmalı. */}
+                (bkz. Gizlilik.jsx başı). Liste mobil app/ayarlar.jsx → HesabiSilModali ile aynı olmalı
+                (2026-09-26'ya kadar mobil profil/index.jsx'teydi). */}
             <li>Adın, e-postan ve profil fotoğrafın</li>
             <li>Biyografin, üniversite ve bölüm bilgin</li>
             <li>Açtığın ders ilanları</li>
             <li>Veri tercihlerin ve cihaz kaydın</li>
             {/* Sunucu hesap silmede bildirim defterini, bildirim tercihlerini ve push cihaz
                 kayıtlarını siliyor (DeleteAccount). Web'de push yok ama kayıtlar web
-                kullanıcısı için de tutuluyor; mobil profil/index.jsx ile aynı madde. */}
+                kullanıcısı için de tutuluyor; mobil app/ayarlar.jsx ile aynı madde. */}
             <li>Bildirim kayıtların, bildirim ayarların ve bildirim alan cihazların</li>
           </ul>
         </div>
@@ -377,6 +536,8 @@ function HesabiSilModali({ open, onClose, onDeleted }) {
           <p className="mt-1.5 text-sm leading-relaxed text-slate-600">
             Yaptığın dersler, kazandırdığın puanlar ve yazdığın değerlendirmeler karşı
             tarafın geçmişine ait olduğu için siliniyor değil — orada adın yerine
+            &ldquo;Silinmiş kullanıcı&rdquo; görünecek. Topluluk&rsquo;taki gönderilerin,
+            yorumların ve oyların da kalacak; gönderi ve yorumlarında da adın yerine
             &ldquo;Silinmiş kullanıcı&rdquo; görünecek.
           </p>
         </div>

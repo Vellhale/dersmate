@@ -22,7 +22,16 @@ import { PersonLink } from '../components/PersonLink'
   14.5rem (232px) birkaç piksel pay bırakır; altbilgi bağlantıları dar ekranda sarılırsa
   yüksekliği artabildiği için sıfır paya güvenilmiyor.
 
-  lg değeri (16rem) ölçümle doğrulandı: 1360x900 ve 1360x700'de sayfa hiç kaymıyor.
+  ⚠️ lg ALTINDA ALT BİLGİ ARTIK HESABIN İÇİNDE DEĞİL (2026-09-26 ölçümü). Alt bilgi
+  künyeyle (2026-09-19) 124px'e, AltBilgi'nin 44px'lik hedefleriyle 173px'e çıktı
+  (390x844, iki satır bağlantı + künye). Sayfa bu yüzden alt bilgi kadar (101px) kayıyor,
+  ama panel kaymadan ekranda: altı 748'de, ekran 844 (375x667'de 571 / 667). Yani
+  konuşma ve yazma alanı ilk bakışta tam görünüyor; aşağı kaydıran yalnızca alt bilgiyi
+  görüyor. Alt bilgiyi de sığdırmak için paneli 101px kısaltmak, telefonda sohbete ayrılan
+  alanı alt bilgiye vermek olurdu — yapılmadı.
+
+  lg değeri (16rem) ölçümle doğrulandı: 1360x900 ve 1360x700'de sayfa hiç kaymıyor
+  (2026-09-26'da AltBilgi'yle yeniden ölçüldü: lg'de alt bilgi 81px, kayma yine 0).
 */
 const PANEL_YUKSEKLIGI = 'h-[calc(100dvh-14.5rem)] lg:h-[calc(100vh-16rem)] lg:min-h-[420px]'
 

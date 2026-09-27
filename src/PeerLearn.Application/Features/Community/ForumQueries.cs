@@ -1,7 +1,9 @@
+using System.Globalization;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using PeerLearn.Application.Abstractions;
 using PeerLearn.Application.Common;
+using PeerLearn.Application.Features.Identity;
 using PeerLearn.Domain.Community;
 using PeerLearn.Domain.Identity;
 
@@ -77,7 +79,75 @@ public sealed record ForumPostDto(
     /// </summary>
     bool UnderReview,
 
-    int ReportCount);
+    int ReportCount,
+
+    /// <summary>
+    /// Kartın altındaki ilk yorum önizlemesi (2026-09-26); yoksa null. Kurallar
+    /// <see cref="ForumOnizleme"/>'de. SONA ve varsayılan değerle eklendi: konumsal kurucu
+    /// kırılmıyor, alanı tanımayan eski istemci onu yok sayıyor.
+    /// </summary>
+    ForumCommentPreviewDto? FirstComment = null);
+
+/// <summary>
+/// Akış kartındaki ilk yorum. Oy ve perde alanı YOK: önizleme yalnızca görünür (Visible)
+/// yorumdan kurulur ve etkileşim ipliğin içinde (GetForumCommentsHandler) yapılır.
+/// </summary>
+public sealed record ForumCommentPreviewDto(
+    Guid CommentId,
+
+    /// <summary>
+    /// Tek satıra indirgenmiş gövde (satır sonu ve art arda boşluk → tek boşluk), en fazla
+    /// <see cref="ForumOnizleme.EnFazlaGrafem"/> grafem; kesildiyse "…" ile biter.
+    /// </summary>
+    string Body,
+
+    ForumAuthorDto Author,
+    DateTime CreatedAtUtc);
+
+/// <summary>
+/// Akıştaki ilk yorum önizlemesinin kuralları.
+/// </summary>
+/// <remarks>
+/// HANGİ YORUM: gönderinin yazılma sırasına göre İLK yorumu (iplikteki sırayla aynı ölçüt,
+/// <see cref="GetForumCommentsHandler"/>), şu üçü atlanarak:
+///  • İncelemedeki (UnderReview) ve kaldırılmış (Removed) yorum — sorgu koşulu BİREBİR
+///    <c>Status == Visible</c>. İplikte perdeli görünen içerik akışta perdesiz görünmemeli;
+///    ayrıca kısmi index IX_Comments_GorunurGonderiTarih ancak bu yazımla kullanılıyor.
+///  • Bakanla arasında HERHANGİ BİR YÖNDE engel olan kişinin yorumu
+///    (<see cref="EngelSorgusu.KisisiEngelsiz"/>). Akış ve iplik bugün engele göre
+///    SÜZMÜYOR; önizleme ise kullanıcının önüne kendiliğinden çıkan tek yorum, engellenen
+///    kişinin sözü oraya itilmemeli. Engelli yorum atlanır, sıradaki görünür yorum gelir.
+///  • Perdeli (UnderReview) GÖNDERİNİN önizlemesi hiç kurulmaz (null): perdenin altındaki
+///    tartışma, perde açılmadan akışta görünmemeli.
+///
+/// SAYI: kart "{n} yorumun tümünü gör" için gönderinin <c>CommentCount</c>'unu kullanır;
+/// önizlemede atlanan yorumlar o sayıda VAR (sayaç yalnızca artıyor, ForumCommands.cs).
+/// </remarks>
+public static class ForumOnizleme
+{
+    /// <summary>Önizleme gövdesinin üst sınırı (grafem). Kart iki satır gösteriyor.</summary>
+    public const int EnFazlaGrafem = 200;
+
+    private const string UcNokta = "…";
+
+    /// <summary>
+    /// Gövdeyi tek satıra indirger ve <see cref="EnFazlaGrafem"/>'de keser. Grafem = kullanıcının
+    /// tek karakter gördüğü birim; emoji ve birleşik harf ortadan bölünmez.
+    /// </summary>
+    public static string Metin(string govde)
+    {
+        var tekSatir = string.Join(' ',
+            govde.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+
+        var bilgi = new StringInfo(tekSatir);
+        if (bilgi.LengthInTextElements <= EnFazlaGrafem)
+        {
+            return tekSatir;
+        }
+
+        return bilgi.SubstringByTextElements(0, EnFazlaGrafem - 1).TrimEnd() + UcNokta;
+    }
+}
 
 public sealed record ForumCommentDto(
     Guid CommentId,
@@ -211,6 +281,13 @@ public sealed class GetForumFeedHandler
             .Where(v => v.UserId == request.CurrentUserId && v.PostId != null && idler.Contains(v.PostId!.Value))
             .ToDictionaryAsync(v => v.PostId!.Value, v => (int)v.Value, ct);
 
+        // Perdeli gönderinin önizlemesi kurulmaz (ForumOnizleme); sorguya yalnızca görünürler girer.
+        var gorunurIdler = sayfa
+            .Where(x => x.p.Status == ForumContentStatus.Visible)
+            .Select(x => x.p.Id)
+            .ToList();
+        var ilkYorumlar = await IlkYorumlarAsync(gorunurIdler, request.CurrentUserId, ct);
+
         var ogeler = sayfa.Select(x => new ForumPostDto(
             x.p.Id,
             x.p.Tag,
@@ -227,9 +304,90 @@ public sealed class GetForumFeedHandler
             x.p.CommentCount,
             oylarim.TryGetValue(x.p.Id, out var oy) ? oy : 0,
             x.p.Status == ForumContentStatus.UnderReview,
-            x.p.ReportCount)).ToList();
+            x.p.ReportCount,
+            ilkYorumlar.GetValueOrDefault(x.p.Id))).ToList();
 
         return new PagedResult<ForumPostDto>(ogeler, toplam, page, pageSize);
+    }
+
+    /// <summary>
+    /// Sayfadaki gönderilerin ilk yorumları — sayfa başına TEK sorgu (gönderi başına bir
+    /// sorgu 20 kartlık sayfada N+1 olurdu). Hangi yorumun seçildiği: <see cref="ForumOnizleme"/>.
+    /// </summary>
+    /// <remarks>
+    /// EF bu sorguyu LATERAL'e değil pencere fonksiyonuna çeviriyor: ROW_NUMBER() OVER
+    /// (PARTITION BY "PostId" ORDER BY "CreatedAtUtc"), ilk satır, gönderilere LEFT JOIN.
+    ///
+    /// ⚠️ <c>gonderiIdler.Contains(c.PostId)</c> süzgeci ADAY YORUMLARIN kendisinde olmak
+    /// ZORUNDA; ilişki koşulu (<c>c.PostId == p.Id</c>) tek başına yetmiyor. İlk yazımda
+    /// yalnızca o vardı ve EF, PostId süzgeci İÇERİDE OLMAYAN bir pencere alt sorgusu
+    /// üretti: her akış isteği sitedeki TÜM görünür yorumları numaralıyordu (üretilen SQL'de
+    /// görüldü, 2026-09-26). PostgreSQL birleşim koşulunu pencere fonksiyonlu alt sorgunun
+    /// içine itmiyor.
+    ///
+    /// ⚠️ Koşul <c>Status == Visible</c> olarak kalmalı: "!= Removed" gibi bir yazım hem
+    /// perdeli yorumu önizlemeye sokar hem kısmi index'i (IX_Comments_GorunurGonderiTarih:
+    /// PostId, CreatedAtUtc WHERE Status = 'Visible') sessizce devre dışı bırakır. O index
+    /// PostId = ANY(...) ile yalnızca sayfadaki gönderilerin görünür yorumlarını okutuyor.
+    ///
+    /// Sıralamaya ikincil anahtar (Id) bilerek EKLENMEDİ: iplik de yalnızca CreatedAtUtc'ye
+    /// göre sıralıyor (GetForumCommentsHandler) ve index o sırayı veriyor.
+    /// </remarks>
+    private async Task<Dictionary<Guid, ForumCommentPreviewDto>> IlkYorumlarAsync(
+        List<Guid> gonderiIdler, Guid bakan, CancellationToken ct)
+    {
+        if (gonderiIdler.Count == 0)
+        {
+            return [];
+        }
+
+        var adaylar = EngelSorgusu.KisisiEngelsiz(
+            _db,
+            _db.CommunityComments.AsNoTracking()
+                .Where(c => c.Status == ForumContentStatus.Visible && gonderiIdler.Contains(c.PostId)),
+            c => c.AuthorUserId,
+            bakan);
+
+        // Gönderiden yola çıkılıyor: EF bunu "Posts LEFT JOIN (pencereli aday yorumlar)"
+        // olarak TEK yorum taramasına çeviriyor. (GroupBy + First aynı sonucu iki tarama ile
+        // veriyordu: grup anahtarları için bir, pencere için bir.)
+        var satirlar = await _db.CommunityPosts.AsNoTracking()
+            .Where(p => gonderiIdler.Contains(p.Id))
+            .Select(p => new
+            {
+                GonderiId = p.Id,
+                Yorum = adaylar
+                    .Where(c => c.PostId == p.Id)
+                    .Join(_db.Users.AsNoTracking(), c => c.AuthorUserId, u => u.Id, (c, u) => new
+                    {
+                        c.Id,
+                        c.Body,
+                        c.AuthorUserId,
+                        c.CreatedAtUtc,
+                        u.DisplayName,
+                        u.TotalEarnedCredits,
+                        u.Role
+                    })
+                    .OrderBy(x => x.CreatedAtUtc)
+                    .FirstOrDefault()
+            })
+            .ToListAsync(ct);
+
+        // Seviye ve metin BELLEKTE: UserLevelRules.Hesapla ile ForumOnizleme.Metin C#
+        // fonksiyonu, projeksiyonun içinde SQL'e çevrilemezler.
+        return satirlar
+            .Where(s => s.Yorum is not null)
+            .ToDictionary(
+                s => s.GonderiId,
+                s => new ForumCommentPreviewDto(
+                    s.Yorum!.Id,
+                    ForumOnizleme.Metin(s.Yorum.Body),
+                    new ForumAuthorDto(
+                        s.Yorum.AuthorUserId,
+                        s.Yorum.DisplayName,
+                        UserLevelRules.Hesapla(s.Yorum.TotalEarnedCredits).Level,
+                        s.Yorum.Role is UserRole.Admin or UserRole.Moderator),
+                    s.Yorum.CreatedAtUtc));
     }
 
     /// <summary>Pencerenin başlangıcı; All ise null (filtre uygulanmaz).</summary>

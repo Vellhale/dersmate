@@ -11,14 +11,24 @@ import { Link } from 'react-router-dom'
  *
  * userId yoksa (silinmiş kullanıcı, eksik alan) sessizce düz metne düşer — kırık bir
  * bağlantı göstermek, bağlantı göstermemekten kötüdür.
+ *
+ * Kalan öznitelikler bağlantıya geçer (2026-09-26, Topluluk kartı): avatar ile ad aynı
+ * profile iki ayrı bağlantıyla gittiğinde avatarınki `tabIndex={-1}` + `aria-hidden`
+ * alır — fareyle tıklanır ama klavye ve ekran okuyucu aynı hedefi iki kez duymaz.
+ * Düz metne düşüldüğünde bu öznitelikler VERİLMEZ: bağlantı yokken anlamları da yok.
  */
-export function PersonLink({ userId, children, className = '', title = 'Profili gör' }) {
+export function PersonLink({ userId, children, className = '', title = 'Profili gör', ...digerleri }) {
   if (!userId) {
     return <span className={className}>{children}</span>
   }
 
   return (
-    <Link to={`/profil/${userId}`} title={title} className={`underline-offset-2 hover:underline ${className}`}>
+    <Link
+      to={`/profil/${userId}`}
+      title={title}
+      className={`underline-offset-2 hover:underline ${className}`}
+      {...digerleri}
+    >
       {children}
     </Link>
   )

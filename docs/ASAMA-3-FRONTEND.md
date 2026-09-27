@@ -108,6 +108,42 @@ Buton, sunucudan gelen `canComplete` bayrağına göre kilitlidir. Bayraklar bac
 `SessionRules`'un **kendisinden** türetilir (`GetMySessions`), yani arayüz sunucunun
 reddedeceği bir butonu asla göstermez.
 
+### Derslerim: beş sekme (2026-09-26, 2026-08-24 kararını geri alır)
+
+2026-08-24'te Derslerim ekrana sabit **iki sütuna** geçmişti (solda yaklaşan, sağda geçmiş +
+puan geçmişi; sütunlar kendi içinde kayıyor, sayfa kaymıyordu — yükseklik
+`100dvh − 10.5rem`, gerekçesi `Sessions.jsx`'in eski başlık yorumundaydı). Kullanıcı
+kararıyla bu düzen **kalktı**: sayfa artık `max-w-3xl` tek sütun, normal kayar ve içerik
+beş sekmede (adlar kullanıcının, değiştirilmeden):
+
+| sekme | içerik | veri |
+|---|---|---|
+| Senden aksiyon bekleyenler | kanıt yükleme / onay bekleyen dersler + "İtirazda, karar yönetimde" | `active` |
+| Planlanmış | "Saati geçti, hâlâ açık" + "Yaklaşan" | `active` |
+| Geçmiş dersler | **yalnızca tamamlananlar**, numaralı sayfa (5'li) | `GET /sessions?pastStatus=Completed` |
+| Puan geçmişi | puan defteri, "daha eski" ile birikir | `GET /wallet/statement` |
+| Rezerve geçmişi | iki rolde bütün rezervasyonlar, sonucu ne olursa olsun, ders tarihine göre | `active` + süzülmemiş geçmiş, birikir |
+
+- **Sekme adreste tutulur** (`?sekme=aksiyon|planlanmis|gecmis|puan|rezerve`, `replace` ile):
+  yenileme ve paylaşılan bağlantı sekmeyi korur, geri tuşu sekme sekme gezmez. Bilinmeyen
+  değer aksiyon sekmesini açar. Parametre yoksa ilk veride karar verilir (senden iş bekleyen
+  ders varsa aksiyon, yoksa planlanmış) ve sabit kalır. Mobil aynı parametreyi okuyup
+  adresten SİLİYOR — bilinçli fark (web'de adres görünür).
+- **Hangi ders hangi sekmede** `frontend/src/lib/dersDurumu.js`'te (`eylemBekliyor`,
+  `dersSekmesi`, `rezervasyonBirlesimi`). Dosya mobille **bayt bayt aynı**; biri değişirse
+  öteki aynı gün. Bu turda web'in aksiyon tanımı mobilinkine geçti: itiraz sayaca girmez
+  (basılacak düğmesi yok) ama aksiyon sekmesinde kendi başlığıyla durur; eğitmenin bitişi
+  geçmiş Booked dersi sunucu bayrağı gelmeden aksiyona geçer. İki istemci aynı sayıyı söyler.
+- **Aynı sayfada iki sayfalama deseni, bilinçli**: Geçmiş dersler numaralı (süzgeçle sayfa
+  sınırları kesin), Puan ve Rezerve birikir. Rezerve numaralanamaz: tam gelen aktif liste
+  sayfalı geçmişin arasına serpiştiği için n. sayfanın sınırı önceki sayfalar yüklenmeden
+  bilinemez. Birleşimde yalnızca yüklenmiş en eski geçmiş kaydından yeni aktif dersler
+  gösterilir, yoksa sonraki sayfa listenin ortasına kayıt sokardı.
+- Geçmiş sayfası değişince liste başına kaydırılır (numaralı düğmeler altta; sayfa bütün
+  olarak kaydığı için kullanıcı yeni sayfanın sonunda kalıyordu).
+- Sunucu `pastStatus`'u tanımıyorsa (eski sürüm) süzülmemiş geçmiş döner; istemci ayrıca
+  `status === 'Completed'` ile süzer ve o durumda sayıyı göstermez. Sunucu önce dağıtılır.
+
 ## 4. Entegrasyon Detayları
 
 - **Hata gösterimi:** Backend Türkçe `detail` mesajını döndürür; `ErrorBox` bunu ve hata kodunu

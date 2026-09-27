@@ -21,7 +21,7 @@ npm --prefix frontend run dev                     # arayüz :5173
 powershell -File .\tools\start-dev.ps1            # üçünü birden, ayrı konsollarda
 powershell -File .\tools\stop-dev.ps1             # düzgün kapat (Postgres'i ÖLDÜRME)
 powershell -File .\tools\restart-api.ps1          # durdur → derle → başlat
-powershell -File .\tools\run-all-tests.ps1        # birim testleri + 17 e2e paketi, tek özet
+powershell -File .\tools\run-all-tests.ps1        # birim testleri + 18 e2e paketi, tek özet
 ```
 
 ```bash
@@ -233,6 +233,101 @@ Hepsi bu projede **en az bir kez** ısırdı:
   gelir. Yeni bir renk eklerken kontrastı ölç.
 - **Erişilebilirlik eşikleri testle korunuyor** (`frontend/e2e/marka.spec.js`). Palet
   değiştirirsen orası kırılır — bu kasıtlı.
+- **`CamKart` dolgusu `!p-*` ile değişir.** Tabanı `p-5` ve derlenen CSS'te `.p-5`, `.p-0` ile
+  `.p-4`'ten SONRA geliyor: `className="p-0"` hiçbir şeyi ezmez, hata da vermez (emsal
+  `UserProfileView`, `Sessions`, `GonderiKarti`: `!p-0`). Cam kart üstünde küçük metin
+  `slate-600`; `slate-500` orada AA eşiğinin altında (`SayfaZemini.jsx`).
+- **Alt bilgi yalnızca `AltBilgi`'den** (`components/AltBilgi.jsx`; Layout ve AuthShell).
+  Sayfaya elle bağlantı şeridi ya da künye satırı yazılmaz. "Çerez tercihleri" ve "Hesap
+  silme" oradan ÇIKAMAZ: rıza her sayfada geri alınabilmeli, mağazanın silme adresi
+  bulunabilmeli. Yüksekliği `Matches.jsx` ve `Chat.jsx`'in boy hesabına giriyor (lg'de
+  81px); değişirse o iki sayfada sayfa kayması yeniden ölçülür.
+- **Topluluk kartının tarzı tek yerden**: `components/GonderiKarti.jsx` → `AKIS_TARZI`
+  (`instagram` | `reddit`). `?akis=` yalnızca `npm run dev`'de okunur, üretim paketinde yok.
+- **Rehber adımı SONA eklenir** (`lib/tour.js`): sunucu kaldığı adımı sayı olarak tutuyor
+  (`onboardingLastStep`), araya giren adım yarıda bırakan herkesi kaydırır. Rehber sürümü
+  yok; eski rehberi bitiren yeni adımı "Rehberi tekrar izle" ile görür. Hedef öğe
+  `ProductTour` → `hedefBul` ile aranır: lg altında raydaki çıpalar DOM'da ama `hidden`,
+  `querySelector` onları kutusuz döndürür ve halka ekranın sol üst köşesine çizilirdi.
+  Seçici dizisi tercih sırasıdır (profil adımı: avatar, yoksa seviye rozeti).
+- **Tailwind `ring-*` ile satır içi `boxShadow` birlikte kullanılmaz**: `ring` de bir
+  box-shadow ve satır içi stil onu tamamen ezer. Rehberin brand-400 halkası bu yüzden ilk
+  commit'ten 2026-09-26'ya kadar HİÇ çizilmedi (karartma satır içindeydi; koyu ray ve üst
+  barda hangi öğenin gösterildiği okunmuyordu). Ek gölge `shadow-[…]` sınıfıyla verilir:
+  `--tw-shadow` katmanına yazar ve halkayla aynı listede birleşir.
+
+---
+
+## Mobil uygulamayla ortak sözleşme
+
+Mobil istemci (`C:\projeler\dersmate Mobil`, React Native / Expo, JavaScript) aynı `/api/v1`
+uçlarına gidiyor ve kendi CLAUDE.md'sinde sunucuyu **değişmez** sayıyor. Sunucuya dokunan bir
+istemci işi bu yüzden istisnadır ve iki depoda AYNI adlı dalda yürür:
+
+| tarih | dal | sunucuya eklenen |
+|---|---|---|
+| 2026-09-25 | `ozellik/push-bildirimleri` | push (yukarıdaki bölüm) |
+| 2026-09-26 | `tasarim/profil-dersler-topluluk` | `GET /sessions?pastStatus=`, `ForumPostDto.FirstComment` |
+
+İstisnanın koşulu: **eklemeli ve geri uyumlu** (parametresiz istek bugünkü yanıtı birebir
+alır) ve **sunucu PR'ı istemcilerden ÖNCE birleşip dağıtılır**. 2026-09-26'nın tuzakları:
+
+- **`pastStatus`** (Derslerim'de "Geçmiş dersler" = yalnızca tamamlananlar). İstemcide süzmek
+  sayfalamayı bozuyordu: `past.totalCount` üç durumun toplamı, beşerli sayfa 0–5 karta
+  düşüyor ve kart eklemeyen sayfa mobilde `onEndReached`'i bir daha tetiklemiyor.
+  - Parametre **dizge** olarak bağlanır, `SessionStatus?` değil: ASP.NET'in enum bağlayıcısı
+    `=99` ya da `=foo` için kendi 400'ünü döndürüyor, `VALIDATION_FAILED` değil. Ayrıştırma
+    `DersGecmisi.SuzgeciCoz`'da; yalnızca üç ad geçer, sayı ve virgüllü birleşim 400.
+  - Eski sunucu parametreyi YOK SAYAR. İki istemci de `status === 'Completed'` süzgecini
+    ayrıca tutuyor; "gereksiz" diye kaldırma.
+- **`FirstComment`** (Topluluk kartında ilk yorumun önizlemesi; kurallar `ForumOnizleme`'de).
+  - Alan konumsal kaydın **SONUNDA**, varsayılanı `null`: mevcut `new ForumPostDto(...)`
+    çağrıları değişmeden derleniyor. Araya eklenen alan her çağrıyı bozar; komşusu aynı
+    türdeyse derleyici de yakalamaz, değerler sessizce kayar.
+  - Koşul **birebir `Status == Visible`**: `!= Removed` perdeli yorumu önizlemeye sokar ve
+    kısmi `IX_Comments_GorunurGonderiTarih` indeksini devre dışı bırakır.
+  - Aday yorumlarda **`gonderiIdler.Contains(c.PostId)` ZORUNLU**. EF sorguyu
+    `ROW_NUMBER() OVER (PARTITION BY "PostId")` penceresine çeviriyor ve PostgreSQL birleşim
+    koşulunu pencereli alt sorgunun içine itmiyor: süzgeç yalnızca ilişki koşulundayken her
+    akış isteği sitedeki TÜM görünür yorumları numaralıyordu (üretilen SQL'de görüldü).
+  - Engel süzgeci iki yönlü (`EngelSorgusu.KisisiEngelsiz`, `Engelsiz` ile aynı ifade
+    ağacından). Akış ve iplik (`GetForumCommentsHandler`) engele göre SÜZMÜYOR: önizleme ile
+    ipliğin ilk yorumu farklı olabilir, `commentCount` atlanan yorumları da sayar. Perdeli
+    gönderinin `firstComment`'i her zaman `null`.
+
+Web ile mobil arasındaki diğer bağlar:
+
+- **Bayt bayt aynı dosyalar.** KAYNAK web, mobil `src/lib/` altına kopyalar; `diff` boş
+  olmalı, biri değişirse öteki aynı gün: `frontend/src/lib/hakkimizdaMetni.js` ve
+  `frontend/src/lib/dersDurumu.js` (hangi ders hangi Derslerim sekmesinde, aksiyon sayacı,
+  Rezerve geçmişi birleşimi). `lib/kunye.js`'in DEĞERLERİ de iki depoda aynı.
+- **`api.js` yüzeyi aynı adlar ve imzalarla**; yeni uç iki depoya birden eklenir, bilinen
+  farklar mobil CLAUDE.md'deki tabloda. `mySessions(pastPage, pastPageSize, pastStatus)` iki
+  depoda aynı imza; varsayılan sayfa boyu web 20, mobil 5.
+- **`SOZLESME_SURUMU` üç yerde** (`LegalDocuments.cs`, web ve mobil `yasalMetinler.js`) ve
+  `Register.cs` eşitlik arıyor. Mağazada mobil sürüm varken sıra: önce mobil yayın, sonra
+  sunucu. Sürüm "kullanıcıya hangi metni gösterdim" beyanıdır: hiçbir yerde yayında olmayan
+  sürümün metni sürüm artmadan düzeltilebilir (2026-09-26/27'de Koşullar §3, Gizlilik
+  §2/§4/§6/§7 ve hesap silme metinleri böyle düzeltildi, 2026-09-25 sürümünün içinde;
+  tarihçe `yasalMetinler.js`'te). Yayındaki metin değişirse sürüm artar.
+  - ⛔ **Bedeli bir birleştirme sırası:** push PR'ları (#38, mobil #20) 2026-09-25'i ESKİ
+    metinle taşıyor. Tek başına birleşip dağıtılırlarsa aynı sürüm iki metne karşılık gelir
+    ve kayıttaki `TermsVersion` kanıt olmaktan çıkar. #38 ve #20 tasarım dalından önce ya da
+    onsuz main'e alınmaz; tasarım dalı push dalının üstünde, ikisi aynı dağıtımda çıkar.
+    Push tek başına çıkacaksa tasarım dalı sürümü üç yerde artırır.
+- **`HesapSilme.jsx` mağazaların silme adresi** ve mobildeki yolu adım adım tarif ediyor
+  (ayrıca Gizlilik §7). Mobilin ayarlar düzeni değişirse bu metinler AYNI GÜN değişir;
+  mağaza incelemesi tarifi izliyor.
+- **Bilinçli farklar** (birini ötekine "düzeltme"):
+  - Derslerim ve Arkadaşlar sekmesi `?sekme=` ile adreste, `replace` ile yazılıyor. Mobil
+    aynı parametreyi okuyup adresten SİLİYOR.
+  - Rehber iki ayrı dizi (web `lib/tour.js`, mobil `src/lib/tur.js`): adım sayısı ve sırası
+    farklı, ilerleme ise hesapta tek sayı. Aynı indeks iki platformda başka adımı gösterir;
+    kabul edilmiş, düşük etkili.
+  - Ayarlar web'de profilin dişli menüsü (`Profile.jsx` → `AyarlarMenusu`), mobilde ayrı
+    ekran (`/ayarlar`). Web'de push, dolayısıyla bildirim ayarı yok.
+  - Geçmiş dersler web'de numaralı sayfa, mobilde birikir. Forum etiket tonları web'de
+    renkli; mobilde yeşil, mor ve gök mavisi hiç yok.
 
 ---
 
@@ -257,6 +352,7 @@ Hepsi bu projede **en az bir kez** ısırdı:
 | Ekonomi, moderasyon, arka plan işleri | `docs/ASAMA-2-BACKEND.md` |
 | Push bildirimleri (defter, dağıtıcı, sessiz saat, etiketler) | `docs/ASAMA-2-BACKEND.md` §8 |
 | Sayfalar, bileşenler, tasarım kararları | `docs/ASAMA-3-FRONTEND.md` |
+| Derslerim'in beş sekmesi, web ↔ mobil farkı | `docs/ASAMA-3-FRONTEND.md` §3 |
 | Sıfırdan kurulum | `docs/GELISTIRME-ORTAMI.md` |
 | Üretim ayarları ve kapılar | `docs/URETIME-CIKIS.md` |
 | Sıfırdan sunucuya kurulum (adım adım) | `docs/SUNUCUYA-KURULUM.md` |

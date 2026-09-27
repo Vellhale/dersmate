@@ -45,6 +45,11 @@ namespace PeerLearn.Application.Features.Identity;
 ///   • Ders oturumları, eşleşmeler, mesaj satırları, değerlendirmeler
 ///   • Cüzdan ve kredi defteri — ledger'a dokunmak karşı tarafın bakiyesini de ilgilendirir
 ///   • Şikayet, itiraz, yaptırım ve yönetici denetim izi — hesap verebilirlik kaydı
+///   • Topluluk gönderileri, yorumları ve oyları — bu metot forum tablolarına DOKUNMUYOR;
+///     yazar adı mezar taşının DisplayName'inden okunduğu için akışta ve iplikte
+///     "Silinmiş kullanıcı" görünüyor. Kullanıcıya bu olgu 2026-09-27'den beri yazılı
+///     (web Gizlilik §7, HesapSilme §3, profil silme penceresi; mobil gizlilik §7 ve
+///     Ayarlar). Buraya forum silme eklenirse o metinler aynı gün değişir.
 ///
 /// ── BANLI KULLANICI ─────────────────────────────────────────────────────────────────
 ///

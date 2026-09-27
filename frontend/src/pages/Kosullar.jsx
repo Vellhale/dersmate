@@ -7,9 +7,12 @@ import { ISLETMECI, ISLETMECI_ADRESI, ISLETMECI_ALAN_ADI, MARKA } from '../lib/k
   KULLANIM KOŞULLARI.
 
   Metin ürünün GERÇEK kurallarını anlatıyor, genel bir şablon değil:
-    • Ders almak ücretsiz, puan yalnızca ANLATANA basılıyor ve harcanmıyor
+    • Ders almak ücretsiz, ders puanı yalnızca ANLATANA basılıyor ve harcanmıyor
       (CreditLedgerService — tek bacaklı işlem, escrow yok)
-    • Puan 30 gün sonra yanıyor (EconomyOptions.EarnedCreditValidityDays)
+    • Topluluk'ta net oy eşiği de puan basıyor (CommunityRewardRules,
+      MintCommunityRewardAsync)
+    • Kazanılan puan (ders ve topluluk) YANMIYOR: iki basımda da CreditLot.ExpiresAtUtc
+      = null (CreditLedgerService → MintLessonRewardAsync, MintCommunityRewardAsync)
     • Ders kanıtla kapanıyor, 48 saatte otomatik onaylanıyor (AutoApproveHours)
     • Yaptırım ölçeği: uyarı / süreli askı / kalıcı ban + cihaz banı
       (ApplySanction, BanUser)
@@ -18,6 +21,31 @@ import { ISLETMECI, ISLETMECI_ADRESI, ISLETMECI_ALAN_ADI, MARKA } from '../lib/k
   karşılığı var. Bir maddeyi değiştirmeden önce kodun hâlâ öyle davrandığını doğrula;
   yoksa bu metin, Topluluk sayfasındaki "3 şikayette otomatik inceleme" vaadiyle aynı
   duruma düşer (kodda karşılığı olmayan koruma sözü).
+
+  ⚠️ §3 2026-09-25 SÜRÜMÜNÜN İÇİNDE DÜZELTİLDİ (2026-09-26, yayından önce; mobil
+  app/kosullar.jsx ile aynı cümleler). Önceki hâli sunucuyla çelişiyordu: "puan YALNIZCA
+  ders anlatana yazılır" (oysa Topluluk oyları da puan basıyor) ve "kazanılan puan 30 günde
+  yanar" (oysa ders kazancı vadesiz açılıyor; EconomyOptions.EarnedCreditValidityDays hâlâ
+  tanımlı ama hiçbir kod onu okumuyor). Hakkımızda'daki "Topluluk’ta oy toplayan
+  katkıların da puan getirir" güvencesi bu düzeltmeyle çelişkisiz okunuyor.
+  Sözleşme sürümü ARTMADI: 2026-09-25 henüz hiçbir yerde yayında değil (üç yer de main'e
+  birleşmemiş dallarda), bu metni kabul etmiş kullanıcı yok (bkz. lib/yasalMetinler.js).
+
+  "Kazandığın puan" bilerek böyle: kayıtta tanımlanan hoş geldin hediyesi
+  (WelcomeBonus) HÂLÂ vadeli (WelcomeCreditValidityDays) ve süresi dolunca yakılıyor.
+  O bir kazanç değil hediye ve unvana da sayılmıyor; ama "puan yanmaz" diye genel bir
+  cümle, kullanıcının kendi puan geçmişindeki eksi satırla çelişirdi. Madde bu yüzden
+  kaynağı adıyla sayıyor.
+
+  HOŞ GELDİN PUANI MADDESİ (2026-09-27, yine 2026-09-25'in içinde): yukarıdaki notun
+  kabul ettiği eksi satırı metin kullanıcıya hiç anlatmıyordu. Eski §3 "süresi dolan
+  puan yanar" diyerek onu kabaca kapsıyordu; yeni metin o cümleyi kaldırınca, e-posta
+  doğrulamasında verilen puanın 14 gün sonra "Süresi dolan puan" satırıyla düştüğünü
+  söyleyen tek açıklama da gitmişti. Dayanak: CreditLedgerService.GrantWelcomeCreditAsync
+  (ExpiresAtUtc = now + WelcomeCreditValidityDays; appsettings.json'da 14, üretimde
+  ezilmiyor), ExpireCreditsHandler → ExpireDueLotsAsync (BackgroundJobs), "seviyene
+  sayılmaz" için User.TotalEarnedCredits'in yalnızca ders ve topluluk kazancıyla artması.
+  WelcomeCreditValidityDays değişirse bu madde ve mobil app/kosullar.jsx aynı gün değişir.
 */
 export default function Kosullar() {
   return (
@@ -73,16 +101,21 @@ export default function Kosullar() {
         </p>
         <Maddeler>
           <li>
-            Puan <strong>yalnızca ders anlatana</strong> yazılır: her 30 dakikalık blok
-            için 50 puan.
+            Puan, onaylanan dersin <strong>anlatanına</strong> yazılır: her 30 dakikalık
+            blok için 50 puan. Topluluk’ta yeterli net oy toplayan katkıların da puan
+            kazandırır.
           </li>
           <li>
             Puan <strong>harcanmaz</strong>. Ders almak için puana ihtiyacın yok; puan
             yalnızca seviyeni ve profilindeki görünürlüğünü belirler.
           </li>
           <li>
-            Kazanılan puanın geçerlilik süresi <strong>30 gündür</strong>; süresi dolan
-            puan yanar.
+            Ders anlatarak ve Topluluk katkılarınla kazandığın puanın{' '}
+            <strong>süresi dolmaz</strong>; bu puan yanmaz.
+          </li>
+          <li>
+            E-posta doğrulamasında verilen hoş geldin puanı 14 gün sonra silinir; seviyene
+            sayılmaz.
           </li>
           <li>
             Puanın nakit veya başka bir değerle karşılığı yoktur, devredilemez.

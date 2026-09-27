@@ -1,21 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAuth } from '../state/AuthContext'
 import { Avatar } from '../components/Avatar'
+import { GonderiKarti } from '../components/GonderiKarti'
 import { CamKart } from '../components/SayfaZemini'
-import { SeviyeRozeti } from '../components/SeviyeRozeti'
-import { YonetimRozeti } from '../components/YonetimRozeti'
 import { Button, ErrorBox, Field, Loading, Modal, Notice, Pagination } from '../components/ui'
 import { api } from '../lib/api'
+import { ETIKET_ENUM, ETIKETLER, oyUygula } from '../lib/forum'
 import {
   AlevIkonu,
   ArtanIkonu,
-  BayrakIkonu,
   BilgiIkonu,
   KalkanIkonu,
-  MesajIkonu,
-  OyOkuIkonu,
   SaatIkonu,
-  UyariIkonu,
 } from '../components/Ikonlar'
 
 /*
@@ -40,22 +36,20 @@ import {
   değişiyor (geri bildirim orada), yalnızca SIRA sabit kalıyor; liste ancak filtre
   değişince ya da yeni gönderi paylaşılınca yeniden çekiliyor.
 
-  ─── NEDEN REDDIT DÜZENİ ──────────────────────────────────────────────────────
-  İstenen referans /liseliler tarzı bir akış. Oradan alınan üç şey var ve üçü de
-  kararla alındı:
+  ─── KART: INSTAGRAM TARZI (2026-09-26), REDDIT TARZI GERİ DÖNÜŞ ─────────────
+  Kart ve parçaları (oy rayı, şikayet düğmesi, yorum ipliği, yazar satırı, etiket
+  pili) components/GonderiKarti.jsx'te; etiket sözlüğü, zaman biçimi ve oy hesabı
+  lib/forum.js'te. Varsayılan tarz Instagram: avatarlı yazar başlığı (profile gider),
+  başlık + üç satırlık özet, çizgiyle ayrılmış eylem satırı (yatay oy, yorum, şikayet)
+  ve ilk yorumun iki satırlık önizlemesi (sunucu: ForumPostDto.firstComment). Eski
+  Reddit düzeni (sol oy rayı) aynı dosyada duruyor; GonderiKarti.jsx → AKIS_TARZI
+  tek satırla geri getirir. Gerekçe o dosyanın başında.
 
-    1. SOL OY RAYI. Oy, gönderinin İÇERİĞİNDEN önce gelir; forumun sıralaması buna
-       bağlı olduğu için kullanıcı "bu gönderi topluluk için ne değerde" bilgisini
-       başlığı okumadan görüyor. Alt satıra konsaydı, taranan bir listede oy
-       yorumların yanında bir sayı daha olurdu.
-    2. BAŞLIK + ÖZET. Gönderi kartı içeriği bitirmez, açmaya davet eder — akış
-       taranabilir kalmalı. Özet üç satırda kesiliyor (line-clamp-3).
-    3. ETİKET (flair). Bir öğrenci forumunda "soru" ile "motivasyon" bambaşka iki
-       okuma kipi; etiket, gönderiyi açmadan hangisine girdiğini söylüyor.
-
-  ALINMAYAN ŞEY: Reddit'in yoğunluğu. Orada bir ekrana 12 gönderi sığar; burada 5.
-  Bu ürünün geri kalanı (Keşfet, Derslerim) ferah kartlarla çalışıyor ve forum tek
-  başına sıkışık bir liste olsaydı uygulamanın içinde başka bir uygulama gibi dururdu.
+  İki tarzda da korunanlar: başlık + özet (kart içeriği bitirmez, açmaya davet eder;
+  özet üç satırda kesilir), etiket (bir öğrenci forumunda "soru" ile "motivasyon" iki
+  ayrı okuma kipi) ve ferahlık — Reddit'in yoğunluğu hiç alınmadı: bu ürünün geri
+  kalanı (Keşfet, Derslerim) ferah kartlarla çalışıyor ve forum tek başına sıkışık bir
+  liste olsaydı uygulamanın içinde başka bir uygulama gibi dururdu.
 
   ─── MODERASYON ARAYÜZÜ İKİNCİL DEĞİL, DÜZENİN PARÇASI ────────────────────────
   Aktif bir öğrenci forumunda spam, argo, izinsiz PDF ve trollemenin OLUP OLMAYACAĞI
@@ -78,24 +72,12 @@ import {
 /* ─── SUNUCU SÖZLEŞMESİ ────────────────────────────────────────────────────────
 
    Arayüz Türkçe anahtarlarla çalışıyor ('yeni', 'stres'), sunucu enum adlarıyla
-   ('Newest', 'ExamStress'). Çeviri TEK YERDE, burada: iki tarafın da kendi doğal
-   sözlüğünü kullanabilmesi için. Anahtarları sunucununkilerle değiştirmek arayüzün
-   geri kalanını (etiket renkleri, adlar, testler) İngilizceye çevirmek demekti.   */
+   ('Newest', 'ExamStress'). Çeviri anahtar başına TEK YERDE: sıralama ve tarih
+   burada, etiket lib/forum.js'te (kart da kullanıyor). Anahtarları sunucununkilerle
+   değiştirmek arayüzün geri kalanını İngilizceye çevirmek demekti.   */
 
 const SIRA_ENUM = { yeni: 'Newest', oy: 'Top', tartismali: 'Controversial' }
 const ZAMAN_ENUM = { hepsi: 'All', gun: 'Day', hafta: 'Week', ay: 'Month' }
-const ETIKET_ENUM = {
-  stres: 'ExamStress',
-  soru: 'Question',
-  kaynak: 'Resource',
-  program: 'StudyPlan',
-  motivasyon: 'Motivation',
-  tercih: 'Preference',
-}
-/** Ters yön: sunucudan gelen etiketi arayüz anahtarına çevirir. */
-const ETIKET_ANAHTARI = Object.fromEntries(
-  Object.entries(ETIKET_ENUM).map(([anahtar, enumAdi]) => [enumAdi, anahtar]),
-)
 
 /*
   ŞİKAYET SEBEBİ → SUNUCU ENUM'U.
@@ -167,38 +149,6 @@ const ZAMAN_ARALIKLARI = [
   { key: 'ay', label: 'Bu ay' },
 ]
 
-const ETIKETLER = [
-  { key: 'hepsi', label: 'Tümü' },
-  { key: 'stres', label: 'Sınav Stresi' },
-  { key: 'soru', label: 'Soru Sor' },
-  { key: 'kaynak', label: 'Kaynak' },
-  { key: 'program', label: 'Ders Programı' },
-  { key: 'motivasyon', label: 'Motivasyon' },
-  { key: 'tercih', label: 'Tercih' },
-]
-
-/*
-  Etiket renkleri. Hepsi 100/700-800 çiftleri — ui.jsx'teki Badge tonlarıyla aynı
-  aile, yani forum kendi renk dilini kurmuyor, var olanı kullanıyor. Çiftler AA
-  eşiğini geçiyor (en düşüğü violet-700/violet-100 ≈ 6.6:1).
-
-  Marka mavisi SORU etiketine verildi: bu üründe soru sormak ana eylem ve marka rengi
-  ana eylemi işaretliyor. Diğerleri marka dışı tonlar — altısı da mavi olsaydı etiket
-  bir ayrım aracı olmaktan çıkardı.
-
-  indigo BİLEREK YOK: e2e/marka.spec.js eski indigo tonlarını arayüzde arıyor.
-*/
-const ETIKET_TONU = {
-  stres: 'bg-amber-100 text-amber-800',
-  soru: 'bg-brand-100 text-brand-700',
-  kaynak: 'bg-emerald-100 text-emerald-700',
-  program: 'bg-violet-100 text-violet-700',
-  motivasyon: 'bg-rose-100 text-rose-700',
-  tercih: 'bg-sky-100 text-sky-800',
-}
-
-const ETIKET_ADI = Object.fromEntries(ETIKETLER.map((e) => [e.key, e.label]))
-
 /*
   ŞİKAYET SEBEPLERİ — beş tanesi bu ürünün gerçek risklerine birebir karşılık geliyor,
   altıncısı ("Diğer") açık uç.
@@ -256,106 +206,6 @@ const ONLEMLER = [
   { baslik: 'Bağlantı eşiği', metin: 'Dışarıya bağlantı paylaşımı 3. seviyeden itibaren açılıyor.' },
   { baslik: 'Otomatik inceleme', metin: 'Kısa sürede 3 şikayet alan gönderi akışta kapatılır.' },
 ]
-
-/* ─── YARDIMCILAR ──────────────────────────────────────────────────────────── */
-
-/**
- * Sunucudan gelen UTC damgasını milisaniyeye çevirir.
- *
- * ⚠️ ZAMAN DİLİMİ EKİ YOKSA 'Z' EKLENİYOR. .NET, DateTime'ı Kind=Utc iken sonunda
- * 'Z' ile yazıyor; Kind=Unspecified iken YAZMIYOR ve o durumda tarayıcı metni YEREL
- * saat sanar. Türkiye'de bu üç saatlik bir kayma demek: üç saat önce yazılmış bir
- * gönderi "şimdi" görünür, bir dakika önce yazılan ise gelecekte kalır. Sütun
- * timestamptz olduğu için EF Utc döndürüyor, yani bugün ek gereksiz — ama tek bir
- * DTO'nun Kind'i değiştiğinde hata SESSİZ olur, bu yüzden koruma burada duruyor.
- */
-function damgayaCevir(metin) {
-  if (!metin) return null
-  const tamDamga = /(?:[zZ]|[+-]\d{2}:?\d{2})$/.test(metin) ? metin : `${metin}Z`
-  const ms = Date.parse(tamDamga)
-  return Number.isNaN(ms) ? null : ms
-}
-
-/** Damganın kaç dakika önce olduğunu verir; okunamayan damga 0 sayılıyor ("şimdi"). */
-function yasDakika(metin) {
-  const ms = damgayaCevir(metin)
-  if (ms === null) return 0
-  // Negatife düşebilir: sunucu saati istemciden birkaç saniye ileriyse. "-1 dk" yerine
-  // "şimdi" göstermek doğru, çünkü fark saat farkı değil senkron gürültüsü.
-  return Math.max(0, Math.round((Date.now() - ms) / 60000))
-}
-
-/** "22 dk" / "3 sa" / "2 g". Forumda mutlak tarih işe yaramıyor: okuyanın sorduğu şey
-    "ne zaman yazıldı" değil, "hâlâ taze mi". */
-function zamanKisalt(dakika) {
-  // Az önce yazılan gönderi/yorum "0 dk" gösteriyordu; sayı doğruydu ama okunuşu
-  // bozuktu — sıfır birimli bir süre, süre değil.
-  if (dakika < 1) return 'şimdi'
-  if (dakika < 60) return `${dakika} dk`
-  const saat = Math.floor(dakika / 60)
-  if (saat < 24) return `${saat} sa`
-  return `${Math.floor(saat / 24)} g`
-}
-
-/**
- * OY UYGULAMA — sunucudaki üç durumun istemci aynası (VoteForumContentHandler).
- *
- *   oy yok      → oy ekle
- *   aynı yön    → GERİ AL (sunucu satırı siler, sayaç düşer)
- *   ters yön    → çevir (bir taraftan düş, diğerine ekle)
- *
- * Tek fonksiyon çünkü üç durumun sayaç etkisi birbirine bağlı; ayrı ayrı yazılsaydı
- * biri düzeltilirken diğeri unutulur ve optimistik sayı sunucununkinden kalıcı olarak
- * ayrışırdı. Yine de bu yalnızca TAHMİN: yanıt gelince sunucunun sayaçları yazılıyor.
- */
-function oyUygula(icerik, yon) {
-  const onceki = icerik.myVote ?? 0
-  const yeni = onceki === yon ? 0 : yon
-
-  let arti = icerik.upvoteCount
-  let eksi = icerik.downvoteCount
-
-  if (onceki === 1) arti -= 1
-  else if (onceki === -1) eksi -= 1
-
-  if (yeni === 1) arti += 1
-  else if (yeni === -1) eksi += 1
-
-  return { ...icerik, upvoteCount: arti, downvoteCount: eksi, myVote: yeni }
-}
-
-function EtiketPili({ etiket, className = '' }) {
-  return (
-    <span
-      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold
-                  ${ETIKET_TONU[etiket] ?? 'bg-slate-100 text-slate-700'} ${className}`}
-    >
-      {ETIKET_ADI[etiket] ?? etiket}
-    </span>
-  )
-}
-
-/**
- * Yazar satırı: avatar + ad + (yönetim rozeti) + seviye.
- *
- * Gönderide ve yorumda AYNI bileşen: yazarın nasıl gösterildiği iki yerde ayrı
- * yazılsaydı, rozet birine eklenip diğerine eklenmeden kalabilirdi.
- */
-function YazarSatiri({ yazar, boyut = 'xs' }) {
-  return (
-    <span className="flex min-w-0 items-center gap-1.5">
-      <Avatar userId={yazar?.userId} name={yazar?.displayName} size={boyut} />
-      <span className="truncate text-xs font-medium text-slate-700">
-        {yazar?.displayName ?? 'Kullanıcı'}
-      </span>
-      {yazar?.isStaff && <YonetimRozeti kucuk={boyut === 'xs'} />}
-      {/* Seviye yalnızca `level` alanıyla besleniyor; rozet ilerleme verisi olmadan
-          ilerleme iddia etmiyor (bkz. SeviyeRozeti). Puan başkasının verisi ve forum
-          DTO'su onu göndermiyor. */}
-      <SeviyeRozeti kaynak={{ level: yazar?.level }} boyut="sm" ton="acik" className="shrink-0" />
-    </span>
-  )
-}
 
 /* ─── SAYFA ────────────────────────────────────────────────────────────────── */
 
@@ -696,7 +546,10 @@ export default function Topluluk() {
               )}
             </CamKart>
           ) : (
-            <div className="space-y-4">
+            /* space-y-5: kartlar cam, zemin üstünde zaten ayrı duruyor; ayrımı asıl
+               kartın İÇ düzeni (başlık / gövde / eylem satırı) veriyor. Bant ya da ek
+               çizgi yok. */
+            <div className="space-y-5">
               {gonderiler.map((gonderi) => (
                 <GonderiKarti
                   key={gonderi.postId}
@@ -1029,400 +882,6 @@ function SiralamaSeridi({ sira, onSira, zaman, onZaman, etiket, onEtiket, acikla
         ))}
       </div>
     </CamKart>
-  )
-}
-
-/* ─── GÖNDERİ KARTI ────────────────────────────────────────────────────────── */
-
-function GonderiKarti({
-  gonderi,
-  benimUserId,
-  yorumDurumu,
-  onOy,
-  yorumlarAcik,
-  onYorumlar,
-  onYorumYaz,
-  onYorumOy,
-  gizliAcik,
-  onGizliAc,
-  onSikayet,
-}) {
-  const etiketAnahtari = ETIKET_ANAHTARI[gonderi.tag] ?? gonderi.tag
-  const benimGonderim = gonderi.author?.userId === benimUserId
-
-  /*
-    İNCELEMEDEKİ GÖNDERİ AKIŞTA KAPALI GELİR.
-
-    Silinmiyor, perdeleniyor. İkisi arasındaki fark moderasyonun görünürlüğü: sessizce
-    silinen içerik, hem yazarına hem okuyanına hiçbir şey söylemez ve "burada sansür
-    var mı" sorusunu cevaplanamaz hâle getirir. Perde ise sebebi yazıyor, sayıyı
-    veriyor ve kararı okuyana bırakıyor.
-  */
-  if (gonderi.underReview && !gizliAcik) {
-    return (
-      <CamKart className="border-amber-200/80 bg-amber-50/70 p-4">
-        <div className="flex items-start gap-3">
-          <UyariIkonu className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
-          <div className="min-w-0">
-            <p className="text-sm font-semibold text-slate-900">Bu gönderi incelemede</p>
-            <p className="mt-1 text-sm leading-relaxed text-slate-700">
-              {gonderi.reportCount} kişi topluluk kurallarını ihlal ettiğini bildirdi. Moderasyon
-              sonuçlanana kadar akışta kapalı tutuluyor.
-            </p>
-            <div className="mt-3 flex flex-wrap items-center gap-3">
-              <button
-                type="button"
-                onClick={onGizliAc}
-                className="min-h-11 rounded-lg border border-amber-300 bg-white px-3 text-xs
-                           font-semibold text-amber-900 transition hover:bg-amber-100 lg:min-h-9"
-              >
-                Yine de göster
-              </button>
-              <span className="text-xs text-slate-600">Etiket: {ETIKET_ADI[etiketAnahtari]}</span>
-            </div>
-          </div>
-        </div>
-      </CamKart>
-    )
-  }
-
-  return (
-    <CamKart className="p-0">
-      {/* Perde açıldıysa uyarı kartın ÜSTÜNDE kalıyor: kullanıcı "yine de göster"e
-          bastığı anı unutabilir, içeriğin durumu unutulmamalı. */}
-      {gonderi.underReview && (
-        <div className="flex items-center gap-2 rounded-t-2xl border-b border-amber-200 bg-amber-50 px-4 py-2">
-          <UyariIkonu className="h-4 w-4 shrink-0 text-amber-600" />
-          <p className="text-xs font-medium text-amber-900">
-            İncelemede — {gonderi.reportCount} şikayet aldı, moderasyon sürüyor.
-          </p>
-        </div>
-      )}
-
-      <div className="flex gap-3 p-4 sm:gap-4 sm:p-5">
-        <OyRayi
-          arti={gonderi.upvoteCount}
-          eksi={gonderi.downvoteCount}
-          oy={gonderi.myVote}
-          onOy={(yon) => onOy(gonderi.postId, yon)}
-        />
-
-        <div className="min-w-0 flex-1">
-          {/* ÜST SATIR: etiket + yazar + zaman solda, şikayet sağ üstte. */}
-          <div className="flex items-start justify-between gap-3">
-            {/*
-              AYIRAÇ NOKTALARI KENDİ BAŞLARINA BİR ÖĞE DEĞİL, ait oldukları metnin
-              başında duruyor. 320px'te bu satır sarıyor ve nokta ayrı bir flex öğesi
-              olduğunda satır sonunda tek başına asılı kalıyordu ("Sınav Stresi ·" /
-              yeni satır / "Elif A."). Noktayı takip ettiği metne bağlamak, sarmanın
-              nereden olursa olsun düzgün görünmesini sağlıyor.
-            */}
-            <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-              <EtiketPili etiket={etiketAnahtari} />
-              <YazarSatiri yazar={gonderi.author} boyut="xs" />
-
-              <span className="flex items-center gap-1.5 text-xs text-slate-600">
-                <span className="text-slate-400" aria-hidden="true">
-                  ·
-                </span>
-                {zamanKisalt(yasDakika(gonderi.createdAtUtc))}
-              </span>
-            </div>
-
-            {/* KENDİ GÖNDERİNİ ŞİKAYET EDEMEZSİN: sunucu da reddediyor ("Kendini
-                şikayet edemezsin"), ama hatayı göstermektense düğmeyi hiç çizmemek
-                doğru — tıklandığında reddedilen bir düğme, kırık bir düğmedir. */}
-            {!benimGonderim && (
-              <SikayetDugmesi
-                onClick={() =>
-                  onSikayet({
-                    tur: 'Gönderi',
-                    id: gonderi.postId,
-                    baslik: gonderi.title,
-                    yazar: gonderi.author?.displayName,
-                  })
-                }
-              />
-            )}
-          </div>
-
-          {/* Başlık gönderinin kendisi: kartın tıklanabilir hissi buradan geliyor.
-              Şimdilik ayrı bir gönderi sayfası yok, o yüzden bağlantı değil — var
-              olmayan bir yere giden bir link, kırık bir vaat olurdu. */}
-          <h3 className="mt-2.5 text-[17px] font-bold leading-snug text-slate-900">
-            {gonderi.title}
-          </h3>
-
-          {/* line-clamp-3: akış TARANABİLİR kalmalı. Tam metin gönderi sayfasında.
-              whitespace-pre-line: kullanıcı satır arası bıraktıysa o boşluk anlam
-              taşıyor (madde madde yazılmış bir soru, tek paragrafa çökerse okunmaz). */}
-          <p className="mt-2 line-clamp-3 whitespace-pre-line text-sm leading-relaxed text-slate-600">
-            {gonderi.body}
-          </p>
-
-          <div className="mt-3.5 flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={onYorumlar}
-              aria-expanded={yorumlarAcik}
-              className={`flex min-h-11 items-center gap-2 rounded-lg px-2.5 text-xs font-semibold
-                          transition lg:min-h-9 ${
-                            yorumlarAcik
-                              ? 'bg-brand-50 text-brand-700'
-                              : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-                          }`}
-            >
-              <MesajIkonu className="h-4 w-4" />
-              {gonderi.commentCount > 0 ? `${gonderi.commentCount} yorum` : 'Yorumlar'}
-            </button>
-          </div>
-
-          {yorumlarAcik && (
-            <YorumListesi
-              durum={yorumDurumu}
-              benimUserId={benimUserId}
-              onSikayet={onSikayet}
-              onYaz={onYorumYaz}
-              onOy={onYorumOy}
-            />
-          )}
-        </div>
-      </div>
-    </CamKart>
-  )
-}
-
-/*
-  OY RAYI — dikey, kartın solunda.
-
-  Dokunma hedefi lg altında 44px (min-h-11): oy okları bu ekranda birbirine en yakın
-  duran iki düğme ve yanlış oku basmak, kullanıcının kendi oyunu ters çevirmesi demek.
-  lg üstünde fare hassas olduğu için 36px yetiyor.
-
-  Renk oyun yönünü söylüyor: yukarı marka mavisi (bu ürünün "evet" rengi), aşağı rose.
-  Sayı da oyun rengini alıyor — kullanıcı kendi oyunu, okların hangisinin dolu olduğuna
-  bakmadan, tek bir sayıya bakarak görebiliyor.
-
-  ⚠️ SAYI ARTIK OYU AYRICA EKLEMİYOR. Sabit veriyle çalışırken gösterilen değer
-  `puan + oy` idi, çünkü taban sayı kullanıcının kendi oyunu içermiyordu. Sunucudan
-  gelen upvoteCount/downvoteCount İÇERİYOR; toplamayı sürdürmek kendi oyumuzu iki kez
-  saymak olurdu.
-*/
-function OyRayi({ arti, eksi, oy = 0, onOy, kucuk = false }) {
-  const olcu = kucuk ? 'h-9 w-9 lg:h-8 lg:w-8' : 'h-11 w-11 lg:h-9 lg:w-9'
-  const ortak =
-    `grid ${olcu} place-items-center rounded-lg transition ` +
-    'focus:outline-none focus:ring-2 focus:ring-brand-200'
-
-  return (
-    <div className="flex shrink-0 flex-col items-center gap-0.5">
-      <button
-        type="button"
-        aria-label="Yukarı oy ver"
-        aria-pressed={oy === 1}
-        onClick={() => onOy(1)}
-        className={`${ortak} ${
-          oy === 1 ? 'bg-brand-50 text-brand-600' : 'text-slate-400 hover:bg-slate-100 hover:text-brand-600'
-        }`}
-      >
-        <OyOkuIkonu className="h-[18px] w-[18px]" strokeWidth={oy === 1 ? 2.6 : 2} />
-      </button>
-
-      <span
-        className={`text-sm font-bold tabular-nums ${
-          oy === 1 ? 'text-brand-700' : oy === -1 ? 'text-rose-700' : 'text-slate-800'
-        }`}
-      >
-        {arti - eksi}
-      </span>
-
-      <button
-        type="button"
-        aria-label="Aşağı oy ver"
-        aria-pressed={oy === -1}
-        onClick={() => onOy(-1)}
-        className={`${ortak} ${
-          oy === -1 ? 'bg-rose-50 text-rose-600' : 'text-slate-400 hover:bg-slate-100 hover:text-rose-600'
-        }`}
-      >
-        {/* Tek çizim, iki yön: aşağı ok ayrı bir ikon değil, aynı okun 180° dönmüşü. */}
-        <OyOkuIkonu className="h-[18px] w-[18px] rotate-180" strokeWidth={oy === -1 ? 2.6 : 2} />
-      </button>
-    </div>
-  )
-}
-
-/*
-  ŞİKAYET DÜĞMESİ — her gönderide ve her yorumda, aynı çizim, aynı yer mantığı.
-
-  Sessiz duruyor (slate-500, ikon + küçük metin) ama saklı değil. İki uç da yanlış
-  olurdu: dikkat çeken bir "Şikayet Et" düğmesi forumu bir ihbar hattı gibi gösterir;
-  üç nokta menüsünün içine gömülen bir şikayet ise ihlali gören kullanıcının vazgeçtiği
-  bir yol olur. Hover'da rose'a dönüyor — eylemin ağırlığı ancak niyet edildiğinde
-  görünüyor.
-
-  Metin lg altında GİZLİ, ikon kalıyor: dar ekranda üst satırda etiket, yazar ve zaman
-  zaten yarışıyor. Erişilebilir ad her iki durumda da aria-label'da.
-*/
-function SikayetDugmesi({ onClick, kucuk = false }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label="Şikayet et"
-      title="Şikayet et"
-      className={`flex shrink-0 items-center gap-1.5 rounded-lg text-slate-500 transition
-                  hover:bg-rose-50 hover:text-rose-700 ${
-                    kucuk ? 'min-h-11 px-2 text-[11px] lg:min-h-8' : 'min-h-11 px-2 text-xs lg:min-h-9'
-                  }`}
-    >
-      <BayrakIkonu className={kucuk ? 'h-3.5 w-3.5' : 'h-4 w-4'} />
-      <span className="hidden font-medium sm:inline">Şikayet et</span>
-    </button>
-  )
-}
-
-/* ─── YORUMLAR ─────────────────────────────────────────────────────────────── */
-
-/*
-  Yorumlar gönderinin İÇİNDE açılıyor, ayrı bir sayfada değil. Sebep: bu bir iskelet ve
-  gönderi sayfası henüz yok; ama karar geçici değil — akranlar arası kısa cevaplar için
-  yerinde açılan bir iplik, sayfa değiştirip geri dönmekten daha az iş.
-
-  Sol kenardaki dikey çizgi (border-l) yorumları gönderiye bağlıyor: girinti tek başına
-  "bu yorumlar o gönderiye ait" demiyor, çizgi diyor.
-
-  YORUM OYU ARTIK TIKLANABİLİR. Sabit veriyle çalışırken salt okunurdu ("basıldığında
-  hiçbir şey olmayan bir düğme, hiç olmayan bir düğmeden kötüdür") çünkü uç yoktu.
-  Uç geldi (POST /api/community/comments/{id}/vote) ve satır gönderinin rayıyla aynı
-  bileşene döndü — vaat edilen ile yapılan yeniden aynı şey.
-*/
-function YorumListesi({ durum, benimUserId, onSikayet, onYaz, onOy }) {
-  const [taslak, setTaslak] = useState('')
-  const [gonderiliyor, setGonderiliyor] = useState(false)
-  const [hata, setHata] = useState(null)
-
-  /* Alt sınır 5 karakter (sunucudaki ForumRules.CommentMinLength ile aynı): "+1" ya da
-     "aynen" gibi tek kelimelik onaylar bir tartışmayı ilerletmiyor ama boş bir yorumu
-     göndermeyi engellemek yeterli — gönderi formundaki 20 karakterlik eşik burada fazla
-     olurdu, kısa ve isabetli cevaplar meşru. */
-  const gonderilebilir = taslak.trim().length >= 5 && !gonderiliyor
-
-  const gonder = async (e) => {
-    e.preventDefault()
-    if (!gonderilebilir) return
-    setGonderiliyor(true)
-    setHata(null)
-    try {
-      await onYaz(taslak.trim())
-      setTaslak('')
-    } catch (err) {
-      // Taslak SİLİNMİYOR: yazdığı yorumu kaybeden kullanıcı yeniden yazmıyor, vazgeçiyor.
-      setHata(err)
-    } finally {
-      setGonderiliyor(false)
-    }
-  }
-
-  const liste = durum?.liste
-
-  return (
-    <div className="mt-4 border-t border-slate-200/70 pt-4">
-      {durum?.yukleniyor ? (
-        <Loading label="Yorumlar yükleniyor…" />
-      ) : durum?.hata ? (
-        <ErrorBox error={durum.hata} />
-      ) : !liste || liste.length === 0 ? (
-        <p className="text-sm text-slate-600">Bu gönderide henüz yorum yok.</p>
-      ) : (
-        <ul className="space-y-4 border-l-2 border-slate-100 pl-3 sm:pl-4">
-          {liste.map((yorum) => (
-            <li key={yorum.commentId}>
-              <div className="flex items-start gap-2.5">
-                <OyRayi
-                  kucuk
-                  arti={yorum.upvoteCount}
-                  eksi={yorum.downvoteCount}
-                  oy={yorum.myVote}
-                  onOy={(yon) => onOy(yorum.commentId, yon)}
-                />
-
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-start justify-between gap-2">
-                    <span className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1">
-                      <YazarSatiri yazar={yorum.author} boyut="xs" />
-                      <span className="flex items-center gap-1.5 text-xs text-slate-600">
-                        <span className="text-slate-400" aria-hidden="true">
-                          ·
-                        </span>
-                        {zamanKisalt(yasDakika(yorum.createdAtUtc))}
-                      </span>
-                    </span>
-
-                    {/* Yorumun şikayet düğmesi de aynı yerde: sağ üst. Gönderiyle
-                        aynı konum, aynı ikon — kullanıcı kuralı bir kez öğreniyor. */}
-                    {yorum.author?.userId !== benimUserId && (
-                      <SikayetDugmesi
-                        kucuk
-                        onClick={() =>
-                          onSikayet({
-                            tur: 'Yorum',
-                            id: yorum.commentId,
-                            baslik: yorum.body,
-                            yazar: yorum.author?.displayName,
-                          })
-                        }
-                      />
-                    )}
-                  </div>
-
-                  {yorum.underReview && (
-                    <p className="mt-1 flex items-center gap-1.5 text-xs font-medium text-amber-800">
-                      <UyariIkonu className="h-3.5 w-3.5 shrink-0" />
-                      Bu yorum incelemede.
-                    </p>
-                  )}
-
-                  <p className="mt-1 whitespace-pre-line text-sm leading-relaxed text-slate-700">
-                    {yorum.body}
-                  </p>
-                </div>
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
-
-      {/*
-        Yorum kutusu SATIR İÇİ, modal değil — gönderiden farkı burada: yorumun tek bir
-        alanı var ve bağlamı (üstündeki tartışma) ekranda kalmalı. Modal açsaydı,
-        cevap yazarken cevapladığın şeyi görmez olurdun.
-
-        Düğme metnin ALTINDA ve alan boşken pasif: hedef 44px, dar ekranda da rahat
-        basılıyor. Enter'la göndermek YOK — çok satırlı bir alanda Enter satır başıdır.
-      */}
-      <form onSubmit={gonder} className="mt-4">
-        <ErrorBox error={hata} />
-        <textarea
-          className="input mt-2 h-20 resize-none"
-          value={taslak}
-          onChange={(e) => setTaslak(e.target.value)}
-          maxLength={1000}
-          placeholder="Yorumunu yaz…"
-          aria-label="Yorum yaz"
-        />
-        <div className="mt-2 flex justify-end">
-          <Button
-            type="submit"
-            loading={gonderiliyor}
-            disabled={!gonderilebilir}
-            className="px-4 py-1.5 text-xs"
-          >
-            Yorumla
-          </Button>
-        </div>
-      </form>
-    </div>
   )
 }
 
