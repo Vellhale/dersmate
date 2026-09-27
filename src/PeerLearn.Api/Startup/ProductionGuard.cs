@@ -227,6 +227,46 @@ public static class ProductionGuard
             }
         }
 
+        /*
+          PUSH BİLDİRİMLERİ (2026-09-25) — e-postadan BİLİNÇLİ OLARAK FARKLI.
+
+          "Log" üretimde DURDURMUYOR: push yokken uygulama çalışır (kullanıcı uygulamayı
+          açınca her şeyi görür), e-posta yokken ise kimse hesabını doğrulayamaz. Sunucu
+          dağıtımı Expo erişim token'ının hazır olmasına bağlanmasın diye "Log" yalnızca
+          açılışta UYARI yazar (Program.cs, LogWarning).
+
+          DURDURAN iki durum var, ikisi de sessiz bir arızanın başlangıcı:
+            1. Tanınmayan sağlayıcı ("expo " gibi bir yazım hatası, "Firebase"): DI onu
+               sessizce Log'a düşürür ve operatör push'u açtığını sanır.
+            2. "Expo" seçili ama erişim token'ı ya da deneyim kimliği boş. Token'sız gönderim
+               Enhanced Security açıldığı gün bütünüyle 401'e döner; deneyim kimliği boşsa
+               başka bir projenin token'ı partiye karıştığında yabancı token'lar ayrılamaz.
+        */
+        var push = configuration.GetSection(PushOptions.SectionName).Get<PushOptions>() ?? new PushOptions();
+        var pushSaglayici = push.Provider?.Trim() ?? string.Empty;
+
+        if (!push.ExpoMu && !pushSaglayici.Equals("Log", StringComparison.OrdinalIgnoreCase))
+        {
+            sorunlar.Add($"Push:Provider tanınmıyor ('{pushSaglayici}'). Geçerli değerler: Expo, Log. " +
+                         "Tanınmayan değer sessizce Log'a düşer ve hiçbir bildirim gitmez. " +
+                         "Ortam değişkeni: Push__Provider");
+        }
+        else if (push.ExpoMu)
+        {
+            if (string.IsNullOrWhiteSpace(push.AccessToken))
+            {
+                sorunlar.Add("Push:Provider=Expo ama Push:AccessToken boş. Expo'da 'Enhanced Security' " +
+                             "açıldığı anda bütün bildirimler reddedilir. Üretim robotunun token'ını verin " +
+                             "(geliştirmeninkini DEĞİL). Ortam değişkeni: Push__AccessToken");
+            }
+
+            if (string.IsNullOrWhiteSpace(push.DeneyimKimligi) || !push.DeneyimKimligi.Trim().StartsWith('@'))
+            {
+                sorunlar.Add("Push:DeneyimKimligi boş ya da '@sahip/slug' biçiminde değil (mobil app.json → " +
+                             "owner/slug). Ortam değişkeni: Push__DeneyimKimligi");
+            }
+        }
+
         if (sorunlar.Count == 0)
         {
             return;

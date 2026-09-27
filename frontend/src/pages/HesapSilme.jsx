@@ -31,8 +31,11 @@ export default function HesapSilme() {
         </p>
         <Maddeler>
           <li>
-            <strong>Mobil uygulamada:</strong> Profil sekmesini aç, sayfanın en altındaki{' '}
-            <strong>“Hesabımı sil”</strong> bağlantısına dokun.
+            {/* "Profil sekmesi" 2026-09-23'te bayatladı: mobilde sekme çubuğu yok, Profil'e
+                çekmecenin başındaki ada dokunarak gidiliyor (mobil Cekmece.jsx). */}
+            <strong>Mobil uygulamada:</strong> sol üstteki menüyü aç ve adına dokunarak
+            Profil’e git; sayfanın en altındaki <strong>“Hesabımı sil”</strong> bağlantısına
+            dokun.
           </li>
           <li>
             <strong>Web sitesinde:</strong>{' '}
@@ -50,11 +53,20 @@ export default function HesapSilme() {
 
       <Bolum no="2" baslik="Ne siliniyor">
         <Maddeler>
-          <li>Adın, e-posta adresin, telefon numaran ve profil fotoğrafın</li>
+          {/* "telefon numaran" 2026-09-25'te çıkarıldı: toplanmıyor (bkz. Gizlilik.jsx başı). */}
+          <li>Adın, e-posta adresin ve profil fotoğrafın</li>
           <li>Biyografin, üniversite ve bölüm bilgin</li>
           <li>Açtığın ders ilanları (arz ve talep)</li>
           <li>Veri toplama tercihlerin</li>
           <li>Cihaz kaydın (giriş yaptığın cihazların kimliği)</li>
+          {/* Sunucu hesap silmede (DeleteAccount) alıcısı olduğun bildirim defteri
+              satırlarını, bildirim tercihlerini ve push cihaz kayıtlarını KOŞULSUZ siliyor
+              (banlı hesap dahil — yukarıdaki cihaz kaydının aksine). Mobil profil/index.jsx
+              "Silinecekler" listesiyle aynı olgu. */}
+          <li>
+            Bildirim kayıtların, bildirim ayarların ve bildirim alan cihazların (mobil
+            uygulamada bildirimleri açtıysan telefonlarının bildirim adresi)
+          </li>
         </Maddeler>
         <p>
           Profil fotoğrafın dosya olarak da sunucudan kaldırılıyor, yalnızca kaydı
@@ -73,6 +85,14 @@ export default function HesapSilme() {
         <Maddeler>
           <li>Ders oturumları, arkadaşlıklar ve mesaj kayıtları</li>
           <li>Kredi defteri (puanların basıldığı kayıtlar)</li>
+          {/* DeleteAccount aktörü olunan defter satırlarını SİLMİYOR (karşı tarafın kaydı),
+              bekleyenleri gönderilmeyecek diye kapatıyor; temizlik işi (CleanupNotifications)
+              30 gün sonra siliyor. */}
+          <li>
+            Senin başlattığın olaylar için başkalarına tutulan bildirim kayıtları (ör. birine
+            yazdığın mesajın bildirimi) — karşı tarafın kaydıdır, içerik taşımaz ve 30 gün
+            sonra silinir; henüz gönderilmemiş olanlar hiç gönderilmez
+          </li>
           <li>
             Şikayet, itiraz ve yaptırım kayıtları — bunlar hesap verebilirlik kaydıdır ve
             silinmesi, kötüye kullanımın izini kaybetmek anlamına gelirdi

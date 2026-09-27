@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using PeerLearn.Application.Abstractions;
 using PeerLearn.Application.Common;
+using PeerLearn.Application.Matchmaking;
 using PeerLearn.Application.Options;
 using PeerLearn.Domain.Identity;
 using PeerLearn.Domain.Matchmaking;
@@ -48,13 +49,11 @@ public sealed class SweepSessionsHandler : IRequestHandler<SweepSessionsCommand,
     /// <summary>Bu süreyi aşan açık itiraz operasyonel bir sorundur; log'a uyarı düşülür.</summary>
     private const int DisputeWarnAfterDays = 3;
 
-    /// <summary>
-    /// Muhatabın hiç yanıt vermediği isteğin ömrü. Süresi dolan istek Pending olmaktan
-    /// çıkar; bu, gönderenin AYNI kişiye AYNI konu için yeniden istek atabilmesini sağlar
-    /// (mükerrer istek engeli yalnızca Pending kayıtlara bakıyor). Süresiz bekleyen bir
-    /// istek, gönderen açısından kalıcı bir kilittir.
-    /// </summary>
-    private const int MatchRequestExpireDays = 14;
+    // İsteğin ömrü (14 gün) artık MatchRules.RequestExpireDays: eskiden burada private bir
+    // sabitti, bugün RespondMatch'in süre kontrolü ve günlük "düşmek üzere" özeti de aynı
+    // değeri okuyor. Neden bir ömür var: süresi dolan istek Pending olmaktan çıkar ve gönderen
+    // AYNI kişiye AYNI konu için yeniden istek atabilir (mükerrer istek engeli yalnızca Pending
+    // kayıtlara bakıyor). Süresiz bekleyen bir istek, gönderen açısından kalıcı bir kilittir.
 
     // ---- Geri çekilme (backoff) ayarları ----
 
@@ -231,8 +230,29 @@ public sealed class SweepSessionsHandler : IRequestHandler<SweepSessionsCommand,
 
           Geri çekilme YOK ve gerekmiyor: bu faz tek bir durum güncellemesi, dış bağımlılığı
           (kilit, başka komut) olmayan tek fazdır. Kayıt bazında kalıcı olarak başarısız
-          olabileceği bir yol yok; SaveChanges düşerse tüm parti düşer ve sonraki turda
-          aynı parti yeniden denenir.
+          olabileceği bir yol yok; güncelleme düşerse hiçbir satır değişmez ve sonraki tur
+          yeniden dener.
+
+          ⛔ KOŞULLU TOPLU GÜNCELLEME — oku-sonra-yaz DEĞİL.
+
+          Eskiden istekler izlenen entity olarak okunup bellekte Expired yapılıyordu. Match'te
+          xmin yok; okuma ile SaveChanges arasında kabul edilen bir istek, bayat okumanın
+          yazımıyla SESSİZCE Expired'a eziliyordu. Push ile bu görünür oldu: gönderene
+          "isteğin kabul edildi" bildirimi gider, dokunduğunda sohbet erişilemez (eşleşme
+          düşmüş). Tek UPDATE'te `WHERE "Status" = 'Pending'` PostgreSQL'in satır kilidiyle
+          yeniden değerlendiriliyor: eşzamanlı kabul önce commit olursa satır koşuldan düşer.
+
+          Parti sınırı (Take) bu yüzden KALKTI. `Take` ile EF şunu üretiyor:
+            UPDATE … AS m SET "Status" = 'Expired'
+            FROM (SELECT … WHERE "Status" = 'Pending' … LIMIT @n) AS t WHERE m."Id" = t."Id"
+          Durum koşulu yalnızca alt sorguda kalıyor ve eşzamanlı güncellenen satırda yeniden
+          sınanmıyor. Ölçüldü (geçici PG 17, commit edilmemiş kabul + süpürücü): hem eski
+          oku-yaz hem Take'li hâl kabulü Expired'a ezdi; koşulsuz tek UPDATE ezmedi. Bellek
+          derdi de yok artık: satırlar okunmuyor. Sorgu IX_Matches_PendingAge kısmi
+          indeksinin filtresini birebir taşıyor.
+
+          Sınır MatchRules ile aynı (CreatedAtUtc <= now − 14 g ⟺ SuresiDoldu); RespondMatch
+          süresi dolmuş isteğe 409 döndüğü için iki taraf aynı ana bakıyor.
 
           RespondedAtUtc'ye DOKUNULMAZ: süre dolumu bir yanıt DEĞİLDİR, yanıtın hiç
           gelmemesidir. Bu alanın anlamı "muhatap ne zaman karar verdi" — süre dolumunda
@@ -243,23 +263,15 @@ public sealed class SweepSessionsHandler : IRequestHandler<SweepSessionsCommand,
           Gelen kutusu, panel ve "yanıt bekleyen istekler" sayımı da aynı ayrıma güveniyor.
           e2e-social/H bölümü iki yönü de sınıyor.)
         */
-        var matchDeadline = now.AddDays(-MatchRequestExpireDays);
+        var matchDeadline = now.AddDays(-MatchRules.RequestExpireDays);
         var expiredMatches = await _db.Matches
             .Where(m => m.Status == MatchStatus.Pending && m.CreatedAtUtc <= matchDeadline)
-            .OrderBy(m => m.CreatedAtUtc)
-            .Take(BatchSize)
-            .ToListAsync(ct);
+            .ExecuteUpdateAsync(s => s.SetProperty(m => m.Status, MatchStatus.Expired), ct);
 
-        foreach (var match in expiredMatches)
+        if (expiredMatches > 0)
         {
-            match.Status = MatchStatus.Expired;
-        }
-
-        if (expiredMatches.Count > 0)
-        {
-            await _db.SaveChangesAsync(ct);
             _logger.LogInformation("{Sayi} eşleşme isteğinin süresi doldu ({Gun} gün yanıtsız).",
-                expiredMatches.Count, MatchRequestExpireDays);
+                expiredMatches, MatchRules.RequestExpireDays);
         }
 
         // 4) Süresi dolan geçici askılar. Erişim kontrolü tarihi zaten kendisi kontrol
@@ -313,7 +325,7 @@ public sealed class SweepSessionsHandler : IRequestHandler<SweepSessionsCommand,
                 gecikmisItiraz, DisputeWarnAfterDays);
         }
 
-        return new SweepSessionsResult(autoApproved, expired, expiredMatches.Count);
+        return new SweepSessionsResult(autoApproved, expired, expiredMatches);
     }
 
     /// <summary>

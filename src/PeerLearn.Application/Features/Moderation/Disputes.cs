@@ -4,6 +4,7 @@ using Microsoft.Extensions.Options;
 using PeerLearn.Application.Abstractions;
 using PeerLearn.Application.Common;
 using PeerLearn.Application.Economy;
+using PeerLearn.Application.Features.Communication.Bildirimler;
 using PeerLearn.Application.Options;
 using PeerLearn.Application.Scheduling;
 using PeerLearn.Domain.Moderation;
@@ -176,15 +177,17 @@ public sealed class ResolveDisputeHandler : IRequestHandler<ResolveDisputeComman
     private readonly CreditLedgerService _ledger;
     private readonly IDistributedLockProvider _locks;
     private readonly EconomyOptions _economy;
+    private readonly IBildirimSinyali _sinyal;
 
     public ResolveDisputeHandler(IAppDbContext db, IClock clock, CreditLedgerService ledger,
-        IDistributedLockProvider locks, IOptions<EconomyOptions> economy)
+        IDistributedLockProvider locks, IOptions<EconomyOptions> economy, IBildirimSinyali sinyal)
     {
         _db = db;
         _clock = clock;
         _ledger = ledger;
         _locks = locks;
         _economy = economy.Value;
+        _sinyal = sinyal;
     }
 
     public async Task Handle(ResolveDisputeCommand request, CancellationToken ct)
@@ -215,9 +218,16 @@ public sealed class ResolveDisputeHandler : IRequestHandler<ResolveDisputeComman
                 handles.Add(await _locks.AcquireAsync(key, lockTimeout, ct));
             }
 
-            await ConcurrencyRetry.RunAsync<object?>(_db, async () =>
+            /*
+              Lambda "deftere satır yazıldı mı"yı DÖNÜŞ DEĞERİYLE bildiriyor: sinyal commit'ten
+              sonra ve lambda'nın DIŞINDA çağrılmalı (içeride olsaydı xmin çakışmasının her
+              denemesi ayrı uyanış olurdu). Dışarıdaki bir bayrağı lambda'dan değiştirmek de
+              aynı tuzağa açık: başarısız denemenin bıraktığı değer sonrakine sızabilirdi.
+            */
+            var bildirimYazildi = await ConcurrencyRetry.RunAsync(_db, async () =>
             {
                 await using var tx = await _db.BeginTransactionAsync(cancellationToken: ct);
+                var satirEklendi = false;
 
                 var dispute = await _db.Disputes.SingleAsync(d => d.Id == request.DisputeId, ct);
                 var session = await _db.LessonSessions.SingleAsync(s => s.Id == dispute.SessionId, ct);
@@ -277,6 +287,22 @@ public sealed class ResolveDisputeHandler : IRequestHandler<ResolveDisputeComman
                         {
                             session.Status = SessionStatus.AwaitingApproval;
                             session.CompletionRequestedAtUtc = now; // 48 saatlik otomatik onay sayacı yeniden başlar.
+
+                            /*
+                              PUSH: öğrenciye "dersin yeniden onayını bekliyor" — kararla AYNI
+                              transaction'da. Sayaç sıfırlandığı için öğrenci yeni 48 saati
+                              ancak bununla öğrenir; bildirim olmasa itiraz hakkını bir kez
+                              kullanmış öğrenci, dersin sessizce otomatik onaylandığını görürdü.
+
+                              ⚠️ Damga yukarıda CompletionRequestedAtUtc'ye atanan AYNI `now`:
+                              anahtar (onay:{ders}:{damga}) ilk tamamlamanınkinden farklı, ve
+                              dağıtıcı SQL eşitliğiyle bu turu tanıyor. Metnin "itiraz sonuçlandı"
+                              biçimini dağıtıcı seçer (Dismissed itirazın ResolvedAtUtc'si de
+                              aynı `now`, aşağıda).
+                            */
+                            BildirimKuyrugu.Ekle(_db, BildirimKuyrugu.OnayBekliyor(
+                                session.Id, session.StudentUserId, session.TutorUserId, now, _economy.AutoApproveHours));
+                            satirEklendi = true;
                         }
 
                         dispute.Status = DisputeStatus.Dismissed;
@@ -317,8 +343,14 @@ public sealed class ResolveDisputeHandler : IRequestHandler<ResolveDisputeComman
 
                 await _db.SaveChangesAsync(ct);
                 await tx.CommitAsync(ct);
-                return null;
+                return satirEklendi;
             }, ct: ct);
+
+            // Commit SONRASI; fırlatmaz (IBildirimSinyali sözleşmesi).
+            if (bildirimYazildi)
+            {
+                _sinyal.Uyandir();
+            }
         }
         finally
         {

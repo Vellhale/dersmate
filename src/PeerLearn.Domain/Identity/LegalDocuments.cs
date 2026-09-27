@@ -62,6 +62,23 @@ public static class LegalDocuments
     /// Mobil uygulama henüz mağazada olmadığı için bugün kullanıcıya dokunan bir
     /// kırılma yok: kapı ilk yayından ÖNCE kapanıyor. Yayına çıkmış bir APK varken
     /// aynı işlem yapılsaydı, güncellemeyi almamış herkes kayıt ekranında kilitlenirdi.
+    /// (Mobil kopya 2026-09-21'de bu değere çekildi.)
+    ///
+    /// 2026-09-25: PUSH BİLDİRİMLERİ — yeni bir ifşa, artması ZORUNLUYDU. Üç şey birden
+    /// geldi: yeni veri türü (telefonun bildirim adresi, bildirim tercihleri, bildirim
+    /// defteri — Domain/Communication), yeni alıcılar (Expo, Google FCM, Apple APNs) ve
+    /// onlarla birlikte yeni bir yurt dışı aktarım. Gizlilik metni (web Gizlilik.jsx, mobil
+    /// app/gizlilik.jsx) ve silinecekler listeleri AYNI turda yazıldı; sayı metinsiz artmadı.
+    ///
+    /// ÜÇ YER AYNI DEĞERE, AYNI DALDA çekildi: burası, web frontend/src/lib/yasalMetinler.js
+    /// ve mobil src/lib/yasalMetinler.js. Yukarıdaki "önce mobil yayın, sonra sunucu" sırası
+    /// bu kez GEREKMEDİ — mağazada henüz uygulama yok, eski sabiti gönderecek kurulu bir paket
+    /// de yok. Mağazaya ilk çıkış bu değerle olacak; ondan sonraki her artışta sıra yeniden
+    /// "önce mobil yayın".
+    ///
+    /// Mevcut kullanıcılar yeniden onaylatılmıyor (sürüm yalnızca yeni kayıtları kapsar).
+    /// Push'un aydınlatması mobil uygulamada veri akışından ÖNCE yapılıyor ve cihaz kaydı
+    /// ucu <c>NotificationPreference.DisclosureShownAtUtc</c> olmadan hiçbir şey yazmıyor.
     /// </remarks>
-    public const string CurrentVersion = "2026-09-19";
+    public const string CurrentVersion = "2026-09-25";
 }

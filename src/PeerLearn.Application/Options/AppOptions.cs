@@ -117,3 +117,53 @@ public sealed class RateLimitOptions
     /// </summary>
     public bool YuksekSinirBilerek { get; set; }
 }
+
+/// <summary>
+/// Push bildirimleri (Expo Push Service). E-posta ayarlarıyla aynı kalıp: "Log" geliştirme,
+/// "Expo" gerçek gönderim.
+/// </summary>
+/// <remarks>
+/// ÜRETİMDE "Log" KALIRSA SUNUCU DURMAZ (e-postadan bilinçli fark): açılışta LogWarning
+/// yazılır. Gerekçe: sunucu dağıtımı Expo erişim token'ının hazır olmasına bağlanmasın.
+/// Push yokken uygulama çalışmaya devam eder; e-posta yokken kimse hesabını doğrulayamazdı.
+/// "Expo" seçiliyken AccessToken ya da DeneyimKimligi boşsa ise açılış DURUR (ProductionGuard).
+///
+/// Ortam değişkenleri: Push__Provider, Push__AccessToken, Push__DeneyimKimligi.
+/// </remarks>
+public sealed class PushOptions
+{
+    public const string SectionName = "Push";
+
+    /// <summary>"Log" (varsayılan; yalnızca maskeli log) veya "Expo".</summary>
+    public string Provider { get; set; } = "Log";
+
+    /// <summary>
+    /// Expo robot erişim token'ı (Bearer). ⚠️ SIR: depoya girmez, loglanmaz. Geliştirme ve
+    /// üretim için AYRI robot ve token. Expo'daki "Enhanced Security" ancak sunucu Bearer ile
+    /// göndermeye başladıktan SONRA açılır; önce açılırsa token'sız gönderimler reddedilir.
+    /// </summary>
+    public string AccessToken { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Bu sunucunun kabul ettiği Expo deneyimi, "@sahip/slug" (mobil app.json → owner/slug;
+    /// bugün "@ardaerenguler/dersmate"). PUSH_TOO_MANY_EXPERIENCE_IDS'te bu deneyimin
+    /// DIŞINDAKİ token'lar partiden ayrılır ve cihaz kayıtları silinir.
+    /// </summary>
+    public string DeneyimKimligi { get; set; } = string.Empty;
+
+    /// <summary>Expo HTTP isteğinin zaman aşımı.</summary>
+    public int ZamanAsimiSaniye { get; set; } = 15;
+
+    /// <summary>
+    /// Mesaj bildiriminin gecikmesi. Web sohbeti görünürken gelen mesajı hemen okundu
+    /// işaretliyor; gecikme olmasa web'de yazışan kullanıcının telefonu her mesajda çalardı.
+    /// Bu sürede okunan mesajın bildirimi gönderim anında Skipped(Okundu) olur.
+    /// </summary>
+    public int MesajGecikmeSaniye { get; set; } = 10;
+
+    /// <summary>(Alıcı, sohbet) başına iki mesaj push'u arasındaki en kısa süre.</summary>
+    public int MesajKismaSaniye { get; set; } = 60;
+
+    /// <summary>Provider "Expo" mu? (büyük/küçük harf duyarsız)</summary>
+    public bool ExpoMu => string.Equals(Provider, "Expo", StringComparison.OrdinalIgnoreCase);
+}

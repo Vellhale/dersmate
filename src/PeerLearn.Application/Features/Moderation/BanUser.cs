@@ -10,7 +10,8 @@ namespace PeerLearn.Application.Features.Moderation;
 /// <summary>
 /// Kalıcı ban (Modül 4.3): hesap Banned yapılır, yaptırım kaydı düşülür ve kullanıcının
 /// TÜM bilinen cihazları (UserDevices) HWID ban listesine eklenir — yeni hesapla dönüşü
-/// (ban evasion) giriş/kayıt sırasındaki HWID kontrolü keser.
+/// (ban evasion) giriş/kayıt sırasındaki HWID kontrolü keser. Push cihaz kayıtları
+/// (PushDevices) silinir.
 /// </summary>
 public sealed record BanUserCommand(Guid TargetUserId, Guid AdminUserId, string Reason)
     : IRequest<BanUserResult>;
@@ -67,6 +68,28 @@ public sealed class BanUserHandler : IRequestHandler<BanUserCommand, BanUserResu
                 // ExpiresAtUtc = null → kalıcı.
             });
         }
+
+        /*
+          PUSH KAYITLARI SİLİNİR (2026-09-25).
+
+          ⚠️ Ban oturumları İPTAL ETMİYOR: yenileme token'ları duruyor, banlı istemciyi
+          AccountStatusMiddleware ve RefreshSession'daki durum kontrolü kesiyor. Bu yüzden push
+          oturum bağı ("bu cihazın en yeni token'ı aktif mi") banlı hesapta HÂLÂ geçer; bağ
+          burada koruma DEĞİL. Gönderimi durduran dağıtıcının hesap durumu süzgeci
+          (Skipped(HesapPasif)), bu silme ise ikinci hat: banlı hesabın token'ı sunucuda hiç
+          kalmasın. Kalıcı banda saklamanın bir amacı yok; ban kaldırılırsa oturum hâlâ
+          geçerli olduğundan uygulama bir sonraki öne gelişte kendini yeniden kaydeder.
+
+          ⛔ GEÇİCİ ASKIDA (Sanctions.cs) BİLEREK SİLİNMİYOR: askı süresince gönderimi aynı
+          durum süzgeci durduruyor; silinseydi askı bitince push, uygulama yeniden kaydolana
+          kadar sessizce ölü kalırdı ve kullanıcı bunu fark etmezdi.
+
+          ExecuteDelete aşağıdaki SaveChanges'ten ÖNCE ve ondan bağımsız çalışır. SaveChanges
+          düşerse ban yazılmamış ama push kaydı silinmiş olur — güvenli yönde: bildirim eksik
+          gider, uygulama yeniden kaydolur. İzlenen silme ise eşzamanlı bir silmede (forget,
+          DeviceNotRegistered) DbUpdateConcurrencyException ile banın kendisini düşürürdü.
+        */
+        await _db.PushDevices.Where(d => d.UserId == user.Id).ExecuteDeleteAsync(ct);
 
         var actorRole = await _db.Users.AsNoTracking()
             .Where(u => u.Id == request.AdminUserId)

@@ -1,5 +1,6 @@
 using System.Data;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Storage;
 using PeerLearn.Domain.Catalog;
 using PeerLearn.Domain.Communication;
@@ -33,6 +34,13 @@ public interface IAppDbContext
 
     DbSet<Conversation> Conversations { get; }
     DbSet<Message> Messages { get; }
+
+    // Push bildirimleri (2026-09-25). Beşi de comms şemasında; ayrıntı: Domain/Communication.
+    DbSet<PushDevice> PushDevices { get; }
+    DbSet<Notification> Notifications { get; }
+    DbSet<PushTicket> PushTickets { get; }
+    DbSet<NotificationPreference> NotificationPreferences { get; }
+    DbSet<MessagePushThrottle> MessagePushThrottles { get; }
 
     DbSet<LessonSession> LessonSessions { get; }
     DbSet<SessionProof> SessionProofs { get; }
@@ -70,4 +78,23 @@ public interface IAppDbContext
 
     /// <summary>Optimistic concurrency çakışmasında retry öncesi izlenen entity'leri sıfırlar.</summary>
     void ClearChangeTracker();
+
+    /// <summary>
+    /// Ham SQL kapısı (<c>ExecuteSqlInterpolatedAsync</c>, <c>SqlQuery</c>). DbContext'in
+    /// kendi özelliği; PeerLearnDbContext ayrıca bir şey uygulamıyor.
+    /// </summary>
+    /// <remarks>
+    /// NEDEN AÇILDI (2026-09-25, push bildirimleri): LINQ'in ifade edemediği ama doğruluğun
+    /// ona dayandığı üç kalıp var ve üçü de tek ifadede ATOMİK olmak zorunda:
+    /// <c>INSERT … ON CONFLICT DO NOTHING / DO UPDATE</c> (hatırlatma sahiplenmesi, tek
+    /// sütunluk tercih yazımı, mesaj kısma yuvası), <c>FOR UPDATE SKIP LOCKED</c> (iki sunucu
+    /// kopyasının aynı satırı sahiplenmemesi) ve <c>pg_advisory_xact_lock</c> (cihaz kaydı).
+    /// "Oku, sonra yaz" biçiminde LINQ'e çevrilen her biri iki kopya arasında yarış açardı.
+    ///
+    /// ⚠️ Yalnızca interpolasyonlu biçimleri kullan (<c>…Interpolated…</c> / <c>SqlQuery</c>
+    /// FormattableString): parametreler bağlanır. <c>ExecuteSqlRaw</c>'a kullanıcı girdisi
+    /// birleştirmek SQL enjeksiyonu demektir. Kolon adı gibi tanımlayıcılar parametre
+    /// olamaz; onları yalnızca sabit bir beyaz listeden seç (ör. BildirimKanallari.TercihSutunu).
+    /// </remarks>
+    DatabaseFacade Database { get; }
 }

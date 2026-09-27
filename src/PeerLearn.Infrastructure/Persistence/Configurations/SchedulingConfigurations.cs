@@ -53,6 +53,21 @@ public sealed class LessonSessionConfiguration : IEntityTypeConfiguration<Lesson
         // Background job'lar: süresi geçen Booked dersler (Expired), onay bekleyenlerin otomatik onayı.
         builder.HasIndex(x => new { x.Status, x.ScheduledEndUtc });
 
+        /* Push hatırlatma kuyruklaması (PushReminderJob, dakikada bir). İki kısmi index:
+           yalnızca ilgili durumdaki dersler girer, ders kapanınca index'ten düşer.
+
+           ⚠️ Sorguların WHERE'i `Status == SessionStatus.Booked` / `AwaitingApproval`
+           olmalı — filtreyi BİREBİR içermeyen sorgu index'i sessizce kullanmaz.
+           Yukarıdaki (Status, ScheduledEndUtc) işe yaramıyor: sıralama başlangıca ve
+           tamamlama damgasına göre, bitişe göre değil. */
+        builder.HasIndex(x => x.ScheduledStartUtc)
+            .HasFilter("\"Status\" = 'Booked'")
+            .HasDatabaseName("IX_LessonSessions_YaklasanDers");
+
+        builder.HasIndex(x => x.CompletionRequestedAtUtc)
+            .HasFilter("\"Status\" = 'AwaitingApproval'")
+            .HasDatabaseName("IX_LessonSessions_OnayBekleyen");
+
         // Durum makinesi geçişlerinde (tamamla/onayla/iptal) çifte tetiklemeyi engeller.
         builder.Property(x => x.Version).IsRowVersion();
 

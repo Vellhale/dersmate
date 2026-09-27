@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using PeerLearn.Api.Authorization;
 using PeerLearn.Application.Abstractions;
 using PeerLearn.Application.Common;
+using PeerLearn.Application.Features.Communication.Bildirimler;
 using PeerLearn.Application.Features.Community;
 using PeerLearn.Application.Features.Economy;
 using PeerLearn.Application.Features.Maintenance;
@@ -209,6 +210,38 @@ public sealed class AdminController : ControllerBase
     [HttpPost("jobs/storage-cleanup")]
     public async Task<CleanupStorageResult> RunStorageCleanup(CancellationToken ct)
         => await _mediator.Send(new CleanupStorageCommand(), ct);
+
+    /*
+      PUSH İŞLERİ (2026-09-25). Üçü de arka planda kendi aralığıyla koşuyor (hatırlatma 1 dk,
+      dağıtım sinyal + 5 sn, makbuz 15 dk); bu uçlar yalnızca e2e ve teşhis için. Üçü de
+      idempotent ve arka plandaki işle AYNI ANDA çalışmaları güvenli: hatırlatma yazımı
+      tekil index'le çakışır, dağıtım satırları kiralayarak (SKIP LOCKED) alır.
+
+      Yalnızca ADMIN: dağıtım gerçek kullanıcılara bildirim gönderir, makbuz cihaz kaydı
+      siler — moderatör yetkisinin konusu değil.
+    */
+
+    /// <summary>Hatırlatmaları (yaklaşan ders, otomatik onay, istek özeti) ŞİMDİ kuyruğa yazar.</summary>
+    [Authorize(Policy = Policies.AdminOnly)]
+    [HttpPost("jobs/push-reminders")]
+    public async Task<PushIsSonucu> RunPushReminders(CancellationToken ct)
+        => await _mediator.Send(new EnqueuePushRemindersCommand(), ct);
+
+    /// <summary>Vadesi gelmiş bildirimleri ŞİMDİ gönderir (en fazla 10 parti × 200 satır).</summary>
+    [Authorize(Policy = Policies.AdminOnly)]
+    [HttpPost("jobs/push-dispatch")]
+    public async Task<PushIsSonucu> RunPushDispatch(CancellationToken ct)
+        => await _mediator.Send(new DispatchNotificationsCommand(), ct);
+
+    /// <summary>
+    /// Makbuzları ŞİMDİ sorar ve defter bakımını çalıştırır. Arka planda bakım günde bir;
+    /// burada her çağrıda, çünkü e2e onu da sınıyor ve komut idempotent.
+    /// </summary>
+    [Authorize(Policy = Policies.AdminOnly)]
+    [HttpPost("jobs/push-receipts")]
+    public async Task<PushIsSonucu> RunPushReceipts(CancellationToken ct)
+        => await _mediator.Send(new CheckPushReceiptsCommand(), ct)
+           + await _mediator.Send(new CleanupNotificationsCommand(), ct);
 
     public sealed record BanRequest(string Reason);
 

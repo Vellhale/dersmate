@@ -186,6 +186,49 @@ async function oturumuKapat(refreshToken, tumCihazlar = false) {
   }
 }
 
+/*
+  ─── PUSH KAYDINI UNUTTURMA ──────────────────────────────────────────────────
+
+  POST /api/v1/push/devices/forget — token'ı taşıyan cihaz satırını siler; uç
+  [AllowAnonymous], yanıt her durumda 204. Web bunu ÇAĞIRMIYOR (web push'u yok); metot
+  mobildeki aynı adlı metodun sözleşmesini taşısın diye burada (bkz. api.forgetPushDevice).
+
+  ⛔ request() KULLANILMIYOR, ham fetch ve BAŞLIKSIZ — oturumuKapat'la aynı sebepten.
+  Mobil bu ucu çevrimdışı çıkıştan SONRAKİ açılışta, çoğu zaman oturum yokken çağırıyor;
+  request() üzerinden gitseydi, arada açılmış YENİ oturumun token'ı isteğe eklenir ve bu
+  alakasız temizlik isteğinden dönen bir 401, AUTH_EXPIRED ile o taze oturumu düşürürdü.
+
+  FIRLATIR (oturumuKapat'ın tersine): mobildeki çağıran "unutulacak" işaretini yalnızca
+  başarıda siliyor, hata olursa iş bir sonraki açılışa kalıyor. Sözleşme iki istemcide
+  aynı kalsın diye burada da hata yutulmuyor.
+*/
+async function pushKaydiniUnut(token) {
+  let response
+  try {
+    response = await fetch(`${API_BASE}/api/v1/push/devices/forget`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token }),
+    })
+  } catch {
+    throw new ApiError('Sunucuya ulaşılamadı. Bağlantını kontrol edip tekrar dene.', 'NETWORK_ERROR', 0)
+  }
+
+  if (response.ok) return null
+
+  let data = null
+  try {
+    data = await response.json()
+  } catch {
+    data = null
+  }
+  throw new ApiError(
+    data?.detail ?? varsayilanHataMetni(response.status),
+    data?.title ?? 'UNKNOWN',
+    response.status,
+  )
+}
+
 async function request(path, opts = {}) {
   const yanit = await istekGonder(path, opts)
 
@@ -620,6 +663,58 @@ export const api = {
       method: 'PUT',
       body: { lastStep, completed, suppressed },
     }),
+
+  /*
+    --- Push bildirimleri (YALNIZCA MOBİL KULLANIYOR) ---
+
+    Web'de push YOK ve bu altı metodu hiçbir sayfa çağırmıyor; web'e bildirim ayarı da
+    bilerek eklenmedi (ayar web'de hiçbir şeyi açıp kapatmazdı — asıl anahtar telefonun
+    işletim sistemi izni). Metotlar yine de burada, çünkü api yüzeyi iki istemcide AYNI
+    tutuluyor: mobil deposundaki src/lib/api.js'te aynı adlar ve aynı gövdelerle duruyorlar
+    ve bir web sayfası mobile çevrilirken çağrılar değişmeden taşınıyor. Uç eklendiğinde
+    iki projede birden eklenir; birini unutmak, fark tablosunda açıklanmamış bir satır ve
+    bir sonraki senkronda "bu uç var mı yok mu" sorusu demek.
+
+    Yollar ve gövdeler sunucudaki PushController'ın (api/push) birebir karşılığı.
+    Tercihler neden /api/v1/preferences'ta DEĞİL: orası çerez rızası satırı (xmin
+    korumalı); her anahtar dokunuşu onun sürümünü oynatır ve rıza kaydını ezme riski
+    doğardı. Push tercihleri ayrı tabloda, alan başına tek sütunluk upsert'le yazılıyor.
+  */
+
+  /**
+   * Cihazın push token'ını oturumdaki hesaba bağlar (idempotent upsert).
+   * @param {{ token: string, platform: 'Android'|'Ios', hwidHash: string, kapaliKanallar?: string[] }} kayit
+   * @returns {Promise<{ kayitli: boolean, alici: string }>} kayitli:false = sunucu HİÇBİR
+   *   ŞEY yazmadı (aydınlatma görülmemiş ya da o cihazın en yeni oturumu aktif değil).
+   */
+  registerPushDevice: ({ token, platform, hwidHash, kapaliKanallar = [] }) =>
+    request('/api/v1/push/devices', {
+      method: 'PUT',
+      body: { token, platform, hwidHash, kapaliKanallar },
+    }),
+  /** Token'ı taşıyan cihaz satırını siler; oturum GEREKMEZ, 204. Ham fetch — bkz. pushKaydiniUnut. */
+  forgetPushDevice: (token) => pushKaydiniUnut(token),
+  /**
+   * { mesajlar, istekler, dersOnayi, dersPlani: bool, aydinlatmaAtUtc: string|null,
+   *   soruErtelemeSayisi: number, soruErtelendiAtUtc: string|null, alici: string }.
+   * Satır yoksa sunucu varsayılanı döner: dördü açık, damgalar null, sayı 0.
+   */
+  pushPreferences: () => request('/api/v1/push/preferences'),
+  /** @param kategori 'mesajlar' | 'istekler' | 'ders-onayi' | 'ders-plani' — 204; bilinmeyen kategori 404. */
+  setPushPreference: (kategori, acik) =>
+    request(`/api/v1/push/preferences/${encodeURIComponent(kategori)}`, {
+      method: 'PUT',
+      body: { acik },
+    }),
+  /** Aydınlatma ekranındaki karar — 204. @param karar 'Acildi' | 'Ertelendi' */
+  pushPromptDecision: (karar) =>
+    request('/api/v1/push/prompt', { method: 'PUT', body: { karar } }),
+  /**
+   * Çağıranın kendi cihazlarına tek bir deneme bildirimi (kuyruktan geçer).
+   * @param tur 'mesaj' | 'istek' | 'onay' | 'ders'
+   * @returns {Promise<{ cihaz: number }>} bağlı cihaz sayısı. 10 dakikada 3'ten fazlası 429.
+   */
+  sendTestPush: (tur) => request('/api/v1/push/test', { method: 'POST', body: { tur } }),
 
   // --- Admin ---
   disputes: () => request('/api/v1/admin/disputes'),

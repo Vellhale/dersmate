@@ -47,12 +47,34 @@
  * aynı anda yürürlüğe giren iki metin değişikliğini tek kapıdan geçirmek, kullanıcıya
  * görünen hiçbir şeyi bozmadan o bedeli yarıya indiriyor.
  *
- * ⚠️ MOBİL DEPO HENÜZ HİZALANMADI. Bu değer web + sunucuda artırıldı; mobil depodaki
- * kopya aynı değere çekilmeden yeni APK yayınlanırsa o kullanıcılar KAYIT OLAMAZ.
- * Sıra aşağıdaki notta. Bugün bunun canlı karşılığı yok çünkü mobil uygulama henüz
- * mağazada değil — kapı, ilk yayından ÖNCE kapatılmış oluyor.
+ * (Mobil depodaki kopya 2026-09-21'de bu değere çekildi; o gün burada duran "mobil depo
+ * henüz hizalanmadı" uyarısı o tarihten beri bayattı ve aşağıdaki artışla kaldırıldı.)
+ *
+ * 2026-09-19 → 2026-09-25 — PUSH BİLDİRİMLERİ. Yeni bir ifşa ve artması ZORUNLUYDU:
+ * push üç şeyi birden getiriyor — yeni bir veri türü (telefonun bildirim adresi,
+ * bildirim tercihleri, bildirim kayıtları), yeni alıcılar (Expo, Google FCM, Apple APNs)
+ * ve onlarla birlikte yeni bir yurt dışı aktarım. Gizlilik §1/§2/§3/§5/§6/§7 AYNI turda
+ * yazıldı (pages/Gizlilik.jsx), silinecekler listeleri de (HesapSilme.jsx, Profile.jsx):
+ * sayı metinsiz yükselmedi. Push web'de yok ama metin yine de web'de de değişti, çünkü
+ * bildirim kayıtları web kullanıcısı için de tutuluyor (§2) ve /gizlilik, mobil
+ * kullanıcının da okuduğu tek herkese açık metin.
+ *
+ * ÜÇ YER AYNI DEĞERE, AYNI DALDA (ozellik/push-bildirimleri) çekildi: bu dosya,
+ * LegalDocuments.CurrentVersion ve mobil depodaki src/lib/yasalMetinler.js. Aşağıdaki
+ * "önce mobil yayın, sonra sunucu" sırası bu kez GEREKMEDİ: mağazada henüz uygulama yok,
+ * yani eski sabiti gönderecek kurulu bir paket de yok. Mağazaya ilk çıkış bu değerle
+ * olacak; ondan sonraki her artışta sıra yeniden "önce mobil yayın".
+ *
+ * Mevcut kullanıcılar YENİDEN ONAYLATILMIYOR — sürüm yalnızca yeni kayıtları kapsıyor
+ * (Register.cs). Push'a ilişkin aydınlatma mobil uygulamanın içinde, veri akışından ÖNCE
+ * yapılıyor ve sunucu o anın damgası (DisclosureShownAtUtc) olmadan cihaz kaydını kabul
+ * etmiyor.
+ *
+ * ⚠️ tools/yasal-surum.ps1 bu dosyada sabitin ATAMASINI düzenli ifadeyle arıyor ve İLK
+ * eşleşmeyi alıyor. Bu yorumlara sabitin adını eşittir ve tırnaklı bir değerle yazma:
+ * yazılırsa betik yorumdaki değeri okur ve bütün e2e paketleri kayıtta düşer.
  */
-export const SOZLESME_SURUMU = '2026-09-19'
+export const SOZLESME_SURUMU = '2026-09-25'
 
 /** Kullanıcıya gösterilen biçim. Sürümle aynı günü anlatır. */
-export const SOZLESME_TARIHI = '19 Eylül 2026'
+export const SOZLESME_TARIHI = '25 Eylül 2026'

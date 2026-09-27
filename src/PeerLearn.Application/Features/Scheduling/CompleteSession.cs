@@ -1,8 +1,11 @@
 using System.Security.Cryptography;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using PeerLearn.Application.Abstractions;
 using PeerLearn.Application.Common;
+using PeerLearn.Application.Features.Communication.Bildirimler;
+using PeerLearn.Application.Options;
 using PeerLearn.Application.Scheduling;
 using PeerLearn.Domain.Scheduling;
 
@@ -42,13 +45,18 @@ public sealed class CompleteSessionHandler : IRequestHandler<CompleteSessionComm
     private readonly IClock _clock;
     private readonly IProofStorage _storage;
     private readonly IGorselTemizleyici _temizleyici;
+    private readonly IBildirimSinyali _sinyal;
+    private readonly EconomyOptions _economy;
 
-    public CompleteSessionHandler(IAppDbContext db, IClock clock, IProofStorage storage, IGorselTemizleyici temizleyici)
+    public CompleteSessionHandler(IAppDbContext db, IClock clock, IProofStorage storage, IGorselTemizleyici temizleyici,
+        IBildirimSinyali sinyal, IOptions<EconomyOptions> economy)
     {
         _db = db;
         _clock = clock;
         _storage = storage;
         _temizleyici = temizleyici;
+        _sinyal = sinyal;
+        _economy = economy.Value;
     }
 
     public async Task<CompleteSessionResult> Handle(CompleteSessionCommand request, CancellationToken ct)
@@ -123,8 +131,25 @@ public sealed class CompleteSessionHandler : IRequestHandler<CompleteSessionComm
         session.Status = SessionStatus.AwaitingApproval;
         session.CompletionRequestedAtUtc = now;
 
+        /*
+          PUSH: öğrenciye "dersin onay bekliyor" — durum yazımıyla AYNI SaveChanges'te.
+
+          ⚠️ Damga, CompletionRequestedAtUtc'ye az önce atanan AYNI `now` değişkeni. Dağıtıcı
+          gönderim anında SQL eşitliğiyle "hâlâ bu tamamlama mı" diye bakıyor (itiraz reddi
+          sayacı sıfırlayıp yeni damga yazar); ikinci bir _clock.UtcNow okuması farklı bir değer
+          üretebilir, o zaman eşitlik hiç tutmaz ve bildirim hiç gitmezdi (mutasyonla ölçüldü).
+
+          Eşzamanlı ikinci tamamlama xmin ile düşünce satır da onunla geri alınır. Vade
+          sessiz saate göre, ama otomatik onaya iki saatten az kalacaksa hemen.
+        */
+        BildirimKuyrugu.Ekle(_db, BildirimKuyrugu.OnayBekliyor(
+            session.Id, session.StudentUserId, session.TutorUserId, now, _economy.AutoApproveHours));
+
         // xmin: eşzamanlı ikinci tamamlama isteği DbUpdateConcurrencyException ile düşer.
         await _db.SaveChangesAsync(ct);
+
+        // Commit SONRASI; fırlatmaz (IBildirimSinyali sözleşmesi).
+        _sinyal.Uyandir();
 
         return new CompleteSessionResult(proof.Id);
     }

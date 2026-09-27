@@ -20,6 +20,9 @@ ortam değişkeniyle verilir. ASP.NET'te iç içe anahtarlar çift alt çizgiyle
 | `Email__Host`, `Email__Port`, `Email__Username`, `Email__Password`, `Email__FromAddress` | SMTP bağlantısı. |
 | `Email__PublicWebUrl` | Doğrulama e-postasındaki bağlantı buradan kurulur (`https://alanadi/dogrula?token=…`). Boşsa e-posta çıplak token taşır ve kullanıcı 300 karakterlik JWT'yi elle kopyalamak zorunda kalır — mobilde pratikte yapılamıyor. |
 
+Push bildirimleri bu listede **değil**: verilmezse uygulama açılır, yalnızca telefona
+bildirim gitmez (açılışta uyarı yazılır). Açma sırası ve Expo erişim token'ı için §11.
+
 ### Hız sınırı (⚠️ ZORUNLU — varsayılanlara güvenmeyin)
 
 | Değişken | Varsayılan | Anlamı |
@@ -173,6 +176,14 @@ içine düşer, yani o anda **birden fazla instance çalıştırmak güvenli de�
 | Kredi vade süpürmesi | 15 dk | 30 günü dolan lotları yakar | `POST /api/admin/jobs/credit-expiry` |
 | Oturum süpürmesi | 10 dk | Otomatik onay, düşen rezervasyon, yanıtsız arkadaş isteği, biten askı | `POST /api/admin/jobs/session-sweep` |
 | Depo bakımı | 24 saat | Saklama süresi dolan kanıt görselleri + artık dosyalar | `POST /api/admin/jobs/storage-cleanup` (yalnızca Admin) |
+| Push hatırlatmaları | 1 dk | Yaklaşan ders (60/10 dk), otomatik onay (24/2 sa) ve günlük istek özetini deftere önceden yazar | `POST /api/admin/jobs/push-reminders` (yalnızca Admin) |
+| Push dağıtımı | sinyal ya da 5 sn | Vadesi gelen defter satırlarını Expo'ya gönderir | `POST /api/admin/jobs/push-dispatch` (yalnızca Admin) |
+| Push makbuzları | 15 dk (+ günde bir temizlik) | Biletlerin makbuzunu sorar, ölü cihazı siler; eski defter satırlarını temizler | `POST /api/admin/jobs/push-receipts` (yalnızca Admin; temizliği de koşar) |
+
+Push saklama süreleri (`CleanupNotifications.cs`, `CheckPushReceipts.cs`): işlenmiş defter
+satırı **30 gün**, bilet **24 saat** (sorulamayan bilet sorulmadan silinir), mesaj kısma
+yuvası **1 gün**. Ömrü bir günden fazla önce dolmuş ama hiç işlenmemiş satır `Skipped(Bayat)`
+yazılır — dağıtıcının uzun süre kapalı kaldığının izi.
 
 Saklama kararları (hepsi `CleanupStorage.cs` içinde sabit):
 
@@ -264,3 +275,91 @@ vardır — yani yeni bir ayrıcalık verilmiş olmaz.
 ⚠️ Komut üretim ortamında çalıştığı için **üretim kapısından geçer**: ortam
 değişkenleri eksikse süreç bu komutta da açılmaz. Bu bilinçli — yanlış
 yapılandırılmış bir kurulumda yönetici açmak, sorunu gizlemekten başka işe yaramaz.
+
+## 11. Push bildirimleri (Expo)
+
+Bildirimleri sunucu Expo Push servisine gönderir (`exp.host`); Expo da FCM'e (Android) ve
+APNs'e (iOS) iletir. Mimari: `docs/ASAMA-2-BACKEND.md` §8.
+
+### Ayarlar
+
+| `.env.production` | Ortam değişkeni | Değer |
+|---|---|---|
+| `PUSH_PROVIDER` | `Push__Provider` | `Log` (varsayılan: hiçbir şey gönderilmez) ya da `Expo` |
+| `PUSH_ACCESS_TOKEN` | `Push__AccessToken` | Expo **üretim** robotunun erişim token'ı. ⚠️ SIR |
+| — | `Push__DeneyimKimligi` | `appsettings.json`'da: `@ardaerenguler/dersmate` (mobil `app.json` → owner/slug). Mobil proje taşınırsa BURASI da değişir. |
+
+Kapı (`ProductionGuard`) üç durumda açılışı **durdurur**: tanınmayan sağlayıcı (`Firebase`
+gibi bir yazım hatası sessizce `Log`'a düşmesin), `Expo` seçili ama token boş, deneyim
+kimliği `@sahip/slug` biçiminde değil.
+
+⚠️ **`Log` üretimde açılışı DURDURMAZ** (bilinçli: sunucu dağıtımı Expo token'ının hazır
+olmasına bağlı kalmasın). Açılışta `Push:Provider 'Log' — push bildirimleri GÖNDERİLMİYOR`
+uyarısı yazılır. Bu uyarıyı ciddiye alın: Log sağlayıcısı Expo gibi bilet döndürdüğü için
+**defterdeki satırlar `Sent` görünür** — veritabanına bakan biri push'un çalıştığını sanır.
+
+### Robotlar ve rol
+
+expo.dev'de **iki ayrı robot kullanıcı** açılır, her biri kendi erişim token'ıyla: biri
+geliştirme (geliştiricinin `appsettings.Development.json`'unda ya da ortam değişkeninde;
+dosya `.gitignore`'da), biri üretim (yalnızca sunucunun `.env.production`'ında). Ayrı
+olmaları token sızdığında iptalin yalnızca bir ortamı düşürmesi için.
+
+Rol: işi gören **en düşük** rol. Viewer'ın gönderime yetip yetmediği henüz ÖLÇÜLMEDİ —
+`--test-push` ile Viewer'la başlanır, 401/403 gelirse bir üst role çıkılır ve sonuç buraya
+yazılır.
+
+### ⛔ Açma sırası: önce Bearer'la gönder, SONRA Enhanced Security
+
+1. Üretim robotunun token'ını `.env.production`'a yaz, `PUSH_PROVIDER=Expo`.
+2. Gerçek bir cihaz token'ıyla sına (kuyruğu atlar, bileti ve 20 sn sonraki makbuzu yazar;
+   token günlüğe maskeli düşer). Token, uygulamadan bildirimleri açmış kendi hesabının
+   satırından okunur: `SELECT "Token" FROM comms."PushDevices" WHERE "UserId" = '<id>'`.
+
+   ```bash
+   # dc = docker compose -f docker-compose.prod.yml --env-file .env.production (SUNUCUYA-KURULUM.md)
+   dc run --rm api dotnet PeerLearn.Api.dll --test-push 'ExponentPushToken[…]' --platform Android
+   ```
+
+   Beklenen: `Expo bildirimi kabul etti` ve makbuzda hata yok. Çıkış kodu 1 ise günlük
+   nedenini söyler (token biçimi, sağlayıcı `Log`, 401, `DeviceNotRegistered`…).
+3. Servisi yeniden başlat (`dc up -d api`) ve uygulamadaki **Test bildirimi gönder**
+   düğmesiyle kuyruktan geçen yolu da dene.
+4. **Ancak bundan sonra** expo.dev → proje ayarları → *Enhanced Security for Push
+   Notifications* açılır.
+
+Enhanced Security açıldığı anda token'sız ya da çalışmayan token'la gelen her gönderim
+(yanlış kopyalanmış token, yetkisi yetmeyen rol, token'sız geliştirme sunucusu)
+`401 UNAUTHORIZED` alır. Sıra bu yüzden "önce Bearer'ın kabul edildiğini gör, sonra zorunlu
+kıl". Dağıtıcı 401'i mesajın suçu saymaz (geçici hata, `LogCritical`) ve satırı üstel
+beklemeyle yeniden dener; altı denemede (~15 dakika) `Failed` olur. Yani yanlış sıra, açıldığı
+andan itibaren **bütün** bildirimleri kaybettirir ve tek iz günlükteki CRITICAL satırlarıdır.
+
+### Token rotasyonu
+
+Sıra yine "önce yeni çalışsın, sonra eski ölsün":
+
+1. expo.dev'de üretim robotuna **yeni** token üret (eskisi hâlâ geçerli).
+2. `.env.production` → `PUSH_ACCESS_TOKEN` yeni değer.
+3. `dc up -d api` (yeniden başlat), `--test-push` ile sına.
+4. Eski token'ı expo.dev'de iptal et.
+
+Adım 4 önce yapılırsa aradaki bütün gönderimler 401 alır (yukarıdaki bekleme zinciri).
+
+### Ağ ve çok instance
+
+- Sunucunun `exp.host:443`'e **giden** bağlantısı açık olmalı. Kapalıysa gönderimler
+  `AgHatasi`/`ZamanAsimi` ile geçici hataya düşer ve ~15 dakikada `Failed` olur.
+- Birden fazla API instance'ı güvenli: satırlar `FOR UPDATE SKIP LOCKED` ile kiralanıyor,
+  hatırlatmalar `ON CONFLICT DO NOTHING` ile yazılıyor, mesaj kısması veritabanında. Tek
+  fark gecikme: "kuyrukta iş var" sinyali süreç içi, diğer instance satırı en geç 5 sn'lik
+  taramasında görür.
+
+### İzlenecekler
+
+| Belirti | Anlamı |
+|---|---|
+| Günlükte `CRITICAL` + 401/403 | Erişim token'ı yanlış, iptal edilmiş ya da Enhanced Security token'sız isteği reddetti |
+| `comms."Notifications"` içinde `Status = 'Failed'` | `LastError` nedeni söyler (maskeli); toplu `Failed` bir kesinti ya da yapılandırma hatası |
+| `LogError` + `MessageTooBig` / `InvalidCredentials` / `MismatchSenderId` | Kod ya da FCM/APNs kimlik bilgisi sorunu; cihazlar SİLİNMEZ, herkes etkilenir |
+| `Status = 'Skipped'`, `Outcome = 'Bayat'` birikiyor | Dağıtıcı uzun süre çalışmamış (ömrü dolan satır gönderilmez) |

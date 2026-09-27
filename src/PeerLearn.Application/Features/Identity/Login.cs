@@ -87,7 +87,7 @@ public sealed class LoginHandler : IRequestHandler<LoginCommand, LoginResult>
         // HWID ZORUNLUDUR: opsiyonel olsaydı ban'li cihaz alanı boş bırakarak kontrolü atlardı.
         // (İstemci parmak izi doğası gereği taklit edilebilir; bu kontrol caydırıcı katmandır,
         // tek güvence değildir — sahte HWID gönderen özel istemciler dispute/yaptırımla yakalanır.)
-        var hwid = Normalize(request.HwidHash)
+        var hwid = HwidKurali.Normalize(request.HwidHash)
                    ?? throw new AppException(ErrorCodes.HwidRequired, "Cihaz kimliği (HWID) zorunludur.");
 
         var deviceBanned = await _db.HwidBans.AnyAsync(b =>
@@ -183,11 +183,5 @@ public sealed class LoginHandler : IRequestHandler<LoginCommand, LoginResult>
             user.Role.ToString(),
             user.CanModerate,
             yenilemeTokeni);
-    }
-
-    private static string? Normalize(string? hwid)
-    {
-        var trimmed = hwid?.Trim().ToLowerInvariant();
-        return string.IsNullOrEmpty(trimmed) ? null : trimmed[..Math.Min(trimmed.Length, 128)];
     }
 }
