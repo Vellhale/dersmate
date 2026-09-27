@@ -115,7 +115,11 @@ const NAV = [
   yoğun ekranlarda (Derslerim, Keşfet) zemin geri çekilir — orada dekor, okumanın
   önüne geçmemeli.
 */
-const ZENGIN_ZEMIN_ROTALARI = ['/profil', '/hakkimizda']
+/* '/hakkimizda' 2026-09-28'de ÇIKARILDI: sayfa kabuğun dışına alındı (oturum
+   gerektirmiyor, bkz. pages/Hakkimizda.jsx) ve zengin zemini artık kendisi çiziyor.
+   Burada da kalsaydı iki ızgara üst üste binerdi — ama sayfa zaten Layout'un
+   içinde çizilmediği için bu satır yalnızca ölü bir eşleşme olurdu. */
+const ZENGIN_ZEMIN_ROTALARI = ['/profil']
 
 const SOSYAL = [
   { ad: 'Instagram', kullanici: 'dersmate_', href: 'https://instagram.com/dersmate_', Ikon: InstagramIkonu },

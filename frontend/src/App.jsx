@@ -63,6 +63,14 @@ export default function App() {
           incelemecisi hesap açmadan okuyabilmeli. */}
       <Route path="/gizlilik-uygulama" element={<GizlilikUygulama />} />
 
+      {/* HAKKIMIZDA — 2026-09-28'de kabuğun DIŞINA alındı. Önce RequireAuth + Layout
+          bloğunun içindeydi ("tek erişim yolu menü, menü de yalnızca giriş yapmışta
+          var" gerekçesiyle) ve sonucu şuydu: dışarıdan gelen ziyaretçi ve MAĞAZA
+          İNCELEMECİSİ ürünün ne olduğunu anlatan metni hiç okuyamıyordu. Mobilde
+          karşılığı oturumsuz da açılıyor; bu, kapatılan bir erişim farkı.
+          Sayfa kendi kabuğunu çiziyor (bkz. pages/Hakkimizda.jsx). */}
+      <Route path="/hakkimizda" element={<Hakkimizda />} />
+
       {/* HESAP SİLME — oturum GEREKTİRMEZ ve kabuğun dışında.
           Google Play, hesap açtıran uygulamalarda silme yolunu uygulamayı KURMADAN
           açılabilen bir adreste de istiyor: telefonunu kaybetmiş ya da hesabına
@@ -113,9 +121,6 @@ export default function App() {
             işlem geçmişi Derslerim'e taşındı ve 2026-09-26'dan beri kendi sekmesinde
             ("Puan geçmişi"): eski adres doğrudan o sekmeyi açıyor. */}
         <Route path="/cuzdan" element={<Navigate to="/dersler?sekme=puan" replace />} />
-        {/* Yan menünün alt bağlantısı: misyon sayfası. Kabuğun (Layout) içinde, çünkü
-            tek erişim yolu menü ve menü yalnızca giriş yapmış kullanıcıda var. */}
-        <Route path="/hakkimizda" element={<Hakkimizda />} />
         {/* Tek bileşen: parametresiz kendi profilin, id ile başkasınınki. */}
         <Route path="/profil" element={<Profile />} />
         <Route path="/profil/:userId" element={<Profile />} />
